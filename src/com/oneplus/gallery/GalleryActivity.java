@@ -6,6 +6,10 @@ import android.support.v13.app.FragmentPagerAdapter;
 import android.support.v4.view.ViewPager;
 
 import com.oneplus.base.BaseActivity;
+import com.oneplus.gallery.media.CameraRollMediaSet;
+import com.oneplus.gallery.media.MediaComparator;
+import com.oneplus.gallery.media.MediaList;
+import com.oneplus.gallery.media.MediaSet;
 
 /**
  * Gallery activity.
@@ -40,7 +44,7 @@ public class GalleryActivity extends BaseActivity
 		// setup UI
 		this.setupUI();
 	}
-	
+	MediaSet m_MediaSet;
 	
 	// Setup UI.
 	private void setupUI()
@@ -72,5 +76,8 @@ public class GalleryActivity extends BaseActivity
 				}
 			}
 		});
+		
+		m_MediaSet = new CameraRollMediaSet();
+		MediaList list = m_MediaSet.openMediaList(MediaComparator.TAKEN_TIME, -1, 0);
 	}
 }

@@ -2,5 +2,8 @@
 
 	<!-- Application -->
 	<string name="app_name">Gallery</string>
+	
+	<!-- Media set -->
+	<string name="media_set_name_camera_roll">Camera</string>
 
 </resources>

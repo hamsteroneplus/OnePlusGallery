@@ -38,6 +38,13 @@ public interface Media extends HandlerObject
 	
 	
 	/**
+	 * Get taken time.
+	 * @return Taken time in milliseconds.
+	 */
+	long getTakenTime();
+	
+	
+	/**
 	 * Get media width.
 	 * @return Media width.
 	 */
