@@ -5,5 +5,6 @@
 	
 	<!-- Media set -->
 	<string name="media_set_name_camera_roll">Camera</string>
-
+	
+	<string name="fragment_add_photo">Click to take pictures</string>
 </resources>

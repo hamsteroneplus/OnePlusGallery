@@ -23,7 +23,9 @@ public class GalleryActivity extends BaseActivity
 	// Create fragment for displaying camera roll.
 	private MediaSetFragment createCameraRollFragment()
 	{
-		return new MediaSetFragment();
+		MediaSetFragment fragment = new MediaSetFragment();
+		fragment.set(MediaSetFragment.PROP_MEDIASET, m_MediaSet);
+		return fragment;
 	}
 	
 	
@@ -52,6 +54,8 @@ public class GalleryActivity extends BaseActivity
 		// setup content view
 		this.setContentView(R.layout.activity_gallery);
 		
+		
+		m_MediaSet = new CameraRollMediaSet();
 		// prepare entry view pager
 		m_EntryViewPager = (ViewPager)this.findViewById(R.id.entry_view_pager);
 		m_EntryViewPager.setAdapter(new FragmentPagerAdapter(this.getFragmentManager())
@@ -77,7 +81,6 @@ public class GalleryActivity extends BaseActivity
 			}
 		});
 		
-		m_MediaSet = new CameraRollMediaSet();
-		MediaList list = m_MediaSet.openMediaList(MediaComparator.TAKEN_TIME, -1, 0);
+		
 	}
 }

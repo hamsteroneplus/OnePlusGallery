@@ -1,0 +1,10 @@
+<resources>
+
+	<!-- Application -->
+	<string name="app_name">圖庫</string>
+	
+	<!-- Media set -->
+	<string name="media_set_name_camera_roll">相機</string>
+	
+	<string name="fragment_add_photo">點擊拍照貼加文件</string>
+</resources>
