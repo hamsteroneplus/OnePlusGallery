@@ -14,7 +14,7 @@ public interface MediaSet extends BaseObject, HandlerObject
 	/**
 	 * Read-only property to get number of media in this set.
 	 */
-	PropertyKey<Integer> PROP_MEDIA_COUNT = new PropertyKey<>("MediaCount", Integer.class, MediaSet.class, 0);
+	PropertyKey<Integer> PROP_MEDIA_COUNT = new PropertyKey<>("MediaCount", Integer.class, MediaSet.class, PropertyKey.FLAG_READONLY, null);
 	/**
 	 * Property for name of this set.
 	 */

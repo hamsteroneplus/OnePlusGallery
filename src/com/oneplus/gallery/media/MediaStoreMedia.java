@@ -8,12 +8,30 @@ import android.os.Handler;
 import android.provider.MediaStore.MediaColumns;
 import android.provider.MediaStore.Files.FileColumns;
 import android.provider.MediaStore.Images.ImageColumns;
+import android.provider.MediaStore.Video.VideoColumns;
 
 /**
  * {@link Media} implementation based-on media store.
  */
 public abstract class MediaStoreMedia implements Media
 {
+	/**
+	 * Columns to be queried from media store.
+	 */
+	public static final String[] MEDIA_COLUMNS = new String[]{
+		MediaColumns._ID,
+		FileColumns.MEDIA_TYPE,
+		FileColumns.DATA,
+		FileColumns.SIZE,
+		MediaColumns.MIME_TYPE,
+		ImageColumns.DATE_TAKEN,
+		MediaColumns.WIDTH,
+		MediaColumns.HEIGHT,
+		ImageColumns.ORIENTATION,
+		VideoColumns.DURATION,
+	};
+	
+	
 	// Fields.
 	private final Uri m_ContentUri;
 	private final String m_FilePath;
@@ -74,7 +92,7 @@ public abstract class MediaStoreMedia implements Media
 			case FileColumns.MEDIA_TYPE_IMAGE:
 				return new PhotoMediaStoreMedia(baseContentUri, cursor, handler);
 			case FileColumns.MEDIA_TYPE_VIDEO:
-				return null;
+				return new VideoMediaStoreMedia(baseContentUri, cursor, handler);
 			case FileColumns.MEDIA_TYPE_NONE:
 				break;
 			default:
@@ -88,7 +106,7 @@ public abstract class MediaStoreMedia implements Media
 			if(mimeType.startsWith("image/"))
 				return new PhotoMediaStoreMedia(baseContentUri, cursor, handler);
 			if(mimeType.startsWith("video/"))
-				return null;
+				return new VideoMediaStoreMedia(baseContentUri, cursor, handler);
 		}
 		
 		// cannot check file type
