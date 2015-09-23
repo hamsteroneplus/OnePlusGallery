@@ -6,10 +6,8 @@ import android.support.v13.app.FragmentPagerAdapter;
 import android.support.v4.view.ViewPager;
 
 import com.oneplus.base.BaseActivity;
-import com.oneplus.gallery.media.CameraRollMediaSet;
-import com.oneplus.gallery.media.MediaComparator;
-import com.oneplus.gallery.media.MediaList;
-import com.oneplus.gallery.media.MediaSet;
+import com.oneplus.gallery.media.MediaManager;
+import com.oneplus.gallery.media.MediaSetList;
 
 /**
  * Gallery activity.
@@ -18,13 +16,15 @@ public class GalleryActivity extends BaseActivity
 {
 	// Fields.
 	private ViewPager m_EntryViewPager;
+	private MediaSetList m_MediaSetList;
 	
 	
 	// Create fragment for displaying camera roll.
 	private MediaSetFragment createCameraRollFragment()
 	{
 		MediaSetFragment fragment = new MediaSetFragment();
-		fragment.set(MediaSetFragment.PROP_MEDIASET, m_MediaSet);
+		if(m_MediaSetList != null && !m_MediaSetList.isEmpty())
+			fragment.set(MediaSetFragment.PROP_MEDIASET, m_MediaSetList.get(0));
 		return fragment;
 	}
 	
@@ -43,10 +43,25 @@ public class GalleryActivity extends BaseActivity
 		// call super
 		super.onCreate(savedInstanceState);
 		
+		// create media set list
+		m_MediaSetList = MediaManager.createMediaSetList();
+		
 		// setup UI
 		this.setupUI();
 	}
-	MediaSet m_MediaSet;
+	
+	
+	// Called when destroying.
+	protected void onDestroy() 
+	{
+		// release media set list
+		if(m_MediaSetList != null)
+			m_MediaSetList.release();
+		
+		// call super
+		super.onDestroy();
+	}
+	
 	
 	// Setup UI.
 	private void setupUI()
@@ -54,8 +69,6 @@ public class GalleryActivity extends BaseActivity
 		// setup content view
 		this.setContentView(R.layout.activity_gallery);
 		
-		
-		m_MediaSet = new CameraRollMediaSet();
 		// prepare entry view pager
 		m_EntryViewPager = (ViewPager)this.findViewById(R.id.entry_view_pager);
 		m_EntryViewPager.setAdapter(new FragmentPagerAdapter(this.getFragmentManager())

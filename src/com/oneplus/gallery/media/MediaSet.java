@@ -18,7 +18,7 @@ public interface MediaSet extends BaseObject, HandlerObject
 	/**
 	 * Property for name of this set.
 	 */
-	PropertyKey<CharSequence> PROP_NAME = new PropertyKey<>("Name", CharSequence.class, MediaSet.class, 0, null);
+	PropertyKey<String> PROP_NAME = new PropertyKey<>("Name", String.class, MediaSet.class, 0, null);
 	
 	
 	/**

@@ -253,6 +253,26 @@ public abstract class BasicMediaList extends ListHandlerBaseObject<Media> implem
 	}
 	
 	
+	/**
+	 * Get media comparator for media ordering.
+	 * @return Media comparator.
+	 */
+	public final MediaComparator getComparator()
+	{
+		return m_Comparator;
+	}
+	
+	
+	/**
+	 * Get maximum number of media allowed in list.
+	 * @return Maximum number of media allowed in list, negative value means unlimited.
+	 */
+	public final int getMaxMediaCount()
+	{
+		return m_MaxMediaCount;
+	}
+	
+	
 	// Get index of media.
 	@Override
 	public int indexOf(Object object)
@@ -263,6 +283,26 @@ public abstract class BasicMediaList extends ListHandlerBaseObject<Media> implem
 			return (index >= 0 ? index : -1);
 		}
 		return -1;
+	}
+	
+	
+	/**
+	 * Remove media from list.
+	 * @param media Media to remove.
+	 * @return True if media removed from list successfully.
+	 */
+	protected boolean removeMedia(Media media)
+	{
+		this.verifyAccess();
+		if(media == null)
+			return false;
+		int index = Collections.binarySearch(m_List, media, m_Comparator);
+		if(index >= 0 && m_List.get(index) == media)
+		{
+			this.removeMediaInternal(index);
+			return true;
+		}
+		return false;
 	}
 	
 	

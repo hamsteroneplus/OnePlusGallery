@@ -43,11 +43,11 @@ public abstract class MediaStoreMedia implements Media
 	
 	/**
 	 * Initialize new MediaStoreMedia instance.
-	 * @param baseContentUri Base content URI.
+	 * @param contentUri Content URI.
 	 * @param cursor Cursor to read data.
 	 * @param handler Handler.
 	 */
-	protected MediaStoreMedia(Uri baseContentUri, Cursor cursor, Handler handler)
+	protected MediaStoreMedia(Uri contentUri, Cursor cursor, Handler handler)
 	{
 		// check parameter
 		if(handler == null)
@@ -57,11 +57,7 @@ public abstract class MediaStoreMedia implements Media
 		m_Handler = handler;
 		
 		// get content URI
-		int id = CursorUtils.getInt(cursor, MediaColumns._ID, 0);
-		if(id > 0)
-			m_ContentUri = Uri.parse(baseContentUri.toString() + "/" + id);
-		else
-			m_ContentUri = baseContentUri;
+		m_ContentUri = contentUri;
 		
 		// get file path
 		m_FilePath = CursorUtils.getString(cursor, MediaColumns.DATA);
@@ -79,20 +75,19 @@ public abstract class MediaStoreMedia implements Media
 	
 	/**
 	 * Create {@link MediaStoreMedia} instance.
-	 * @param baseContentUri Base content URI.
 	 * @param cursor Cursor to read data.
 	 * @param handler Handler.
 	 * @return Create media instance, or Null if fail to create.
 	 */
-	public static MediaStoreMedia create(Uri baseContentUri, Cursor cursor, Handler handler)
+	public static MediaStoreMedia create(Cursor cursor, Handler handler)
 	{
 		// create media by media type
 		switch(CursorUtils.getInt(cursor, FileColumns.MEDIA_TYPE, FileColumns.MEDIA_TYPE_NONE))
 		{
 			case FileColumns.MEDIA_TYPE_IMAGE:
-				return new PhotoMediaStoreMedia(baseContentUri, cursor, handler);
+				return new PhotoMediaStoreMedia(cursor, handler);
 			case FileColumns.MEDIA_TYPE_VIDEO:
-				return new VideoMediaStoreMedia(baseContentUri, cursor, handler);
+				return new VideoMediaStoreMedia(cursor, handler);
 			case FileColumns.MEDIA_TYPE_NONE:
 				break;
 			default:
@@ -104,9 +99,9 @@ public abstract class MediaStoreMedia implements Media
 		if(mimeType != null)
 		{
 			if(mimeType.startsWith("image/"))
-				return new PhotoMediaStoreMedia(baseContentUri, cursor, handler);
+				return new PhotoMediaStoreMedia(cursor, handler);
 			if(mimeType.startsWith("video/"))
-				return new VideoMediaStoreMedia(baseContentUri, cursor, handler);
+				return new VideoMediaStoreMedia(cursor, handler);
 		}
 		
 		// cannot check file type
@@ -119,6 +114,37 @@ public abstract class MediaStoreMedia implements Media
 	public Uri getContentUri()
 	{
 		return m_ContentUri;
+	}
+	
+	
+	/**
+	 * Get content URI from cursor.
+	 * @param cursor Cursor.
+	 * @return Content URI.
+	 */
+	public static Uri getContentUri(Cursor cursor)
+	{
+		return getContentUri(cursor, CursorUtils.getInt(cursor, FileColumns.MEDIA_TYPE, FileColumns.MEDIA_TYPE_NONE));
+	}
+	
+	
+	/**
+	 * Get content URI from cursor.
+	 * @param cursor Cursor.
+	 * @param mediaType Media type defined in {@link FileColumns}.
+	 * @return Content URI.
+	 */
+	public static Uri getContentUri(Cursor cursor, int mediaType)
+	{
+		switch(mediaType)
+		{
+			case FileColumns.MEDIA_TYPE_IMAGE:
+				return PhotoMediaStoreMedia.getContentUri(cursor);
+			case FileColumns.MEDIA_TYPE_VIDEO:
+				return VideoMediaStoreMedia.getContentUri(cursor);
+			default:
+				return null;
+		}
 	}
 	
 	
