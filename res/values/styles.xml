@@ -13,5 +13,22 @@
     <style name="AppTheme" parent="AppBaseTheme">
         <!-- All customizations that are NOT specific to a particular API-level can go here. -->
     </style>
+    
+    <!-- Base text -->
+	<style name="BaseText">
+		<item name="android:fontFamily">sans-serif</item>
+	</style>
+	
+	<!--media set list item title -->
+	<style name="MediaSetListItemTitleText" parent="BaseText">
+		<item name="android:textColor">@color/media_set_list_item_title</item>
+		<item name="android:textSize">@dimen/media_set_list_item_title_text_size</item>
+	</style>
+	
+	<!--media set list item title -->
+	<style name="MediaSetListItemSizeText" parent="BaseText">
+		<item name="android:textColor">@color/media_set_list_item_size</item>
+		<item name="android:textSize">@dimen/media_set_list_item_title_text_size</item>
+	</style>
 
 </resources>
