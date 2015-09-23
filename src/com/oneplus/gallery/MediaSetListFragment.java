@@ -1,11 +1,19 @@
 package com.oneplus.gallery;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.Context;
+import android.content.DialogInterface;
 import android.os.Bundle;
+import android.text.InputFilter;
+import android.text.InputType;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.BaseAdapter;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -19,6 +27,7 @@ public class MediaSetListFragment extends BaseFragment
 {
 	// Fields
 	private Activity m_Activity;
+	private Button m_AddAlbumButton;
 	private MediaSetListAdapter m_MediaSetListAdapter;
 	private ListView m_MediaSetListView;
 	
@@ -52,7 +61,41 @@ public class MediaSetListFragment extends BaseFragment
 	public void onResume() {
 		super.onResume();
 		
+		m_AddAlbumButton = (Button)getView().findViewById(R.id.add_album_buttom);
 		m_MediaSetListView = (ListView)getView().findViewById(R.id.media_set_listview);
+		
+		m_AddAlbumButton.setOnClickListener(new View.OnClickListener() {
+			
+			@Override
+			public void onClick(View v) {
+				// show dialog
+				final EditText input = new EditText(m_Activity);
+				input.setHint("我的最愛");
+				input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(140)});
+				input.setRawInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL);
+		        new AlertDialog.Builder(m_Activity)
+		                .setTitle("新建圖集")
+		                .setView(input)
+		                .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+		                    public void onClick(DialogInterface dialog, int whichButton) {
+		                    	String newAlbumName = input.getText().toString();
+
+		                    	// TODO: create new album
+		                    	
+		            			InputMethodManager imm = (InputMethodManager)m_Activity.getSystemService(Context.INPUT_METHOD_SERVICE);
+		            			imm.hideSoftInputFromWindow(input.getWindowToken(), 0);
+		                    }
+		                })
+		                .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+		                    public void onClick(DialogInterface dialog, int whichButton) {
+		                    	InputMethodManager imm = (InputMethodManager)m_Activity.getSystemService(Context.INPUT_METHOD_SERVICE);
+		            			imm.hideSoftInputFromWindow(input.getWindowToken(), 0);
+		                    	dialog.dismiss();
+		                    }
+		                })
+                .show();
+			}
+		});
 		m_MediaSetListView.setAdapter(m_MediaSetListAdapter);
 	}
 	

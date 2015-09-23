@@ -10,5 +10,14 @@
 	    android:divider="@color/media_set_list_item_background"
 	    android:dividerHeight="@dimen/media_set_list_item_divider_height">    
 	</ListView>
+	
+	<Button 
+	    android:id="@+id/add_album_buttom"
+	    android:layout_width="@dimen/media_set_list_add_album_button_size"
+	    android:layout_height="@dimen/media_set_list_add_album_button_size"
+	    android:layout_alignParentRight="true"
+	    android:layout_alignParentBottom="true"
+	    android:layout_marginRight="@dimen/media_set_list_add_album_button_margin_right"
+	    android:layout_marginBottom="@dimen/media_set_list_add_album_button_margin_bottom"/>
 
 </RelativeLayout>
