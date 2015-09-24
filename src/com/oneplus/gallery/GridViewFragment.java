@@ -1,6 +1,9 @@
 package com.oneplus.gallery;
 
 
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 
 import com.oneplus.base.BaseFragment;
@@ -45,17 +48,41 @@ import android.widget.Toast;
 /**
  * Fragment to display media in media set.
  */
-public class MediaSetFragment extends BaseFragment {
+public class GridViewFragment extends BaseFragment {
 
 	// Private fields
 	private MediaList m_MediaList = null;
+	private GridView m_GridView;
 	private GridViewItemAdapter m_GridViewItemAdapter;
 	private Drawable m_GreySquare = new SquareDrawable(270,270);
+	private View m_NoMediaView;
+	
+	
 	/**
-	 * Property to get or set MediaSet
+	 * Property to get or set whether media list is camera roll or not.
 	 */
-	public final static PropertyKey<MediaList> PROP_MEDIA_LIST = new PropertyKey<>("FragmentMediaList", MediaList.class, MediaSetFragment.class, 0, null);
+	public static final PropertyKey<Boolean> PROP_IS_CAMERA_ROLL = new PropertyKey<>("IsCameraRoll", Boolean.class, GridViewFragment.class, PropertyKey.FLAG_NOT_NULL, false);
+	/**
+	 * Property to get or set selection mode.
+	 */
+	public static final PropertyKey<Boolean> PROP_IS_SELECTION_MODE = new PropertyKey<>("IsSelectionMode", Boolean.class, GridViewFragment.class, PropertyKey.FLAG_NOT_NULL, false);
+	/**
+	 * Property to get or set media list to display.
+	 */
+	public final static PropertyKey<MediaList> PROP_MEDIA_LIST = new PropertyKey<>("MediaList", MediaList.class, GridViewFragment.class, 0, null);
+	/**
+	 * Read-only property to get number of selected media.
+	 */
+	public static final PropertyKey<Integer> PROP_SELECTION_COUNT = new PropertyKey<>("SelectionCount", Integer.class, GridViewFragment.class, 0);
 
+	
+	/**
+	 * Raised after clicking single media.
+	 */
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	public static final EventKey<ListItemEventArgs<Media>> EVENT_MEDIA_CLICKED = new EventKey<ListItemEventArgs<Media>>("MediaClicked", (Class)ListItemEventArgs.class, GridViewFragment.class);
+	
+	
 	// Adapter view holder
 	static class GridViewItemHolder {
 		int m_ItemPosition;
@@ -67,11 +94,78 @@ public class MediaSetFragment extends BaseFragment {
 	}
 	
 	
+	// Event handlers.
+	private final EventHandler<ListChangeEventArgs> m_MediaAddedHandler = new EventHandler<ListChangeEventArgs>()
+	{
+		@Override
+		public void onEventReceived(EventSource source, EventKey<ListChangeEventArgs> key, ListChangeEventArgs e)
+		{
+			onMediaAdded(e);
+		}
+	};
+	private final EventHandler<ListChangeEventArgs> m_MediaRemovedHandler = new EventHandler<ListChangeEventArgs>()
+	{
+		@Override
+		public void onEventReceived(EventSource source, EventKey<ListChangeEventArgs> key, ListChangeEventArgs e)
+		{
+			onMediaRemoved(e);
+		}
+	};
+	
+	
+	/**
+	 * Get all selected media.
+	 * @return List of selected media.
+	 */
+	public List<Media> getSelectedMedia()
+	{
+		return Collections.EMPTY_LIST;
+	}
+	
+	
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		// TODO Auto-generated method stub
 		super.onCreate(savedInstanceState);
 		Log.d(TAG, "onCreate");
+	}
+	
+	private void onItemClicked(int index, View view)
+	{
+		// check state
+		if(m_MediaList == null)
+			return;
+		if(index < 0 || index >= m_MediaList.size())
+		{
+			Log.e(TAG, "onItemClicked() - Invalid index : " + index);
+			return;
+		}
+		
+		// raise event
+		Media media = m_MediaList.get(index);
+		this.raise(EVENT_MEDIA_CLICKED, new ListItemEventArgs<Media>(index, media));
+	}
+	
+	private void onMediaAdded(ListChangeEventArgs e)
+	{
+		// show grid view
+		if(!m_MediaList.isEmpty())
+			this.showGridView();
+		
+		// refresh items
+		if(m_GridViewItemAdapter != null)
+			m_GridViewItemAdapter.notifyDataSetChanged();
+	}
+	
+	private void onMediaRemoved(ListChangeEventArgs e)
+	{
+		// hide grid view
+		if(m_MediaList.isEmpty())
+			;
+		
+		// refresh items
+		if(m_GridViewItemAdapter != null)
+			m_GridViewItemAdapter.notifyDataSetChanged();
 	}
 
 	@Override
@@ -89,9 +183,9 @@ public class MediaSetFragment extends BaseFragment {
 	}
 
 	/**
-	 * Initialize new MediaSetFragment instance.
+	 * Initialize new GridViewFragment instance.
 	 */
-	public MediaSetFragment() {
+	public GridViewFragment() {
 		this.setRetainInstance(true);
 		onInitialize();
 	}
@@ -114,41 +208,55 @@ public class MediaSetFragment extends BaseFragment {
 	
 	
 	private boolean setMediaList(MediaList value) {
+		
+		// check instance
+		if(m_MediaList == value)
+			return false;
+		
+		// detach from previous media list
+		if(m_MediaList != null)
+		{
+			m_MediaList.removeHandler(MediaList.EVENT_MEDIA_ADDED, m_MediaAddedHandler);
+			m_MediaList.removeHandler(MediaList.EVENT_MEDIA_REMOVED, m_MediaRemovedHandler);
+		}
+		
+		// attach to new media list
 		m_MediaList = value;
 		if(m_MediaList == null)
 			Log.d(TAG, "m_MediaList value null" );
 		else {
 			Log.d(TAG, "m_MediaList value" );
-			m_MediaList.addHandler(MediaList.EVENT_MEDIA_ADDED, new EventHandler<ListChangeEventArgs>(){
-				@Override
-				public void onEventReceived(EventSource source, EventKey<ListChangeEventArgs> key, ListChangeEventArgs e) {
-					Log.e(TAG, "EVENT_MEDIA_ADDED");
-					showGridView();
-					if(m_GridViewItemAdapter != null) {
-						m_GridViewItemAdapter.notifyDataSetChanged();
-					}
-				}
-				
-			});
+			m_MediaList.addHandler(MediaList.EVENT_MEDIA_ADDED, m_MediaAddedHandler);
+			m_MediaList.addHandler(MediaList.EVENT_MEDIA_REMOVED, m_MediaRemovedHandler);
 		}
+		
+		// update UI
+		if(m_GridViewItemAdapter != null)
+			m_GridViewItemAdapter.notifyDataSetChanged();
+		if(value != null && !value.isEmpty())
+			this.showGridView();
+		else
+			this.showNoMedia();
+		
+		// complete
 		return true;
 	}
 
 	private void showGridView() {
-		GridView gridview = (GridView) getView().findViewById(R.id.gridview);
-		View noPhotoView = getView().findViewById(R.id.no_photo);
-		m_GridViewItemAdapter = new GridViewItemAdapter(this.getActivity());
-		gridview.setAdapter(m_GridViewItemAdapter);
-		gridview.setOnItemClickListener(new OnItemClickListener() {
-			@Override
-			public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-				Log.d(TAG, "gridview onItemClick event item position:" + position);
-				Toast.makeText(MediaSetFragment.this.getActivity(), "" + position, Toast.LENGTH_SHORT).show();
-			}
-	    });	
-		gridview.setVisibility(View.VISIBLE);
-		noPhotoView.setVisibility(View.GONE);
-		noPhotoView.setOnClickListener(null);
+		
+		if(m_GridView == null)
+			return;
+		m_GridView.setVisibility(View.VISIBLE);
+		m_NoMediaView.setVisibility(View.GONE);
+	}
+	
+	private void showNoMedia()
+	{
+		if(m_NoMediaView == null)
+			return;
+		m_GridView.setVisibility(View.GONE);
+		if(this.get(PROP_IS_CAMERA_ROLL))
+			m_NoMediaView.setVisibility(View.VISIBLE);
 	}
 
 	// Create view.
@@ -156,31 +264,50 @@ public class MediaSetFragment extends BaseFragment {
 	public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 		Log.d(TAG, "onCreateView");
 		View view = inflater.inflate(R.layout.fragment_gridview, container, false);
-		GridView gridview = (GridView) view.findViewById(R.id.gridview);
-		View noPhotoView = view.findViewById(R.id.no_photo);
-		if(m_MediaList != null && !m_MediaList.isEmpty()) {
+		m_GridView = (GridView) view.findViewById(R.id.gridview);
+		if(m_GridViewItemAdapter == null)
 			m_GridViewItemAdapter = new GridViewItemAdapter(this.getActivity());
-			gridview.setAdapter(m_GridViewItemAdapter);
-			gridview.setOnItemClickListener(new OnItemClickListener() {
-				@Override
-				public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-					Log.d(TAG, "gridview onItemClick event item position:" + position);
-					Toast.makeText(MediaSetFragment.this.getActivity(), "" + position, Toast.LENGTH_SHORT).show();
-				}
-		    });	
-			noPhotoView.setVisibility(View.GONE);	
-		}else {
-			gridview.setVisibility(View.GONE);
-			noPhotoView.setVisibility(View.VISIBLE);
-			noPhotoView.setOnClickListener(new OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					Intent intent = new Intent("android.media.action.STILL_IMAGE_CAMERA");
-				    startActivity(intent);
-				}
-			});
-		}
+		m_GridView.setAdapter(m_GridViewItemAdapter);
+		m_GridView.setOnItemClickListener(new OnItemClickListener() {
+			@Override
+			public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+				Log.d(TAG, "gridview onItemClick event item position:" + position);
+				Toast.makeText(GridViewFragment.this.getActivity(), "" + position, Toast.LENGTH_SHORT).show();
+				onItemClicked(position, view);
+			}
+	    });	
+		
+		m_NoMediaView = view.findViewById(R.id.no_photo);
+		m_NoMediaView.setOnClickListener(new OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				Intent intent = new Intent("android.media.action.STILL_IMAGE_CAMERA");
+			    startActivity(intent);
+			}
+		});
+		
+		if(m_MediaList != null && !m_MediaList.isEmpty())
+			this.showGridView();
+		else
+			this.showNoMedia();
+		
 		return view;
+	}
+	
+	
+	@Override
+	public void onDestroyView()
+	{
+		// clear references
+		if(m_GridView != null)
+		{
+			m_GridView.setAdapter(null);
+			m_GridView = null;
+		}
+		m_NoMediaView = null;
+		
+		// call super
+		super.onDestroyView();
 	}
 
 
@@ -295,7 +422,7 @@ public class MediaSetFragment extends BaseFragment {
 								holder.m_ItemVideotime.setText(getVideoTime(media));
 							}
 						}
-					}, MediaSetFragment.this.getHandler());
+					}, GridViewFragment.this.getHandler());
 				}
 			}
 			return convertView;

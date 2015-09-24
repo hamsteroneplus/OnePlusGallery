@@ -58,6 +58,13 @@ public class MediaSetListFragment extends BaseFragment
 	
 	
 	/**
+	 * Raised after clicking single media set.
+	 */
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	public static final EventKey<ListItemEventArgs<MediaSet>> EVENT_MEDIA_SET_CLICKED = new EventKey<ListItemEventArgs<MediaSet>>("MediaSetClicked", (Class)ListItemEventArgs.class, MediaSetListFragment.class);
+	
+	
+	/**
 	 * Initialize new MediaSetListFragment instance.
 	 */
 	public MediaSetListFragment()
@@ -126,7 +133,8 @@ public class MediaSetListFragment extends BaseFragment
 
 			@Override
 			public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-				
+				MediaSet set = m_MediaSetList.get(position);
+				raise(EVENT_MEDIA_SET_CLICKED, new ListItemEventArgs<MediaSet>(position, set));
 			}
 		});
 		m_MediaSetListView.setAdapter(m_MediaSetListAdapter);
