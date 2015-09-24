@@ -4,9 +4,13 @@ import android.app.Fragment;
 import android.os.Bundle;
 import android.support.v13.app.FragmentPagerAdapter;
 import android.support.v4.view.ViewPager;
+import android.util.Log;
 
 import com.oneplus.base.BaseActivity;
+import com.oneplus.gallery.media.MediaComparator;
+import com.oneplus.gallery.media.MediaList;
 import com.oneplus.gallery.media.MediaManager;
+import com.oneplus.gallery.media.MediaSet;
 import com.oneplus.gallery.media.MediaSetList;
 
 /**
@@ -22,9 +26,13 @@ public class GalleryActivity extends BaseActivity
 	// Create fragment for displaying camera roll.
 	private MediaSetFragment createCameraRollFragment()
 	{
+		Log.d(TAG, "createCameraRollFragment");
 		MediaSetFragment fragment = new MediaSetFragment();
-		if(m_MediaSetList != null && !m_MediaSetList.isEmpty())
-			fragment.set(MediaSetFragment.PROP_MEDIASET, m_MediaSetList.get(0));
+		if(m_MediaSetList != null && !m_MediaSetList.isEmpty()){
+			MediaSet mediaset = m_MediaSetList.get(0);
+			MediaList medialist = mediaset.openMediaList(MediaComparator.TAKEN_TIME, -1, 0);
+			fragment.set(MediaSetFragment.PROP_MEDIALIST, medialist);
+		}
 		return fragment;
 	}
 	

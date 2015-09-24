@@ -3,16 +3,18 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent" >
     
+    <!-- Device has Photos -->
     <GridView
         android:id="@+id/gridview"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:columnWidth="89dp"
-        android:horizontalSpacing="0dp"
         android:numColumns="4"
-        android:stretchMode="none"
-        android:verticalSpacing="0dp" />
+        android:stretchMode="spacingWidth"
+        android:horizontalSpacing="1dp"
+        android:verticalSpacing="1dp" />
     
+    <!-- Device has no Photos -->
 	<RelativeLayout 
 	    android:id="@+id/no_photo"
 	    android:layout_width="wrap_content"

@@ -8,29 +8,29 @@
 	        android:id="@+id/item_thumbnail"
 	        android:layout_width="match_parent"
 	        android:layout_height="match_parent"
-	        android:scaleType="center"
+	        android:scaleType="centerCrop"
 	        />
 	    
-	    <!-- Type Icon -->
-	    <ImageView
-	        android:id="@+id/item_type"
-	        android:layout_width="24dp"
+	    
+	    <LinearLayout 
+	        android:layout_width="match_parent"
 	        android:layout_height="24dp"
 	        android:layout_alignParentBottom="true"
-	        android:layout_alignParentStart="true"
-	        />
-	    
-	    <!-- Video Time -->
-	    <TextView android:id="@+id/item_video_time"
-	        android:layout_width="wrap_content"
-	        android:layout_height="wrap_content"
-	        android:layout_toEndOf="@id/item_type"
-	        android:layout_alignParentBottom="true"
-	        android:layout_marginStart="8dp"
-	        android:singleLine="true"
-	        android:gravity="center"
-	        android:textSize="16sp"
-	        android:text="@string/fragment_add_photo"
-	        />
-	    
+	        android:visibility="gone">
+		    <!-- Type Icon -->
+		    <ImageView
+		        android:id="@+id/item_type"
+		        android:layout_width="24dp"
+		        android:layout_height="match_parent"
+		        />
+		    <!-- Video Time -->
+		    <TextView android:id="@+id/item_video_time"
+		        android:layout_width="0dp"
+		        android:layout_height="match_parent"
+		        android:layout_weight="1"
+		        android:singleLine="true"
+		        android:gravity="start|center_vertical"
+		        android:textSize="12sp"
+		        />
+	    </LinearLayout>
 </RelativeLayout>
