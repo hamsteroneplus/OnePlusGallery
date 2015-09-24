@@ -11,9 +11,7 @@ import com.oneplus.base.Handle;
 import com.oneplus.base.Log;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.gallery.media.Media;
-import com.oneplus.gallery.media.MediaComparator;
 import com.oneplus.gallery.media.MediaList;
-import com.oneplus.gallery.media.MediaSet;
 import com.oneplus.media.BitmapPool;
 import com.oneplus.media.BitmapPool.Callback;
 
@@ -21,6 +19,13 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.ColorFilter;
+import android.graphics.Paint;
+import android.graphics.Paint.Style;
+import android.graphics.PixelFormat;
+import android.graphics.Rect;
+import android.graphics.drawable.Drawable;
 import android.media.MediaMetadataRetriever;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -31,7 +36,6 @@ import android.view.View.OnTouchListener;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
-import android.widget.ImageView.ScaleType;
 import android.widget.BaseAdapter;
 import android.widget.GridView;
 import android.widget.ImageView;
@@ -46,10 +50,11 @@ public class MediaSetFragment extends BaseFragment {
 	// Private fields
 	private MediaList m_MediaList = null;
 	private GridViewItemAdapter m_GridViewItemAdapter;
+	private Drawable m_GreySquare = new SquareDrawable(270,270);
 	/**
 	 * Property to get or set MediaSet
 	 */
-	public final static PropertyKey<MediaList> PROP_MEDIALIST = new PropertyKey<>("FragmentMediaList", MediaList.class, MediaSetFragment.class, 0, null);
+	public final static PropertyKey<MediaList> PROP_MEDIA_LIST = new PropertyKey<>("FragmentMediaList", MediaList.class, MediaSetFragment.class, 0, null);
 
 	// Adapter view holder
 	static class GridViewItemHolder {
@@ -58,6 +63,7 @@ public class MediaSetFragment extends BaseFragment {
 		ImageView m_ItemTypeIcon;
 		TextView m_ItemVideotime;
 		String m_ItemType;
+		String m_ItemFilePath;
 	}
 	
 	
@@ -100,7 +106,7 @@ public class MediaSetFragment extends BaseFragment {
 	@Override
 	public <TValue> boolean set(PropertyKey<TValue> key, TValue value)
 	{
-		if(key == PROP_MEDIALIST)
+		if(key == PROP_MEDIA_LIST)
 			return this.setMediaList((MediaList)value);
 		
 		return super.set(key, value);
@@ -221,7 +227,7 @@ public class MediaSetFragment extends BaseFragment {
 				Log.d(TAG, "getItem 0");
 			}else {
 				if(m_MediaList != null)
-					return m_MediaList.get(position);
+					return m_MediaList.get(position -1);
 				else 
 					return null;	
 			}
@@ -236,8 +242,8 @@ public class MediaSetFragment extends BaseFragment {
 		// create a new ImageView for each item referenced by the Adapter
 		public View getView(int position, View convertView, ViewGroup parent) {
 			final GridViewItemHolder holder; 
-
 			if (convertView == null) {
+			Log.d(TAG, "convertView == null getView position:" + position);
 				// holder initialize
 				holder = new GridViewItemHolder();
 				convertView = m_inflater.inflate(R.layout.fragment_gridview_item, parent, false);
@@ -247,10 +253,13 @@ public class MediaSetFragment extends BaseFragment {
 				// set Tag
 				convertView.setTag(holder);
 			} else {
+				//recycled view
 				holder = (GridViewItemHolder) convertView.getTag();
+				holder.m_ItemThumbnail.setImageDrawable(m_GreySquare);
+				((ViewGroup)holder.m_ItemTypeIcon.getParent()).setVisibility(View.GONE);
 			}
-
 			holder.m_ItemPosition = position;
+			
 			holder.m_ItemThumbnail.setOnTouchListener(new OnTouchListener() {
 				@Override
 				public boolean onTouch(View v, MotionEvent event) {
@@ -266,16 +275,17 @@ public class MediaSetFragment extends BaseFragment {
 			if(m_MediaList != null) {
 				if(holder.m_ItemPosition == 0) {
 					// Set item thumbnail
-					holder.m_ItemThumbnail.setScaleType(ScaleType.CENTER);
 					holder.m_ItemThumbnail.setImageResource(R.drawable.camera);
 				}else {
 					// -1 for the first one for CameraIcon to start camera activity
-					final Media media = m_MediaList.get(holder.m_ItemPosition - 1);
-					holder.m_ItemThumbnail.setScaleType(ScaleType.CENTER_CROP);
+					final Media media = m_MediaList.get(position - 1);
+					holder.m_ItemFilePath = media.getFilePath();
 					holder.m_ItemType = media.getMimeType();
 					BitmapPool.DEFAULT_THUMBNAIL.decode(media.getFilePath(), 270, 270, new Callback() {
 						@Override
 						public void onBitmapDecoded(Handle handle, String filePath, Bitmap bitmap) {
+							if(!filePath.equals(holder.m_ItemFilePath))
+								return;
 							// Set Item thumbnail
 							holder.m_ItemThumbnail.setImageBitmap(bitmap);
 							// Check item type
@@ -293,7 +303,7 @@ public class MediaSetFragment extends BaseFragment {
 	}
 
 
-	public String getVideoTime(Media media) {
+	private String getVideoTime(Media media) {
 		MediaMetadataRetriever retriever = new MediaMetadataRetriever();
 		retriever.setDataSource(media.getFilePath());
 		String time = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
@@ -302,6 +312,51 @@ public class MediaSetFragment extends BaseFragment {
 		long hours = duration / 3600;
 		long minutes = (duration - hours * 3600) / 60;
 		long seconds = duration - (hours * 3600 + minutes * 60);
+		
 		return String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds);
+	}
+	
+	
+	private class SquareDrawable extends Drawable
+	{
+	    private final Paint mPaint;
+	    private final Rect mRect;
+	    private final int mWidth;
+	    private final int mHeight;
+
+	    public SquareDrawable(int width, int height)
+	    {
+	    	mWidth = width;
+	    	mHeight = height;
+	        mPaint = new Paint();
+	        mRect = new Rect();
+	    }
+
+		@Override
+		public void draw(Canvas canvas) {
+			// Set the correct values in the Paint
+	        mPaint.setARGB(255, 125, 125, 125);
+	        mPaint.setStrokeWidth(2);
+	        mPaint.setStyle(Style.FILL);
+	        // Adjust the rect
+	        mRect.left = 0;
+	        mRect.top = 0;
+	        mRect.right = mWidth;
+	        mRect.bottom = mHeight;
+	        // Draw it
+	        canvas.drawRect(mRect, mPaint); 
+			
+		}
+
+		@Override
+		public void setAlpha(int alpha) {}
+
+		@Override
+		public void setColorFilter(ColorFilter cf) {}
+
+		@Override
+		public int getOpacity() {
+			return PixelFormat.OPAQUE;
+		}
 	}
 }
