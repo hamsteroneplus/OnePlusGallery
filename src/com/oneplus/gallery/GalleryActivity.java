@@ -134,6 +134,9 @@ public class GalleryActivity extends BaseActivity
 	private void onMediaSetListFragmentReady(MediaSetListFragment fragment)
 	{
 		Log.v(TAG, "onMediaSetListFragmentReady()");
+		
+		// set media set list
+		fragment.set(MediaSetListFragment.PROP_MEDIA_SET_LIST, m_MediaSetList);
 	}
 	
 	

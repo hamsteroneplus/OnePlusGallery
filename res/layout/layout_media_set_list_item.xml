@@ -16,7 +16,6 @@
 	    	android:layout_height="wrap_content"
 	    	android:layout_marginLeft="@dimen/media_set_list_item_title_margin_left"
 	    	android:layout_centerVertical="true"
-	    	android:text="五五六六得第一"
 	    	style="@style/MediaSetListItemTitleText"/>
 	    
 	    <TextView 
@@ -26,7 +25,6 @@
 	    	android:layout_toRightOf="@+id/media_set_title"
 	    	android:layout_marginLeft="@dimen/media_set_list_item_title_margin_left"
 	    	android:layout_centerVertical="true"
-	    	android:text="5566"
 	    	style="@style/MediaSetListItemSizeText"/>
 	    
 	</RelativeLayout>
@@ -35,7 +33,6 @@
 	    android:id="@+id/media_set_cover_image"
 	    android:layout_width="match_parent"
 	    android:layout_height="@dimen/media_set_list_item_cover_image_height"
-	    android:scaleType="centerCrop"
-	    android:src="@drawable/ic_launcher"/>
+	    android:scaleType="centerCrop"/>
 
 </LinearLayout>
