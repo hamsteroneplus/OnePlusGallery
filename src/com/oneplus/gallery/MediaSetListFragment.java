@@ -372,7 +372,7 @@ public class MediaSetListFragment extends BaseFragment
 									int rectLeft = (index * gridSize) % coverWidth;
 									int rectTop = (index / gridPerRow) * gridSize;
 									//Log.v(TAG, "onEventReceived() - index is :"+index+" , rectLeft is :"+rectLeft+ " , rectTop is "+rectTop);
-									canvas.drawBitmap(bitmap, new Rect(0, 0, gridSize, gridSize), new Rect(rectLeft, rectTop, rectLeft+gridSize, rectTop+gridSize), null);
+									canvas.drawBitmap(bitmap, new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight()), new Rect(rectLeft, rectTop, rectLeft+gridSize, rectTop+gridSize), null);
 									
 									// update bitmap table
 									m_MediaSetCoverImageTable.put(mediaSet, gridCover);
