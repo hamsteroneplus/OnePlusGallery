@@ -369,10 +369,25 @@ public class MediaSetListFragment extends BaseFragment
 								@Override
 								public void onBitmapDecoded(Handle handle, String filePath, Bitmap bitmap) {
 							
+									// gridCoverImageRect
 									int rectLeft = (index * gridSize) % coverWidth;
 									int rectTop = (index / gridPerRow) * gridSize;
-									//Log.v(TAG, "onEventReceived() - index is :"+index+" , rectLeft is :"+rectLeft+ " , rectTop is "+rectTop);
-									canvas.drawBitmap(bitmap, new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight()), new Rect(rectLeft, rectTop, rectLeft+gridSize, rectTop+gridSize), null);
+									
+									// Bitmap Rect
+									int bitmapRectLeft = 0;
+									int bitmapRectTop = 0;
+									int shortSide = 0;
+									if(bitmap.getHeight() >= bitmap.getWidth())
+									{
+										shortSide = bitmap.getWidth();
+										bitmapRectTop = (bitmap.getHeight() - bitmap.getWidth())/2;
+									}
+									else
+									{
+										shortSide = bitmap.getHeight();
+										bitmapRectLeft = (bitmap.getWidth() - bitmap.getHeight())/2;
+									}	
+									canvas.drawBitmap(bitmap, new Rect(bitmapRectLeft, bitmapRectTop, bitmapRectLeft+shortSide, bitmapRectTop+shortSide), new Rect(rectLeft, rectTop, rectLeft+gridSize, rectTop+gridSize), null);
 									
 									// update bitmap table
 									m_MediaSetCoverImageTable.put(mediaSet, gridCover);
