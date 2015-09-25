@@ -13,4 +13,8 @@
 	<dimen name="media_set_list_item_title_margin_left">16dp</dimen>
 	<dimen name="media_set_list_item_cover_image_height">120sp</dimen>
 	
+	<!-- GridView Fragment item-->
+	<dimen name="gridview_item_height">89dp</dimen>
+	<dimen name="gridview_item_width">89dp</dimen>
+	
 </resources>

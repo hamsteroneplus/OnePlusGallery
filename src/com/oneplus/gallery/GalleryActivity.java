@@ -339,11 +339,19 @@ public class GalleryActivity extends BaseActivity
 	@Override
 	protected void onStart()
 	{
+		Log.d(TAG, "onStart");
 		// call super
 		super.onStart();
 		
 		// setup media set list
 		this.setupMediaSetList();
+		
+		// HomeBtn and resume need set medialist for gridviewfragment, otherwise girdview show nothing
+		if(m_DefaultGridViewFragment != null && m_DefaultMediaSet != null) {
+			m_DefaultMediaList = m_DefaultMediaSet.openMediaList(MediaComparator.TAKEN_TIME, -1, 0);
+			m_DefaultGridViewFragment.set(GridViewFragment.PROP_IS_CAMERA_ROLL, true);
+			m_DefaultGridViewFragment.set(GridViewFragment.PROP_MEDIA_LIST, m_DefaultMediaList);
+		}
 	}
 	
 	
@@ -432,9 +440,6 @@ public class GalleryActivity extends BaseActivity
 		if(m_DefaultMediaSet == null)
 			Log.w(TAG, "setupMediaSetList() - No default set");
 		
-		// add event handlers
-		m_MediaSetList.addHandler(MediaSetList.EVENT_MEDIA_SET_ADDED, m_MediaSetAddedHandler);
-		m_MediaSetList.addHandler(MediaSetList.EVENT_MEDIA_SET_REMOVED, m_MediaSetRemovedHandler);
 	}
 	
 	

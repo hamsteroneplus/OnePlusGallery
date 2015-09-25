@@ -42,6 +42,7 @@ import android.widget.AdapterView.OnItemClickListener;
 import android.widget.BaseAdapter;
 import android.widget.GridView;
 import android.widget.ImageView;
+import android.widget.ImageView.ScaleType;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -54,10 +55,11 @@ public class GridViewFragment extends BaseFragment {
 	private MediaList m_MediaList = null;
 	private GridView m_GridView;
 	private GridViewItemAdapter m_GridViewItemAdapter;
-	private Drawable m_GreySquare = new SquareDrawable(270,270);
+	private Drawable m_GreySquare;
 	private View m_NoMediaView;
-	
-	
+	private int m_GridviewItemWidth;
+	private int m_GridviewItemHeight;
+	private static BitmapPool m_BitmapPool = new BitmapPool("GridViewFragmentBitmapPool", 64 << 20, Bitmap.Config.ARGB_8888, 3);
 	/**
 	 * Property to get or set whether media list is camera roll or not.
 	 */
@@ -91,6 +93,7 @@ public class GridViewFragment extends BaseFragment {
 		TextView m_ItemVideotime;
 		String m_ItemType;
 		String m_ItemFilePath;
+		Handle m_DecodeHandle;
 	}
 	
 	
@@ -113,6 +116,7 @@ public class GridViewFragment extends BaseFragment {
 	};
 	
 	
+	
 	/**
 	 * Get all selected media.
 	 * @return List of selected media.
@@ -128,6 +132,12 @@ public class GridViewFragment extends BaseFragment {
 		// TODO Auto-generated method stub
 		super.onCreate(savedInstanceState);
 		Log.d(TAG, "onCreate");
+		m_GridviewItemHeight = this.getResources().getDimensionPixelSize(R.dimen.gridview_item_height);
+		m_GridviewItemWidth = this.getResources().getDimensionPixelSize(R.dimen.gridview_item_width);
+		
+		// Prepare greySquare
+		m_GreySquare = new SquareDrawable(m_GridviewItemWidth, m_GridviewItemHeight);
+		
 	}
 	
 	private void onItemClicked(int index, View view)
@@ -180,6 +190,7 @@ public class GridViewFragment extends BaseFragment {
 		// TODO Auto-generated method stub
 		super.onResume();
 		Log.d(TAG, "onResume");
+		
 	}
 
 	/**
@@ -298,6 +309,7 @@ public class GridViewFragment extends BaseFragment {
 	@Override
 	public void onDestroyView()
 	{
+		Log.d(TAG, "onDestroyView");
 		// clear references
 		if(m_GridView != null)
 		{
@@ -305,7 +317,6 @@ public class GridViewFragment extends BaseFragment {
 			m_GridView = null;
 		}
 		m_NoMediaView = null;
-		
 		// call super
 		super.onDestroyView();
 	}
@@ -330,7 +341,6 @@ public class GridViewFragment extends BaseFragment {
 		// Private fields
 		private Context m_Context = null;
 		private LayoutInflater m_inflater;
-		private GridViewItemHolder m_Holder = null;
 
 		public GridViewItemAdapter(Context context) {
 			m_Context = context;
@@ -338,11 +348,10 @@ public class GridViewFragment extends BaseFragment {
 		}
 
 		public int getCount() {
-			Log.d(TAG, "getCount");
 			int count = 0;
 			if(m_MediaList != null && !m_MediaList.isEmpty()) {
 				count += m_MediaList.size();
-				return count +1 ;
+				return count + 1;// +1 for the first one camera icon item
 			}
 			else
 				return 0;
@@ -370,7 +379,7 @@ public class GridViewFragment extends BaseFragment {
 		public View getView(int position, View convertView, ViewGroup parent) {
 			final GridViewItemHolder holder; 
 			if (convertView == null) {
-			Log.d(TAG, "convertView == null getView position:" + position);
+				//Log.d(TAG, "convertView == null getView position:" + position);
 				// holder initialize
 				holder = new GridViewItemHolder();
 				convertView = m_inflater.inflate(R.layout.fragment_gridview_item, parent, false);
@@ -382,15 +391,15 @@ public class GridViewFragment extends BaseFragment {
 			} else {
 				//recycled view
 				holder = (GridViewItemHolder) convertView.getTag();
-				holder.m_ItemThumbnail.setImageDrawable(m_GreySquare);
 				((ViewGroup)holder.m_ItemTypeIcon.getParent()).setVisibility(View.GONE);
 			}
+			holder.m_ItemThumbnail.setImageDrawable(m_GreySquare);
 			holder.m_ItemPosition = position;
 			
 			holder.m_ItemThumbnail.setOnTouchListener(new OnTouchListener() {
 				@Override
 				public boolean onTouch(View v, MotionEvent event) {
-					Log.d(TAG, "holder touch event view: " +  v.toString());
+					//Log.d(TAG, "holder touch event view: " +  v.toString());
 					if(holder.m_ItemPosition == 0) {
 						Intent intent = new Intent("android.media.action.STILL_IMAGE_CAMERA");
 						startActivity(intent);
@@ -403,15 +412,18 @@ public class GridViewFragment extends BaseFragment {
 				if(holder.m_ItemPosition == 0) {
 					// Set item thumbnail
 					holder.m_ItemThumbnail.setImageResource(R.drawable.camera);
+					holder.m_ItemFilePath = "cameraIcon";
 				}else {
+					Log.e(TAG, "holder.m_ItemPosition: " + holder.m_ItemPosition);
 					// -1 for the first one for CameraIcon to start camera activity
 					final Media media = m_MediaList.get(position - 1);
 					holder.m_ItemFilePath = media.getFilePath();
 					holder.m_ItemType = media.getMimeType();
-					BitmapPool.DEFAULT_THUMBNAIL.decode(media.getFilePath(), 270, 270, new Callback() {
+					holder.m_DecodeHandle = m_BitmapPool.decode(media.getFilePath(), m_GridviewItemWidth, m_GridviewItemHeight,BitmapPool.FLAG_ASYNC|BitmapPool.FLAG_URGENT, new Callback() {
 						@Override
 						public void onBitmapDecoded(Handle handle, String filePath, Bitmap bitmap) {
-							if(!filePath.equals(holder.m_ItemFilePath))
+							// if decode handle is not the same, means the origin holder is recycled, don't update image to that holder
+							if(handle != holder.m_DecodeHandle)
 								return;
 							// Set Item thumbnail
 							holder.m_ItemThumbnail.setImageBitmap(bitmap);
@@ -430,6 +442,7 @@ public class GridViewFragment extends BaseFragment {
 	}
 
 
+	
 	private String getVideoTime(Media media) {
 		MediaMetadataRetriever retriever = new MediaMetadataRetriever();
 		retriever.setDataSource(media.getFilePath());
