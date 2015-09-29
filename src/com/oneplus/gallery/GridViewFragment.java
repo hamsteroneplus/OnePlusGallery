@@ -15,8 +15,10 @@ import com.oneplus.base.Log;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaList;
+import com.oneplus.gallery.media.VideoMedia;
 import com.oneplus.media.BitmapPool;
 import com.oneplus.media.BitmapPool.Callback;
+import com.oneplus.media.CenterCroppedBitmapPool;
 
 import android.app.Activity;
 import android.content.Context;
@@ -30,6 +32,7 @@ import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.media.MediaMetadataRetriever;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -59,7 +62,9 @@ public class GridViewFragment extends BaseFragment {
 	private View m_NoMediaView;
 	private int m_GridviewItemWidth;
 	private int m_GridviewItemHeight;
-	private static BitmapPool m_BitmapPool = new BitmapPool("GridViewFragmentBitmapPool", 64 << 20, Bitmap.Config.ARGB_8888, 3);
+	private static BitmapPool m_BitmapPool = new CenterCroppedBitmapPool("GridViewFragmentBitmapPool", 64 << 20, Bitmap.Config.ARGB_8888, 3);
+	private static BitmapPool m_SmallBitmapPool = new CenterCroppedBitmapPool("GridViewFragmentSmallBitmapPool", 32 << 20, Bitmap.Config.RGB_565, 4, BitmapPool.FLAG_USE_EMBEDDED_THUMB_ONLY);
+	
 	/**
 	 * Property to get or set whether media list is camera roll or not.
 	 */
@@ -86,14 +91,56 @@ public class GridViewFragment extends BaseFragment {
 	
 	
 	// Adapter view holder
-	static class GridViewItemHolder {
-		int m_ItemPosition;
-		ImageView m_ItemThumbnail;
-		ImageView m_ItemTypeIcon;
-		TextView m_ItemVideotime;
-		String m_ItemType;
-		String m_ItemFilePath;
-		Handle m_DecodeHandle;
+	private class GridViewItemHolder {
+		public int position;
+		public Uri contentUri;
+		public ImageView thumbnailImageView;
+		public ImageView typeIconView;
+		public TextView durationTextView;
+		public String mimeType;
+		public final BitmapPool.Callback smallThumbDecodeCallback = new BitmapPool.Callback()
+		{
+			public void onBitmapDecoded(Handle handle, Uri contentUri, Bitmap bitmap) 
+			{
+				if(handle == smallThumbDecodeHandle && bitmap != null && !thumbDecoded)
+					thumbnailImageView.setImageBitmap(bitmap);
+			}
+			public void onBitmapDecoded(Handle handle, String filePath, Bitmap bitmap) 
+			{
+				if(handle == smallThumbDecodeHandle && bitmap != null && !thumbDecoded)
+					thumbnailImageView.setImageBitmap(bitmap);
+			}
+		};
+		public Handle smallThumbDecodeHandle;
+		public final BitmapPool.Callback thumbDecodeCallback = new BitmapPool.Callback()
+		{
+			public void onBitmapDecoded(Handle handle, Uri contentUri, Bitmap bitmap) 
+			{
+				if(handle == thumbDecodeHandle && bitmap != null)
+				{
+					thumbDecoded = true;
+					thumbnailImageView.setImageBitmap(bitmap);
+				}
+			}
+			public void onBitmapDecoded(Handle handle, String filePath, Bitmap bitmap)
+			{
+				if(handle == thumbDecodeHandle && bitmap != null)
+				{
+					thumbDecoded = true;
+					thumbnailImageView.setImageBitmap(bitmap);
+				}
+			}
+		};
+		public Handle thumbDecodeHandle;
+		public boolean thumbDecoded;
+		
+		public GridViewItemHolder(View itemView)
+		{
+			this.thumbnailImageView = (ImageView) itemView.findViewById(R.id.item_thumbnail);
+			this.typeIconView = (ImageView) itemView.findViewById(R.id.item_type);
+			this.durationTextView = (TextView) itemView.findViewById(R.id.item_video_time);
+			itemView.setTag(this);
+		}
 	}
 	
 	
@@ -348,10 +395,10 @@ public class GridViewFragment extends BaseFragment {
 		}
 
 		public int getCount() {
-			int count = 0;
 			if(m_MediaList != null && !m_MediaList.isEmpty()) {
-				count += m_MediaList.size();
-				return count + 1;// +1 for the first one camera icon item
+				if(get(PROP_IS_CAMERA_ROLL))
+					return m_MediaList.size() + 1;// +1 for the first one camera icon item
+				return m_MediaList.size();
 			}
 			else
 				return 0;
@@ -359,13 +406,15 @@ public class GridViewFragment extends BaseFragment {
 
 		public Object getItem(int position) {
 			Log.d(TAG, "getItem position: " + position);
-			if(position == 0) {
-				Log.d(TAG, "getItem 0");
-			}else {
-				if(m_MediaList != null)
-					return m_MediaList.get(position -1);
-				else 
-					return null;	
+			if(m_MediaList != null)
+			{
+				if(get(PROP_IS_CAMERA_ROLL))
+				{
+					if(position == 0)
+						return null;
+					return m_MediaList.get(position - 1);
+				}
+				return m_MediaList.get(position);
 			}
 			return null;
 		}
@@ -381,60 +430,48 @@ public class GridViewFragment extends BaseFragment {
 			if (convertView == null) {
 				//Log.d(TAG, "convertView == null getView position:" + position);
 				// holder initialize
-				holder = new GridViewItemHolder();
 				convertView = m_inflater.inflate(R.layout.fragment_gridview_item, parent, false);
-				holder.m_ItemThumbnail = (ImageView) convertView.findViewById(R.id.item_thumbnail);
-				holder.m_ItemTypeIcon = (ImageView) convertView.findViewById(R.id.item_type);
-				holder.m_ItemVideotime = (TextView) convertView.findViewById(R.id.item_video_time);
-				// set Tag
-				convertView.setTag(holder);
+				holder = new GridViewItemHolder(convertView);
 			} else {
 				//recycled view
 				holder = (GridViewItemHolder) convertView.getTag();
-				((ViewGroup)holder.m_ItemTypeIcon.getParent()).setVisibility(View.GONE);
+				((ViewGroup)holder.typeIconView.getParent()).setVisibility(View.GONE);
 			}
-			holder.m_ItemThumbnail.setImageDrawable(m_GreySquare);
-			holder.m_ItemPosition = position;
+			holder.thumbnailImageView.setImageDrawable(m_GreySquare);
+			holder.position = position;
+			holder.thumbDecoded = false;
 			
-			holder.m_ItemThumbnail.setOnTouchListener(new OnTouchListener() {
-				@Override
-				public boolean onTouch(View v, MotionEvent event) {
-					//Log.d(TAG, "holder touch event view: " +  v.toString());
-					if(holder.m_ItemPosition == 0) {
-						Intent intent = new Intent("android.media.action.STILL_IMAGE_CAMERA");
-						startActivity(intent);
-					}
-					return false;
-				}
-			});
-			
+			boolean isCameraRoll = get(PROP_IS_CAMERA_ROLL);
 			if(m_MediaList != null) {
-				if(holder.m_ItemPosition == 0) {
+				if(holder.position == 0 && isCameraRoll) {
 					// Set item thumbnail
-					holder.m_ItemThumbnail.setImageResource(R.drawable.camera);
-					holder.m_ItemFilePath = "cameraIcon";
+					holder.thumbnailImageView.setImageResource(R.drawable.camera);
+					holder.contentUri = null;
+					holder.smallThumbDecodeHandle = null;
+					holder.thumbDecodeHandle = null;
 				}else {
-					Log.e(TAG, "holder.m_ItemPosition: " + holder.m_ItemPosition);
+					Log.e(TAG, "holder.m_ItemPosition: " + holder.position);
 					// -1 for the first one for CameraIcon to start camera activity
-					final Media media = m_MediaList.get(position - 1);
-					holder.m_ItemFilePath = media.getFilePath();
-					holder.m_ItemType = media.getMimeType();
-					holder.m_DecodeHandle = m_BitmapPool.decode(media.getFilePath(), m_GridviewItemWidth, m_GridviewItemHeight,BitmapPool.FLAG_ASYNC|BitmapPool.FLAG_URGENT, new Callback() {
-						@Override
-						public void onBitmapDecoded(Handle handle, String filePath, Bitmap bitmap) {
-							// if decode handle is not the same, means the origin holder is recycled, don't update image to that holder
-							if(handle != holder.m_DecodeHandle)
-								return;
-							// Set Item thumbnail
-							holder.m_ItemThumbnail.setImageBitmap(bitmap);
-							// Check item type
-							if(holder.m_ItemType.startsWith("video/")) {
-								((ViewGroup)holder.m_ItemTypeIcon.getParent()).setVisibility(View.VISIBLE);
-								holder.m_ItemTypeIcon.setImageResource(R.drawable.about);
-								holder.m_ItemVideotime.setText(getVideoTime(media));
-							}
-						}
-					}, GridViewFragment.this.getHandler());
+					Media media = m_MediaList.get(isCameraRoll ? position - 1 : position);
+					String filePath = media.getFilePath();
+					holder.contentUri = media.getContentUri();
+					holder.mimeType = media.getMimeType();
+					if(filePath != null)
+					{
+						holder.smallThumbDecodeHandle = m_SmallBitmapPool.decode(media.getFilePath(), m_GridviewItemWidth, m_GridviewItemHeight, BitmapPool.FLAG_ASYNC | BitmapPool.FLAG_URGENT, holder.smallThumbDecodeCallback, GridViewFragment.this.getHandler());
+						holder.thumbDecodeHandle = m_BitmapPool.decode(media.getFilePath(), m_GridviewItemWidth, m_GridviewItemHeight, BitmapPool.FLAG_ASYNC | BitmapPool.FLAG_URGENT, holder.thumbDecodeCallback, GridViewFragment.this.getHandler());
+					}
+					else
+					{
+						int mediaType = (media instanceof VideoMedia ? BitmapPool.MEDIA_TYPE_VIDEO : BitmapPool.MEDIA_TYPE_PHOTO);
+						holder.smallThumbDecodeHandle = m_SmallBitmapPool.decode(getActivity(), holder.contentUri, mediaType, m_GridviewItemWidth, m_GridviewItemHeight, BitmapPool.FLAG_ASYNC | BitmapPool.FLAG_URGENT, holder.smallThumbDecodeCallback, GridViewFragment.this.getHandler());
+						holder.thumbDecodeHandle = m_BitmapPool.decode(getActivity(), holder.contentUri, mediaType, m_GridviewItemWidth, m_GridviewItemHeight, BitmapPool.FLAG_ASYNC | BitmapPool.FLAG_URGENT, holder.thumbDecodeCallback, GridViewFragment.this.getHandler());
+					}
+					if(media instanceof VideoMedia) {
+						((ViewGroup)holder.typeIconView.getParent()).setVisibility(View.VISIBLE);
+						holder.typeIconView.setImageResource(R.drawable.about);
+						holder.durationTextView.setText(getVideoTime((VideoMedia)media));
+					}
 				}
 			}
 			return convertView;
@@ -443,11 +480,8 @@ public class GridViewFragment extends BaseFragment {
 
 
 	
-	private String getVideoTime(Media media) {
-		MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-		retriever.setDataSource(media.getFilePath());
-		String time = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
-		long timeInmillisec = Long.parseLong( time );
+	private String getVideoTime(VideoMedia media) {
+		long timeInmillisec = media.getDuration();
 		long duration = timeInmillisec / 1000;
 		long hours = duration / 3600;
 		long minutes = (duration - hours * 3600) / 60;
