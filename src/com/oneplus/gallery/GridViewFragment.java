@@ -1,7 +1,7 @@
 package com.oneplus.gallery;
 
 
-import java.util.Collection;
+import java.lang.ref.WeakReference;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -17,7 +17,6 @@ import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaList;
 import com.oneplus.gallery.media.VideoMedia;
 import com.oneplus.media.BitmapPool;
-import com.oneplus.media.BitmapPool.Callback;
 import com.oneplus.media.CenterCroppedBitmapPool;
 
 import android.app.Activity;
@@ -31,21 +30,17 @@ import android.graphics.Paint.Style;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
-import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnClickListener;
-import android.view.View.OnTouchListener;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
 import android.widget.BaseAdapter;
 import android.widget.GridView;
 import android.widget.ImageView;
-import android.widget.ImageView.ScaleType;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -54,16 +49,22 @@ import android.widget.Toast;
  */
 public class GridViewFragment extends BaseFragment {
 
+	// constant
+	private static int PRE_DECODE_BITMAP_COUNTS = 27;
+	
 	// Private fields
 	private MediaList m_MediaList = null;
 	private GridView m_GridView;
 	private GridViewItemAdapter m_GridViewItemAdapter;
 	private Drawable m_GreySquare;
-	private View m_NoMediaView;
+	private View m_EmptyMediaView;
+	private int m_GridviewColumns;
 	private int m_GridviewItemWidth;
+	private PreDecodeBitmapRunnable m_PreDecodeBitmapRunnable;
 	private int m_GridviewItemHeight;
 	private static BitmapPool m_BitmapPool = new CenterCroppedBitmapPool("GridViewFragmentBitmapPool", 64 << 20, Bitmap.Config.ARGB_8888, 3);
 	private static BitmapPool m_SmallBitmapPool = new CenterCroppedBitmapPool("GridViewFragmentSmallBitmapPool", 32 << 20, Bitmap.Config.RGB_565, 4, BitmapPool.FLAG_USE_EMBEDDED_THUMB_ONLY);
+	
 	
 	/**
 	 * Property to get or set whether media list is camera roll or not.
@@ -82,7 +83,6 @@ public class GridViewFragment extends BaseFragment {
 	 */
 	public static final PropertyKey<Integer> PROP_SELECTION_COUNT = new PropertyKey<>("SelectionCount", Integer.class, GridViewFragment.class, 0);
 
-	
 	/**
 	 * Raised after clicking single media.
 	 */
@@ -144,6 +144,43 @@ public class GridViewFragment extends BaseFragment {
 	}
 	
 	
+	private static class PreDecodeBitmapRunnable implements Runnable {
+		
+		private final WeakReference<GridViewFragment> m_ActivityRef;
+		
+		PreDecodeBitmapRunnable(GridViewFragment gridfragment) {
+			m_ActivityRef = new WeakReference<GridViewFragment>(gridfragment);
+		}
+		@Override
+		public void run() {
+			if(m_ActivityRef != null) {
+				int visibleLastposition = m_ActivityRef.get().m_GridView.getLastVisiblePosition();
+				int visibleFirstposition = m_ActivityRef.get().m_GridView.getFirstVisiblePosition();
+				int itemWidth = m_ActivityRef.get().m_GridviewItemWidth;
+				int itemHeight = m_ActivityRef.get().m_GridviewItemHeight;
+				MediaList medialist = m_ActivityRef.get().m_MediaList;
+				if(medialist == null)
+					return;
+				
+				//TODO: need to keep decode handle for cancellation
+				int mediaListSize = medialist.size();
+				for(int i = visibleLastposition; i < visibleLastposition + PRE_DECODE_BITMAP_COUNTS; ++i) {
+					if(i >= mediaListSize) return;
+					Media media = medialist.get(i);
+					m_BitmapPool.decode(media.getFilePath(), itemWidth, itemHeight, BitmapPool.FLAG_ASYNC, null, null);
+				}
+				for(int i = visibleFirstposition; i < visibleFirstposition - PRE_DECODE_BITMAP_COUNTS; --i) {
+					if( i < 0) return;
+					Media media = medialist.get(i);
+					m_BitmapPool.decode(media.getFilePath(), itemWidth, itemHeight, BitmapPool.FLAG_ASYNC, null, null);
+				}
+				
+			}
+		}
+		
+	}
+	
+	
 	// Event handlers.
 	private final EventHandler<ListChangeEventArgs> m_MediaAddedHandler = new EventHandler<ListChangeEventArgs>()
 	{
@@ -161,9 +198,8 @@ public class GridViewFragment extends BaseFragment {
 			onMediaRemoved(e);
 		}
 	};
-	
-	
-	
+
+
 	/**
 	 * Get all selected media.
 	 * @return List of selected media.
@@ -181,7 +217,7 @@ public class GridViewFragment extends BaseFragment {
 		Log.d(TAG, "onCreate");
 		m_GridviewItemHeight = this.getResources().getDimensionPixelSize(R.dimen.gridview_item_height);
 		m_GridviewItemWidth = this.getResources().getDimensionPixelSize(R.dimen.gridview_item_width);
-		
+
 		// Prepare greySquare
 		m_GreySquare = new SquareDrawable(m_GridviewItemWidth, m_GridviewItemHeight);
 		
@@ -205,10 +241,6 @@ public class GridViewFragment extends BaseFragment {
 	
 	private void onMediaAdded(ListChangeEventArgs e)
 	{
-		// show grid view
-		if(!m_MediaList.isEmpty())
-			this.showGridView();
-		
 		// refresh items
 		if(m_GridViewItemAdapter != null)
 			m_GridViewItemAdapter.notifyDataSetChanged();
@@ -225,20 +257,6 @@ public class GridViewFragment extends BaseFragment {
 			m_GridViewItemAdapter.notifyDataSetChanged();
 	}
 
-	@Override
-	public void onPause() {
-		// TODO Auto-generated method stub
-		super.onPause();
-		Log.d(TAG, "onPause");
-	}
-
-	@Override
-	public void onResume() {
-		// TODO Auto-generated method stub
-		super.onResume();
-		Log.d(TAG, "onResume");
-		
-	}
 
 	/**
 	 * Initialize new GridViewFragment instance.
@@ -250,6 +268,16 @@ public class GridViewFragment extends BaseFragment {
 
 	private void onInitialize() {
 		Log.d(TAG, "onInitialize" );
+	}
+	
+	
+	@Override
+	public void onStop() {
+		super.onStop();
+		// Shrink BitmapPool size to 16MB when Gallery is not visible
+		m_BitmapPool.shrink(16 << 20);
+		m_SmallBitmapPool.shrink(16 << 20);
+		
 	}
 	
 	
@@ -266,7 +294,6 @@ public class GridViewFragment extends BaseFragment {
 	
 	
 	private boolean setMediaList(MediaList value) {
-		
 		// check instance
 		if(m_MediaList == value)
 			return false;
@@ -291,31 +318,16 @@ public class GridViewFragment extends BaseFragment {
 		// update UI
 		if(m_GridViewItemAdapter != null)
 			m_GridViewItemAdapter.notifyDataSetChanged();
-		if(value != null && !value.isEmpty())
-			this.showGridView();
-		else
-			this.showNoMedia();
+		
+		// Scroll gridview to top when mediaList is changed
+		if(!get(PROP_IS_CAMERA_ROLL)) {
+			m_GridView.setSelection(0);
+		}
 		
 		// complete
 		return true;
 	}
 
-	private void showGridView() {
-		
-		if(m_GridView == null)
-			return;
-		m_GridView.setVisibility(View.VISIBLE);
-		m_NoMediaView.setVisibility(View.GONE);
-	}
-	
-	private void showNoMedia()
-	{
-		if(m_NoMediaView == null)
-			return;
-		m_GridView.setVisibility(View.GONE);
-		if(this.get(PROP_IS_CAMERA_ROLL))
-			m_NoMediaView.setVisibility(View.VISIBLE);
-	}
 
 	// Create view.
 	@Override
@@ -323,6 +335,7 @@ public class GridViewFragment extends BaseFragment {
 		Log.d(TAG, "onCreateView");
 		View view = inflater.inflate(R.layout.fragment_gridview, container, false);
 		m_GridView = (GridView) view.findViewById(R.id.gridview);
+		m_GridView.setNumColumns(m_GridviewColumns);
 		if(m_GridViewItemAdapter == null)
 			m_GridViewItemAdapter = new GridViewItemAdapter(this.getActivity());
 		m_GridView.setAdapter(m_GridViewItemAdapter);
@@ -335,8 +348,8 @@ public class GridViewFragment extends BaseFragment {
 			}
 	    });	
 		
-		m_NoMediaView = view.findViewById(R.id.no_photo);
-		m_NoMediaView.setOnClickListener(new OnClickListener() {
+		m_EmptyMediaView = view.findViewById(R.id.no_photo);
+		m_EmptyMediaView.setOnClickListener(new OnClickListener() {
 			@Override
 			public void onClick(View v) {
 				Intent intent = new Intent("android.media.action.STILL_IMAGE_CAMERA");
@@ -344,11 +357,8 @@ public class GridViewFragment extends BaseFragment {
 			}
 		});
 		
-		if(m_MediaList != null && !m_MediaList.isEmpty())
-			this.showGridView();
-		else
-			this.showNoMedia();
-		
+		m_GridView.setEmptyView(m_EmptyMediaView);
+		m_PreDecodeBitmapRunnable = new PreDecodeBitmapRunnable(this);
 		return view;
 	}
 	
@@ -363,7 +373,7 @@ public class GridViewFragment extends BaseFragment {
 			m_GridView.setAdapter(null);
 			m_GridView = null;
 		}
-		m_NoMediaView = null;
+		m_EmptyMediaView = null;
 		// call super
 		super.onDestroyView();
 	}
@@ -373,6 +383,7 @@ public class GridViewFragment extends BaseFragment {
 	public void onAttach(Activity activity) {
 		super.onAttach(activity);
 		Log.d(TAG, "onAttach");
+		m_GridviewColumns = this.getResources().getInteger(R.integer.griview_columns);
 	}
 
 	
@@ -388,7 +399,7 @@ public class GridViewFragment extends BaseFragment {
 		// Private fields
 		private Context m_Context = null;
 		private LayoutInflater m_inflater;
-
+		
 		public GridViewItemAdapter(Context context) {
 			m_Context = context;
 			m_inflater = (LayoutInflater) m_Context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
@@ -472,8 +483,14 @@ public class GridViewFragment extends BaseFragment {
 						holder.typeIconView.setImageResource(R.drawable.about);
 						holder.durationTextView.setText(getVideoTime((VideoMedia)media));
 					}
+					
+					// Pre-Decode Bitmap for grid view items which is not visible yet. 
+					GridViewFragment.this.getHandler().removeCallbacks(m_PreDecodeBitmapRunnable);
+					GridViewFragment.this.getHandler().postDelayed(m_PreDecodeBitmapRunnable,200);
 				}
+				
 			}
+			
 			return convertView;
 		}
 	}

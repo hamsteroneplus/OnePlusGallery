@@ -9,7 +9,6 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:columnWidth="89dp"
-        android:numColumns="4"
         android:stretchMode="spacingWidth"
         android:horizontalSpacing="1dp"
         android:verticalSpacing="1dp" />
@@ -18,7 +17,8 @@
 	<RelativeLayout 
 	    android:id="@+id/no_photo"
 	    android:layout_width="wrap_content"
-	    android:layout_height="wrap_content" >
+	    android:layout_height="wrap_content"
+	    android:visibility="gone" >
 	    
 	    <!-- Icon -->
 	    <ImageView
