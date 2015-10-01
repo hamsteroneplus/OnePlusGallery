@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
 	android:layout_width="match_parent"
-	android:layout_height="match_parent">
+	android:layout_height="match_parent"
+	android:background="@color/gallery_activity_background">
 
 	<!-- Entry page -->
 	<LinearLayout
@@ -28,6 +29,20 @@
 		android:visibility="gone">
 	    
 		<FrameLayout android:id="@+id/grid_view_fragment_container"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"/>
+	
+	</LinearLayout>
+	
+	<!-- Filmstrip -->
+	<LinearLayout android:id="@+id/filmstrip_container"
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
+		android:background="#000000"
+		android:orientation="vertical"
+		android:visibility="gone">
+	    
+		<FrameLayout android:id="@+id/filmstrip_fragment_container"
 			android:layout_width="match_parent"
 			android:layout_height="match_parent"/>
 	

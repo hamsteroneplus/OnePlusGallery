@@ -34,6 +34,7 @@ import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
+import android.provider.MediaStore;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -254,6 +255,15 @@ public class GridViewFragment extends BaseFragment {
 		// check state
 		if(m_MediaList == null)
 			return;
+		if(this.get(PROP_IS_CAMERA_ROLL))
+		{
+			if(index == 0)
+			{
+				this.startActivity(new Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA));
+				return;
+			}
+			--index;
+		}
 		if(index < 0 || index >= m_MediaList.size())
 		{
 			Log.e(TAG, "onItemClicked() - Invalid index : " + index);
@@ -331,9 +341,17 @@ public class GridViewFragment extends BaseFragment {
 		
 	}
 	
+	@SuppressWarnings("unchecked")
+	@Override
+	public <TValue> TValue get(PropertyKey<TValue> key)
+	{
+		if(key == PROP_MEDIA_LIST)
+			return (TValue)m_MediaList;
+		return super.get(key);
+	}
+	
 	
 	// Set property value.
-	@SuppressWarnings("unchecked")
 	@Override
 	public <TValue> boolean set(PropertyKey<TValue> key, TValue value)
 	{
@@ -405,7 +423,7 @@ public class GridViewFragment extends BaseFragment {
 			@Override
 			public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
 				Log.d(TAG, "gridview onItemClick event item position:" + position);
-				Toast.makeText(GridViewFragment.this.getActivity(), "" + position, Toast.LENGTH_SHORT).show();
+				//Toast.makeText(GridViewFragment.this.getActivity(), "" + position, Toast.LENGTH_SHORT).show();
 				onItemClicked(position, view);
 			}
 	    });	

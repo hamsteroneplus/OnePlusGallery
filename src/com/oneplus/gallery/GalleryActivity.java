@@ -30,6 +30,7 @@ public class GalleryActivity extends BaseActivity
 {
 	// Constants.
 	private static final String FRAGMENT_TAG_DEFAULT_GRID_VIEW = "GalleryActivity.DefaultGridView";
+	private static final String FRAGMENT_TAG_FILMSTRIP = "GalleryActivity.Filmstrip";
 	private static final String FRAGMENT_TAG_GRID_VIEW = "GalleryActivity.GridView";
 	private static final String FRAGMENT_TAG_MEDIA_SET_LIST = "GalleryActivity.MediaSetList";
 	private static final long DURATION_RELEASE_MEDIA_SET_LIST_DELAY = 3000;
@@ -53,6 +54,8 @@ public class GalleryActivity extends BaseActivity
 	private MediaList m_DefaultMediaList;
 	private MediaSet m_DefaultMediaSet;
 	private ViewPager m_EntryViewPager;
+	private View m_FilmstripContainer;
+	private FilmstripFragment m_FilmstripFragment;
 	private View m_GridViewContainer;
 	private GridViewFragment m_GridViewFragment;
 	private MediaList m_MediaList;
@@ -101,6 +104,7 @@ public class GalleryActivity extends BaseActivity
 	{
 		ENTRY,
 		GRID_VIEW,
+		FILMSTRIP,
 	}
 	
 	
@@ -116,6 +120,7 @@ public class GalleryActivity extends BaseActivity
 		Log.v(TAG, "changeMode() - Change mode from ", prevMode, " to ", mode);
 		
 		// enter new mode
+		ScreenSize screenSize = new ScreenSize(this, false);
 		switch(mode)
 		{
 			case GRID_VIEW:
@@ -124,10 +129,23 @@ public class GalleryActivity extends BaseActivity
 					Log.e(TAG, "changeMode() - No grid view container");
 					return false;
 				}
-				ScreenSize screenSize = new ScreenSize(this, false);
-				m_GridViewContainer.setVisibility(View.VISIBLE);
-				m_GridViewContainer.setTranslationX(screenSize.getWidth());
-				m_GridViewContainer.animate().translationX(0).alpha(1).setDuration(150).start();
+				if(prevMode != Mode.FILMSTRIP)
+				{
+					m_GridViewContainer.setVisibility(View.VISIBLE);
+					m_GridViewContainer.setTranslationY(screenSize.getHeight());
+					m_GridViewContainer.animate().translationY(0).alpha(1).setDuration(300).start();
+				}
+				break;
+				
+			case FILMSTRIP:
+				if(m_FilmstripContainer == null)
+				{
+					Log.e(TAG, "changeMode() - No filmstrip container");
+					return false;
+				}
+				m_FilmstripContainer.setVisibility(View.VISIBLE);
+				m_FilmstripContainer.setAlpha(0f);
+				m_FilmstripContainer.animate().alpha(1).setDuration(300).start();
 				break;
 		}
 		
@@ -135,16 +153,30 @@ public class GalleryActivity extends BaseActivity
 		switch(prevMode)
 		{
 			case GRID_VIEW:
-				if(m_GridViewContainer != null)
+				if(m_GridViewContainer != null && mode == Mode.ENTRY)
 				{
-					ScreenSize screenSize = new ScreenSize(this, false);
-					m_GridViewContainer.animate().translationX(screenSize.getWidth()).alpha(0).setDuration(150).withEndAction(new Runnable()
+					m_GridViewContainer.animate().translationY(screenSize.getHeight()).alpha(0).setDuration(300).withEndAction(new Runnable()
 					{
 						@Override
 						public void run()
 						{
 							m_GridViewContainer.setVisibility(View.GONE);
 							m_GridViewFragment.set(GridViewFragment.PROP_MEDIA_LIST, null);
+						}
+					}).start();
+				}
+				break;
+				
+			case FILMSTRIP:
+				if(m_FilmstripContainer != null)
+				{
+					m_FilmstripContainer.animate().alpha(0).setDuration(300).withEndAction(new Runnable()
+					{
+						@Override
+						public void run()
+						{
+							m_FilmstripContainer.setVisibility(View.GONE);
+							m_FilmstripFragment.set(FilmstripFragment.PROP_MEDIA_LIST, null);
 						}
 					}).start();
 				}
@@ -166,6 +198,17 @@ public class GalleryActivity extends BaseActivity
 			case GRID_VIEW:
 				this.changeMode(Mode.ENTRY);
 				break;
+				
+			case FILMSTRIP:
+			{
+				MediaList mediaList = m_FilmstripFragment.get(FilmstripFragment.PROP_MEDIA_LIST);
+				if(mediaList != m_DefaultMediaList)
+					this.changeMode(Mode.GRID_VIEW);
+				else
+					this.changeMode(Mode.ENTRY);
+				break;
+			}
+				
 			default:
 				super.onBackPressed();
 				break;
@@ -230,6 +273,16 @@ public class GalleryActivity extends BaseActivity
 	}
 	
 	
+	// Called after creating filmstrip fragment.
+	private void onFilmstripFragmentReady(FilmstripFragment fragment)
+	{
+		Log.v(TAG, "onFilmstripFragmentReady()");
+		
+		// attach
+		//
+	}
+	
+	
 	// Called after creating grid view fragment.
 	private void onGridViewFragmentReady(GridViewFragment fragment)
 	{
@@ -243,7 +296,37 @@ public class GalleryActivity extends BaseActivity
 	// Called after clicking media in grid view.
 	private void onMediaClickedInGridView(ListItemEventArgs<Media> e)
 	{
+		// check state
+		int index = e.getIndex();
+		MediaList mediaList;
+		if(m_Mode == Mode.GRID_VIEW)
+			mediaList = m_GridViewFragment.get(GridViewFragment.PROP_MEDIA_LIST);
+		else
+			mediaList = m_DefaultMediaList;
+		if(mediaList == null)
+		{
+			Log.e(TAG, "onMediaClickedInGridView() - No media list");
+			return;
+		}
+		if(index < 0 || index >= mediaList.size())
+		{
+			Log.e(TAG, "onMediaClickedInGridView() - Invalid media index : " + index);
+			return;
+		}
+		if(m_FilmstripFragment == null)
+		{
+			Log.e(TAG, "onMediaClickedInGridView() - No filmstrip fragment");
+			return;
+		}
 		
+		// show media
+		m_FilmstripFragment.set(FilmstripFragment.PROP_MEDIA_LIST, mediaList);
+		m_FilmstripFragment.set(FilmstripFragment.PROP_CURRENT_MEDIA_INDEX, index);
+		if(!this.changeMode(Mode.FILMSTRIP))
+		{
+			Log.e(TAG, "onMediaClickedInGridView() - Fail to change mode");
+			m_FilmstripFragment.set(FilmstripFragment.PROP_MEDIA_LIST, null);
+		}
 	}
 	
 	
@@ -327,8 +410,12 @@ public class GalleryActivity extends BaseActivity
 	protected void onSaveInstanceState(Bundle outState)
 	{
 		// detach fragments
+		FragmentTransaction fragmentTransaction = this.getFragmentManager().beginTransaction();
 		if(m_GridViewFragment != null)
-			this.getFragmentManager().beginTransaction().detach(m_GridViewFragment).commit();
+			fragmentTransaction.detach(m_GridViewFragment);
+		if(m_FilmstripFragment != null)
+			fragmentTransaction.detach(m_FilmstripFragment);
+		fragmentTransaction.commit();
 		
 		// call super
 		super.onSaveInstanceState(outState);
@@ -451,24 +538,36 @@ public class GalleryActivity extends BaseActivity
 		
 		// find views
 		m_GridViewContainer = this.findViewById(R.id.grid_view_container);
+		m_FilmstripContainer = this.findViewById(R.id.filmstrip_container);
 		
 		// create fragments
 		FragmentManager fragmentManager = this.getFragmentManager();
+		FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
 		m_DefaultGridViewFragment = (GridViewFragment)fragmentManager.findFragmentByTag(FRAGMENT_TAG_DEFAULT_GRID_VIEW);
 		m_MediaSetListFragment = (MediaSetListFragment)fragmentManager.findFragmentByTag(FRAGMENT_TAG_MEDIA_SET_LIST);
 		m_GridViewFragment = (GridViewFragment)fragmentManager.findFragmentByTag(FRAGMENT_TAG_GRID_VIEW);
+		m_FilmstripFragment = (FilmstripFragment)fragmentManager.findFragmentByTag(FRAGMENT_TAG_FILMSTRIP);
 		if(m_DefaultGridViewFragment != null)
 			this.onDefaultGridViewFragmentReady(m_DefaultGridViewFragment);
 		if(m_MediaSetListFragment != null)
 			this.onMediaSetListFragmentReady(m_MediaSetListFragment);
 		if(m_GridViewFragment != null)
-			fragmentManager.beginTransaction().attach(m_GridViewFragment).commit();
+			fragmentTransaction.attach(m_GridViewFragment);
 		else
 		{
 			m_GridViewFragment = new GridViewFragment();
-			fragmentManager.beginTransaction().add(R.id.grid_view_fragment_container, m_GridViewFragment, FRAGMENT_TAG_GRID_VIEW).commit();
+			fragmentTransaction.add(R.id.grid_view_fragment_container, m_GridViewFragment, FRAGMENT_TAG_GRID_VIEW);
+		}
+		if(m_FilmstripFragment != null)
+			fragmentTransaction.attach(m_FilmstripFragment);
+		else
+		{
+			m_FilmstripFragment = new FilmstripFragment();
+			fragmentTransaction.add(R.id.filmstrip_fragment_container, m_FilmstripFragment, FRAGMENT_TAG_FILMSTRIP);
 		}
 		this.onGridViewFragmentReady(m_GridViewFragment);
+		this.onFilmstripFragmentReady(m_FilmstripFragment);
+		fragmentTransaction.commit();
 		
 		// prepare entry view pager
 		m_EntryViewPager = (ViewPager)this.findViewById(R.id.entry_view_pager);

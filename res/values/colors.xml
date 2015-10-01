@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 	
+	<!-- Gallery activity -->
+	<color name="gallery_activity_background">#FF16181B</color>
+	
 	<!-- Media set list item -->
 	<color name="media_set_list_item_background">#FF16181B</color>
 	<color name="media_set_list_item_title">#FFFFFFFF</color>
