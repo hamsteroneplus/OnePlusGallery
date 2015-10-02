@@ -14,6 +14,7 @@ import android.widget.TextView;
 import com.oneplus.base.EventHandler;
 import com.oneplus.base.EventKey;
 import com.oneplus.base.EventSource;
+import com.oneplus.base.Handle;
 import com.oneplus.base.Log;
 import com.oneplus.base.ScreenSize;
 import com.oneplus.gallery.media.Media;
@@ -62,6 +63,7 @@ public class OPGalleryActivity extends GalleryActivity
 	private View m_GridViewContainer;
 	private GridViewFragment m_GridViewFragment;
 	private MediaList m_MediaList;
+	private Handle m_MediaManagerActivateHandle;
 	private MediaSetList m_MediaSetList;
 	private MediaSetListFragment m_MediaSetListFragment;
 	private Mode m_Mode = Mode.ENTRY;
@@ -112,8 +114,12 @@ public class OPGalleryActivity extends GalleryActivity
 	
 	
 	// Change current mode.
-	@SuppressWarnings("incomplete-switch")
 	private boolean changeMode(Mode mode)
+	{
+		return this.changeMode(mode, true);
+	}
+	@SuppressWarnings("incomplete-switch")
+	private boolean changeMode(Mode mode, boolean animate)
 	{
 		// check state
 		Mode prevMode = m_Mode;
@@ -135,8 +141,16 @@ public class OPGalleryActivity extends GalleryActivity
 				if(prevMode != Mode.FILMSTRIP)
 				{
 					m_GridViewContainer.setVisibility(View.VISIBLE);
-					m_GridViewContainer.setTranslationY(screenSize.getHeight());
-					m_GridViewContainer.animate().translationY(0).alpha(1).setDuration(300).start();
+					if(animate)
+					{
+						m_GridViewContainer.setTranslationY(screenSize.getHeight());
+						m_GridViewContainer.animate().translationY(0).alpha(1).setDuration(300).start();
+					}
+					else
+					{
+						m_GridViewContainer.setTranslationY(0);
+						m_GridViewContainer.setAlpha(1f);
+					}
 				}
 				break;
 				
@@ -147,8 +161,15 @@ public class OPGalleryActivity extends GalleryActivity
 					return false;
 				}
 				m_FilmstripContainer.setVisibility(View.VISIBLE);
-				m_FilmstripContainer.setAlpha(0f);
-				m_FilmstripContainer.animate().alpha(1).setDuration(300).start();
+				if(animate)
+				{
+					m_FilmstripContainer.setAlpha(0f);
+					m_FilmstripContainer.animate().alpha(1).setDuration(300).start();
+				}
+				else
+				{
+					m_FilmstripContainer.setAlpha(1f);
+				}
 				break;
 		}
 		
@@ -158,30 +179,46 @@ public class OPGalleryActivity extends GalleryActivity
 			case GRID_VIEW:
 				if(m_GridViewContainer != null && mode == Mode.ENTRY)
 				{
-					m_GridViewContainer.animate().translationY(screenSize.getHeight()).alpha(0).setDuration(300).withEndAction(new Runnable()
+					if(animate)
 					{
-						@Override
-						public void run()
+						m_GridViewContainer.animate().translationY(screenSize.getHeight()).alpha(0).setDuration(300).withEndAction(new Runnable()
 						{
-							m_GridViewContainer.setVisibility(View.GONE);
-							m_GridViewFragment.set(GridViewFragment.PROP_MEDIA_LIST, null);
-						}
-					}).start();
+							@Override
+							public void run()
+							{
+								m_GridViewContainer.setVisibility(View.GONE);
+								m_GridViewFragment.set(GridViewFragment.PROP_MEDIA_LIST, null);
+							}
+						}).start();
+					}
+					else
+					{
+						m_GridViewContainer.setVisibility(View.GONE);
+						m_GridViewFragment.set(GridViewFragment.PROP_MEDIA_LIST, null);
+					}
 				}
 				break;
 				
 			case FILMSTRIP:
 				if(m_FilmstripContainer != null)
 				{
-					m_FilmstripContainer.animate().alpha(0).setDuration(300).withEndAction(new Runnable()
+					if(animate)
 					{
-						@Override
-						public void run()
+						m_FilmstripContainer.animate().alpha(0).setDuration(300).withEndAction(new Runnable()
 						{
-							m_FilmstripContainer.setVisibility(View.GONE);
-							m_FilmstripFragment.set(FilmstripFragment.PROP_MEDIA_LIST, null);
-						}
-					}).start();
+							@Override
+							public void run()
+							{
+								m_FilmstripContainer.setVisibility(View.GONE);
+								m_FilmstripFragment.set(FilmstripFragment.PROP_MEDIA_LIST, null);
+							}
+						}).start();
+					}
+					else
+					{
+						m_FilmstripContainer.setVisibility(View.GONE);
+						m_FilmstripFragment.set(FilmstripFragment.PROP_MEDIA_LIST, null);
+					}
 				}
 				break;
 		}
@@ -273,6 +310,9 @@ public class OPGalleryActivity extends GalleryActivity
 			m_GridViewFragment.removeHandler(GridViewFragment.EVENT_MEDIA_CLICKED, m_GridViewMediaClickedHandler);
 		if(m_MediaSetListFragment != null)
 			m_MediaSetListFragment.removeHandler(MediaSetListFragment.EVENT_MEDIA_SET_CLICKED, m_MediaSetClickedHandler);
+		
+		// release media set list
+		this.releaseMediaSetList();
 		
 		// call super
 		super.onDestroy();
@@ -422,8 +462,36 @@ public class OPGalleryActivity extends GalleryActivity
 		// call super
 		super.onNewIntent(intent);
 		
+		// reset current mode
+		this.changeMode(Mode.ENTRY, false);
+		
 		// show default media set
 		m_EntryViewPager.setCurrentItem(0, false);
+	}
+	
+	
+	// Called when resuming.
+	@Override
+	protected void onResume()
+	{
+		// call super
+		super.onResume();
+		
+		// activate media manager
+		if(!Handle.isValid(m_MediaManagerActivateHandle))
+			m_MediaManagerActivateHandle = MediaManager.activate();
+	}
+	
+	
+	// Called when pausing.
+	@Override
+	protected void onPause()
+	{
+		// deactivate media manager
+		m_MediaManagerActivateHandle = Handle.close(m_MediaManagerActivateHandle);
+		
+		// call super
+		super.onPause();
 	}
 	
 	
@@ -444,44 +512,12 @@ public class OPGalleryActivity extends GalleryActivity
 	}
 	
 	
-	// Called when starting.
-	@Override
-	protected void onStart()
-	{
-		Log.d(TAG, "onStart");
-		// call super
-		super.onStart();
-		
-		// setup media set list
-		this.setupMediaSetList();
-		
-		// HomeBtn and resume need set medialist for gridviewfragment, otherwise girdview show nothing
-		if(m_DefaultGridViewFragment != null && m_DefaultMediaSet != null) {
-			m_DefaultMediaList = m_DefaultMediaSet.openMediaList(MediaComparator.TAKEN_TIME, -1, 0);
-			m_DefaultGridViewFragment.set(GridViewFragment.PROP_IS_CAMERA_ROLL, true);
-			m_DefaultGridViewFragment.set(GridViewFragment.PROP_MEDIA_LIST, m_DefaultMediaList);
-		}
-	}
-	
-	
 	// Called when status bar visibility changed.
 	@Override
 	protected void onStatusBarVisibilityChanged(boolean isVisible)
 	{
 		super.onStatusBarVisibilityChanged(isVisible);
 		this.updateUIMargins(isVisible);
-	}
-	
-	
-	// Called when stopping.
-	@Override
-	protected void onStop()
-	{
-		// release media set list
-		this.releaseMediaSetList();
-		
-		// call super
-		super.onStop();
 	}
 	
 	

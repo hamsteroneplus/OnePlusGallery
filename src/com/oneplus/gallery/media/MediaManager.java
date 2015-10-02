@@ -56,6 +56,8 @@ public class MediaManager
 	
 	
 	// Fields.
+	private static final List<Handle> m_ActivateHandles = new ArrayList<>();
+	private static final List<ActiveStateCallback> m_ActiveStateCallbacks = new ArrayList<>();
 	private static final List<MediaSetListImpl> m_ActiveMediaSetLists = new ArrayList<>();
 	private static CameraRollMediaSet m_CameraRollMediaSet;
 	private static HashMap<Uri, ContentObserver> m_ContentObservers;
@@ -78,6 +80,23 @@ public class MediaManager
 		 * @param client Content provider client.
 		 */
 		void onAccessContentProvider(ContentResolver contentResolver, Uri contentUri, ContentProviderClient client) throws RemoteException;
+	}
+	
+	
+	/**
+	 * Call-back interface for media manager active state change.
+	 */
+	public interface ActiveStateCallback
+	{
+		/**
+		 * Called if media manager is activated.
+		 */
+		void onActivated();
+		
+		/**
+		 * Called if media manager is deactivated.
+		 */
+		void onDeactivated();
 	}
 	
 	
@@ -353,7 +372,7 @@ public class MediaManager
 	}
 	
 	
-	// Access content provider (in content thread)
+	// Access content provider (in content thread).
 	private static void accessContentProvider(ContentProviderAccessHandle handle)
 	{
 		ContentProviderClient client = null;
@@ -377,6 +396,50 @@ public class MediaManager
 	}
 	
 	
+	/**
+	 * Activate media manager.
+	 * @return Handle to activation.
+	 */
+	public static Handle activate()
+	{
+		// check state
+		verifyAccess();
+		
+		// create handle
+		Handle handle = new Handle("ActivateMediaManager")
+		{
+			@Override
+			protected void onClose(int flags)
+			{
+				deactivate(this);
+			}
+		};
+		
+		// activate
+		m_ActivateHandles.add(handle);
+		if(m_ActivateHandles.size() == 1)
+		{
+			Log.w(TAG, "activate()");
+			for(int i = m_ActiveStateCallbacks.size() - 1 ; i >= 0 ; --i)
+				m_ActiveStateCallbacks.get(i).onActivated();
+		}
+		
+		// complete
+		return handle;
+	}
+	
+	
+	/**
+	 * Add {@link ActiveStateCallback}.
+	 * @param callback Call-back to add.
+	 */
+	public static void addActiveStateCallback(ActiveStateCallback callback)
+	{
+		verifyAccess();
+		m_ActiveStateCallbacks.add(callback);
+	}
+	
+	
 	// Cancel content provider access.
 	private static void cancelContentProviderAccess(ContentProviderAccessHandle handle)
 	{
@@ -392,8 +455,7 @@ public class MediaManager
 	public static MediaSetList createMediaSetList()
 	{
 		// check state
-		if(!GalleryApplication.current().isDependencyThread())
-			throw new RuntimeException("Not in main thread.");
+		verifyAccess();
 		
 		// create list
 		MediaSetListImpl list = new MediaSetListImpl();
@@ -411,6 +473,24 @@ public class MediaManager
 		
 		// complete
 		return list;
+	}
+	
+	
+	// Deactivate media manager.
+	private static void deactivate(Handle handle)
+	{
+		// check state
+		verifyAccess();
+		
+		// deactivate
+		if(!m_ActivateHandles.remove(handle) || !m_ActivateHandles.isEmpty())
+			return;
+		
+		Log.w(TAG, "deactivate()");
+		
+		// call-back
+		for(int i = m_ActiveStateCallbacks.size() - 1 ; i >= 0 ; --i)
+			m_ActiveStateCallbacks.get(i).onDeactivated();
 	}
 	
 	
@@ -473,6 +553,16 @@ public class MediaManager
 				MediaManager.handleMessage(msg);
 			}
 		};
+	}
+	
+	
+	/**
+	 * Check media manager active state.
+	 * @return True is media manager is active.
+	 */
+	public static boolean isActive()
+	{
+		return !m_ActivateHandles.isEmpty();
 	}
 	
 	
@@ -562,49 +652,6 @@ public class MediaManager
 	}
 	
 	
-	/**
-	 * Register content change call-back.
-	 * @param contentUri Content URI to listen.
-	 * @param callback Call-back.
-	 * @return Handle to registered call-back.
-	 */
-	public static Handle registerContentChangedCallback(Uri contentUri, ContentChangeCallback callback)
-	{
-		return registerContentChangedCallback(contentUri, callback, null);
-	}
-	
-	
-	/**
-	 * Register content change call-back.
-	 * @param contentUri Content URI to listen.
-	 * @param callback Call-back.
-	 * @param handler Handler to perform call-back.
-	 * @return Handle to registered call-back.
-	 */
-	public static Handle registerContentChangedCallback(Uri contentUri, ContentChangeCallback callback, Handler handler)
-	{
-		if(contentUri == null)
-		{
-			Log.e(TAG, "registerContentChangedCallback() - No content URI");
-			return null;
-		}
-		if(callback == null)
-		{
-			Log.e(TAG, "registerContentChangedCallback() - No call-back");
-			return null;
-		}
-		ContentChangeCallbackHandle handle = new ContentChangeCallbackHandle(contentUri, callback, handler);
-		if(isContentThread())
-			registerContentChangedCallback(handle);
-		else
-		{
-			startContentThread();
-			Message.obtain(m_ContentThreadHandler, MSG_REGISTER_CONTENT_CHANGED_CB, handle).sendToTarget();
-		}
-		return handle;
-	}
-	
-	
 	// Refresh directory media sets. (in main thread)
 	private static void refreshDirectoryMediaSets()
 	{
@@ -652,6 +699,49 @@ public class MediaManager
 	}
 	
 	
+	/**
+	 * Register content change call-back.
+	 * @param contentUri Content URI to listen.
+	 * @param callback Call-back.
+	 * @return Handle to registered call-back.
+	 */
+	public static Handle registerContentChangedCallback(Uri contentUri, ContentChangeCallback callback)
+	{
+		return registerContentChangedCallback(contentUri, callback, null);
+	}
+	
+	
+	/**
+	 * Register content change call-back.
+	 * @param contentUri Content URI to listen.
+	 * @param callback Call-back.
+	 * @param handler Handler to perform call-back.
+	 * @return Handle to registered call-back.
+	 */
+	public static Handle registerContentChangedCallback(Uri contentUri, ContentChangeCallback callback, Handler handler)
+	{
+		if(contentUri == null)
+		{
+			Log.e(TAG, "registerContentChangedCallback() - No content URI");
+			return null;
+		}
+		if(callback == null)
+		{
+			Log.e(TAG, "registerContentChangedCallback() - No call-back");
+			return null;
+		}
+		ContentChangeCallbackHandle handle = new ContentChangeCallbackHandle(contentUri, callback, handler);
+		if(isContentThread())
+			registerContentChangedCallback(handle);
+		else
+		{
+			startContentThread();
+			Message.obtain(m_ContentThreadHandler, MSG_REGISTER_CONTENT_CHANGED_CB, handle).sendToTarget();
+		}
+		return handle;
+	}
+	
+	
 	// Register content change call-back (in content thread).
 	private static void registerContentChangedCallback(ContentChangeCallbackHandle handle)
 	{
@@ -668,6 +758,17 @@ public class MediaManager
 			m_ContentResolver.registerContentObserver(handle.contentUri, true, observer);
 		}
 		observer.callbackHandles.add(handle);
+	}
+	
+	
+	/**
+	 * Remove {@link ActiveStateCallback}.
+	 * @param callback Call-back to remove.
+	 */
+	public static void removeActiveStateCallback(ActiveStateCallback callback)
+	{
+		verifyAccess();
+		m_ActiveStateCallbacks.remove(callback);
 	}
 	
 	
@@ -708,5 +809,13 @@ public class MediaManager
 		Log.v(TAG, "unregisterContentChangedCallback() - Unregister from ", handle.contentUri);
 		m_ContentObservers.remove(handle.contentUri);
 		m_ContentResolver.unregisterContentObserver(observer);
+	}
+	
+	
+	// Check current thread.
+	private static void verifyAccess()
+	{
+		if(!GalleryApplication.current().isDependencyThread())
+			throw new RuntimeException("Not in main thread.");
 	}
 }

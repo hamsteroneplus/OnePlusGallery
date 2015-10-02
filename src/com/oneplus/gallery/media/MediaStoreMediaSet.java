@@ -41,7 +41,22 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	
 	// Fields.
 	private List<MediaListImpl> m_ActiveMediaLists;
+	private boolean m_IsMediaStoreContentChanged;
 	private volatile Handle m_MediaCountRefreshHandle;
+	private final MediaManager.ActiveStateCallback m_MediaManagerActiveStateCB = new MediaManager.ActiveStateCallback()
+	{
+		@Override
+		public void onDeactivated()
+		{
+			onMediaManagerDeactivated();
+		}
+		
+		@Override
+		public void onActivated()
+		{
+			onMediaManagerActivated();
+		}
+	};
 	private final MediaManager.ContentChangeCallback m_MediaStoreContentChangedCB = new MediaManager.ContentChangeCallback()
 	{
 		@Override
@@ -109,6 +124,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 		if(type == null)
 			throw new IllegalArgumentException("No type specified.");
 		m_Type = type;
+		MediaManager.addActiveStateCallback(m_MediaManagerActiveStateCB);
 	}
 	
 	
@@ -139,6 +155,12 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 		// check state
 		if(this.get(PROP_IS_RELEASED))
 			return;
+		if(!MediaManager.isActive())
+		{
+			m_IsMediaStoreContentChanged = true;
+			return;
+		}
+		m_IsMediaStoreContentChanged = false;
 		
 		// refresh media count
 		this.refreshMediaCount(false);
@@ -203,6 +225,26 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	
 	
 	/**
+	 * Called when {@link MediaManager} activated.
+	 */
+	protected void onMediaManagerActivated()
+	{
+		if(m_IsMediaStoreContentChanged)
+		{
+			m_IsMediaStoreContentChanged = false;
+			this.handleMediaStoreContentChange();
+		}
+	}
+	
+	
+	/**
+	 * Called when {@link MediaManager} deactivated.
+	 */
+	protected void onMediaManagerDeactivated()
+	{}
+	
+	
+	/**
 	 * Called when content in media store has been changed.
 	 * @param contentUri Content URI of changed content.
 	 */
@@ -238,6 +280,9 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 				m_MediaStoreContentChangedCBHandles = Handle.close(m_MediaStoreContentChangedCBHandles);
 			}
 		});
+		
+		// remove call-back
+		MediaManager.removeActiveStateCallback(m_MediaManagerActiveStateCB);
 		
 		// call super
 		super.onRelease();
