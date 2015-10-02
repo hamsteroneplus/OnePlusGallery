@@ -7,7 +7,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 
-import com.oneplus.base.BaseFragment;
 import com.oneplus.base.EventHandler;
 import com.oneplus.base.EventKey;
 import com.oneplus.base.EventSource;
@@ -45,12 +44,11 @@ import android.widget.BaseAdapter;
 import android.widget.GridView;
 import android.widget.ImageView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 /**
  * Fragment to display media in media set.
  */
-public class GridViewFragment extends BaseFragment {
+public class GridViewFragment extends GalleryFragment {
 
 	// constant
 	private static int PRE_DECODE_BITMAP_COUNTS = 27;

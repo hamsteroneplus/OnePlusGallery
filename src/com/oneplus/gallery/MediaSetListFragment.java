@@ -25,7 +25,6 @@ import android.widget.TextView;
 import java.util.Hashtable;
 import java.util.LinkedList;
 
-import com.oneplus.base.BaseFragment;
 import com.oneplus.base.EventHandler;
 import com.oneplus.base.EventKey;
 import com.oneplus.base.EventSource;
@@ -44,7 +43,7 @@ import com.oneplus.media.BitmapPool;
 /**
  * Fragment to display media set list.
  */
-public class MediaSetListFragment extends BaseFragment
+public class MediaSetListFragment extends GalleryFragment
 {
 	private static final int MONITORED_RAGE = 5;
 	

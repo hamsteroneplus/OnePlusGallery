@@ -1,13 +1,12 @@
 package com.oneplus.gallery;
 
-import com.oneplus.base.BaseFragment;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.gallery.media.MediaList;
 
 /**
  * Filmstrip fragment.
  */
-public class FilmstripFragment extends BaseFragment
+public class FilmstripFragment extends GalleryFragment
 {
 	/**
 	 * Property to get or set index of current media.
