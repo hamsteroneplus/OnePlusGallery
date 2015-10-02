@@ -1,7 +1,7 @@
 <resources>
 
     <!--  -->
-    <style name="AppBaseTheme" parent="android:Theme.Light">
+    <style name="AppBaseTheme" parent="android:Theme.Material">
         <!--
             Theme customizations available in newer API levels can go in
             res/values-vXX/styles.xml, while customizations related to
@@ -29,7 +29,7 @@
 	</style>
 	
 	<!-- Gallery window -->
-	<style name="GalleryWindow" parent="@android:style/Theme.NoTitleBar">
+	<style name="GalleryWindow" parent="@android:style/Theme.Material.NoActionBar">
 	</style>
 	
 	<!--media set list item title -->

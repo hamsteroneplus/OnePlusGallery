@@ -2,6 +2,7 @@
 
 	<!-- Entry page -->
 	<dimen name="entry_page_tab_text">20dp</dimen>
+	<dimen name="entry_page_margin">5dp</dimen>
 	
 	<!-- Media set list fragment -->
 	<dimen name="media_set_list_add_album_button_size">56dp</dimen>

@@ -16,7 +16,6 @@ import com.oneplus.base.EventKey;
 import com.oneplus.base.EventSource;
 import com.oneplus.base.Log;
 import com.oneplus.base.ScreenSize;
-import com.oneplus.gallery.R.id;
 import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaComparator;
 import com.oneplus.gallery.media.MediaList;
@@ -74,7 +73,7 @@ public class OPGalleryActivity extends GalleryActivity
 		@Override
 		public void onEventReceived(EventSource source, EventKey<ListItemEventArgs<Media>> key, ListItemEventArgs<Media> e)
 		{
-			onMediaClickedInGridView(e);
+			onMediaClickedInGridView(e, source == m_DefaultGridViewFragment);
 		}
 	};
 	private final EventHandler<ListChangeEventArgs> m_MediaSetAddedHandler = new EventHandler<ListChangeEventArgs>()
@@ -318,15 +317,11 @@ public class OPGalleryActivity extends GalleryActivity
 	
 	
 	// Called after clicking media in grid view.
-	private void onMediaClickedInGridView(ListItemEventArgs<Media> e)
+	private void onMediaClickedInGridView(ListItemEventArgs<Media> e, boolean isDefaultGridView)
 	{
 		// check state
 		int index = e.getIndex();
-		MediaList mediaList;
-		if(m_Mode == Mode.GRID_VIEW)
-			mediaList = m_GridViewFragment.get(GridViewFragment.PROP_MEDIA_LIST);
-		else
-			mediaList = m_DefaultMediaList;
+		MediaList mediaList = (isDefaultGridView ? m_DefaultMediaList : m_MediaList);
 		if(mediaList == null)
 		{
 			Log.e(TAG, "onMediaClickedInGridView() - No media list");
@@ -563,6 +558,9 @@ public class OPGalleryActivity extends GalleryActivity
 		if(m_DefaultMediaSet == null)
 			Log.w(TAG, "setupMediaSetList() - No default set");
 		
+		// show media set list
+		if(m_MediaSetListFragment != null)
+			m_MediaSetListFragment.set(MediaSetListFragment.PROP_MEDIA_SET_LIST, m_MediaSetList);
 	}
 	
 	
@@ -612,6 +610,8 @@ public class OPGalleryActivity extends GalleryActivity
 		
 		// prepare entry view pager
 		m_EntryViewPager = (ViewPager)this.findViewById(R.id.entry_view_pager);
+		m_EntryViewPager.setPageMargin(this.getResources().getDimensionPixelSize(R.dimen.entry_page_margin));
+		m_EntryViewPager.setOverScrollMode(View.OVER_SCROLL_NEVER);
 		m_EntryViewPager.setAdapter(new PagerAdapter()
 		{
 			private FragmentTransaction m_FragmentTransaction;
