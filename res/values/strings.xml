@@ -13,5 +13,10 @@
 	<!-- Media set -->
 	<string name="media_set_name_camera_roll">Camera</string>
 	
-	<string name="fragment_add_photo">Click to take pictures</string>
+	<!-- GridView Fragment -->
+	<string name="fragment_launch_camera">Click to take pictures</string>
+	<string name="toolbar_selection_addto">Add to</string>
+	<string name="toolbar_selection_share">Share</string>
+	<string name="toolbar_selection_delete">Delete</string>
+	<string name="toolbar_selection_total">"%1$d items selected"</string>
 </resources>

@@ -6,5 +6,9 @@
 	<!-- Media set -->
 	<string name="media_set_name_camera_roll">相機</string>
 	
-	<string name="fragment_add_photo">點擊拍照貼加文件</string>
+	<!-- GridView Fragment -->
+	<string name="fragment_launch_camera">點擊拍照添加照片</string>
+	<string name="fragment_toolbar_selection_addto">添加至</string>
+	<string name="fragment_toolbar_selection_share">分享</string>
+	<string name="fragment_toolbar_selection_delete">刪除</string>
 </resources>

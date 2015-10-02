@@ -3,6 +3,7 @@
     android:layout_width="89dp"
     android:layout_height="89dp"
      >
+
     	<!-- Thumbnail -->
 	    <ImageView 
 	        android:id="@+id/item_thumbnail"
@@ -33,4 +34,12 @@
 		        android:textSize="12sp"
 		        />
 	    </LinearLayout>
+	    
+	    <ImageView 
+	        android:id="@+id/item_selected"
+	        android:layout_width="match_parent"
+	        android:layout_height="match_parent"
+	        android:src="@drawable/ic_selected"
+	        android:scaleType="center"
+	        android:visibility="gone"/>
 </RelativeLayout>
