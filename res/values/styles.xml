@@ -19,10 +19,18 @@
 		<item name="android:fontFamily">sans-serif</item>
 	</style>
 	
+	<!-- Entry page -->
+	<style name="EntryPageTabText" parent="BaseText">
+		<item name="android:textColor">@color/entry_page_tab_text</item>
+		<item name="android:textSize">@dimen/entry_page_tab_text</item>
+	</style>
+	<style name="EntryPageTabText.Selected" parent="EntryPageTabText">
+		<item name="android:textColor">@color/entry_page_tab_text_selected</item>
+	</style>
+	
 	<!-- Gallery window -->
-	<style name="GalleryWindow" parent="@android:style/Theme.NoTitleBar.Fullscreen">
-        
-    </style>
+	<style name="GalleryWindow" parent="@android:style/Theme.NoTitleBar">
+	</style>
 	
 	<!--media set list item title -->
 	<style name="MediaSetListItemTitleText" parent="BaseText">

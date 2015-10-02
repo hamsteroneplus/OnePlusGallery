@@ -3,6 +3,13 @@
 	<!-- Application -->
 	<string name="app_name">Gallery</string>
 	
+	<!-- Entry page -->
+	<string name="entry_page_tab_default_grid_view">Photos</string>
+	<string name="entry_page_tab_media_set_list">Albums</string>
+	
+	<!-- Gallery activity -->
+	
+	
 	<!-- Media set -->
 	<string name="media_set_name_camera_roll">Camera</string>
 	

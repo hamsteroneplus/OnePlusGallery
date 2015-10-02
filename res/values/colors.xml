@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 	
+	<!-- Entry page -->
+	<color name="entry_page_tab_background">#121212</color>
+	<color name="entry_page_tab_text">#7FFFFFFF</color>
+	<color name="entry_page_tab_text_selected">#FFFFFF</color>
+    
 	<!-- Gallery activity -->
 	<color name="gallery_activity_background">#FF16181B</color>
 	

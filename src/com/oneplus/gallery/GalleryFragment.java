@@ -19,11 +19,11 @@ public abstract class GalleryFragment extends BaseFragment
 	/**
 	 * Property to get or set action bar can be shown or not.
 	 */
-	public static final PropertyKey<Boolean> PROP_HAS_ACTION_BAR = new PropertyKey<>("HasActionBar", Boolean.class, GalleryFragment.class, false);
+	public static final PropertyKey<Boolean> PROP_HAS_ACTION_BAR = new PropertyKey<>("HasActionBar", Boolean.class, GalleryFragment.class, PropertyKey.FLAG_NOT_NULL, false);
 	/**
 	 * Property to get or set whether {@link #ACTION_ID_BACK} action is needed or not.
 	 */
-	public static final PropertyKey<Boolean> PROP_IS_BACK_ACTION_NEEDED = new PropertyKey<>("IsBackActionNeeded", Boolean.class, GalleryFragment.class, true);
+	public static final PropertyKey<Boolean> PROP_IS_BACK_ACTION_NEEDED = new PropertyKey<>("IsBackActionNeeded", Boolean.class, GalleryFragment.class, PropertyKey.FLAG_NOT_NULL, true);
 	
 	
 	/**

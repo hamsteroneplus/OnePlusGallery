@@ -1,9 +1,12 @@
 <resources>
 
-    <!-- Media set list fragment -->
-    <dimen name="media_set_list_add_album_button_size">56dp</dimen>
-    <dimen name="media_set_list_add_album_button_margin_right">25dp</dimen>
-    <dimen name="media_set_list_add_album_button_margin_bottom">16dp</dimen>
+	<!-- Entry page -->
+	<dimen name="entry_page_tab_text">20dp</dimen>
+	
+	<!-- Media set list fragment -->
+	<dimen name="media_set_list_add_album_button_size">56dp</dimen>
+	<dimen name="media_set_list_add_album_button_margin_right">25dp</dimen>
+	<dimen name="media_set_list_add_album_button_margin_bottom">16dp</dimen>
     
 	<!-- Media Set List item -->
 	<dimen name="media_set_list_item_divider_height">8dp</dimen>

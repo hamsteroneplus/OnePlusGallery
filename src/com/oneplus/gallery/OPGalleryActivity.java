@@ -9,18 +9,21 @@ import android.support.v4.view.PagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.TextView;
 
 import com.oneplus.base.EventHandler;
 import com.oneplus.base.EventKey;
 import com.oneplus.base.EventSource;
 import com.oneplus.base.Log;
 import com.oneplus.base.ScreenSize;
+import com.oneplus.gallery.R.id;
 import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaComparator;
 import com.oneplus.gallery.media.MediaList;
 import com.oneplus.gallery.media.MediaManager;
 import com.oneplus.gallery.media.MediaSet;
 import com.oneplus.gallery.media.MediaSetList;
+import com.oneplus.widget.ViewUtils;
 
 /**
  * Gallery activity.
@@ -52,6 +55,8 @@ public class OPGalleryActivity extends GalleryActivity
 	private GridViewFragment m_DefaultGridViewFragment;
 	private MediaList m_DefaultMediaList;
 	private MediaSet m_DefaultMediaSet;
+	private View m_EntryPageContainer;
+	private ViewGroup m_EntryPageTabContainer;
 	private ViewPager m_EntryViewPager;
 	private View m_FilmstripContainer;
 	private FilmstripFragment m_FilmstripFragment;
@@ -235,6 +240,9 @@ public class OPGalleryActivity extends GalleryActivity
 	{
 		Log.v(TAG, "onDefaultGridViewFragmentReady()");
 		
+		// initialize
+		fragment.set(GridViewFragment.PROP_HAS_ACTION_BAR, false);
+		
 		// attach
 		fragment.addHandler(GridViewFragment.EVENT_MEDIA_CLICKED, m_GridViewMediaClickedHandler);
 		
@@ -272,10 +280,24 @@ public class OPGalleryActivity extends GalleryActivity
 	}
 	
 	
+	// Called when entry view page selected.
+	private void onEntryViewPagerPageSelected(int position)
+	{
+		for(int i = m_EntryPageTabContainer.getChildCount() - 1 ; i >= 0 ; --i)
+		{
+			TextView tab = (TextView)m_EntryPageTabContainer.getChildAt(i);
+			tab.setTextAppearance(this , position == i ? R.style.EntryPageTabText_Selected : R.style.EntryPageTabText);
+		}
+	}
+	
+	
 	// Called after creating filmstrip fragment.
 	private void onFilmstripFragmentReady(FilmstripFragment fragment)
 	{
 		Log.v(TAG, "onFilmstripFragmentReady()");
+		
+		// initialize
+		fragment.set(FilmstripFragment.PROP_HAS_ACTION_BAR, false);
 		
 		// attach
 		//
@@ -286,6 +308,9 @@ public class OPGalleryActivity extends GalleryActivity
 	private void onGridViewFragmentReady(GridViewFragment fragment)
 	{
 		Log.v(TAG, "onGridViewFragmentReady()");
+		
+		// initialize
+		fragment.set(GridViewFragment.PROP_HAS_ACTION_BAR, true);
 		
 		// attach
 		fragment.addHandler(GridViewFragment.EVENT_MEDIA_CLICKED, m_GridViewMediaClickedHandler);
@@ -377,6 +402,9 @@ public class OPGalleryActivity extends GalleryActivity
 	{
 		Log.v(TAG, "onMediaSetListFragmentReady()");
 		
+		// initialize
+		fragment.set(MediaSetListFragment.PROP_HAS_ACTION_BAR, false);
+		
 		// attach
 		fragment.addHandler(MediaSetListFragment.EVENT_MEDIA_SET_CLICKED, m_MediaSetClickedHandler);
 		
@@ -438,6 +466,15 @@ public class OPGalleryActivity extends GalleryActivity
 			m_DefaultGridViewFragment.set(GridViewFragment.PROP_IS_CAMERA_ROLL, true);
 			m_DefaultGridViewFragment.set(GridViewFragment.PROP_MEDIA_LIST, m_DefaultMediaList);
 		}
+	}
+	
+	
+	// Called when status bar visibility changed.
+	@Override
+	protected void onStatusBarVisibilityChanged(boolean isVisible)
+	{
+		super.onStatusBarVisibilityChanged(isVisible);
+		this.updateUIMargins(isVisible);
 	}
 	
 	
@@ -536,8 +573,13 @@ public class OPGalleryActivity extends GalleryActivity
 		this.setContentView(R.layout.activity_gallery);
 		
 		// find views
+		m_EntryPageContainer = this.findViewById(R.id.entry_page_container);
+		m_EntryPageTabContainer = (ViewGroup)m_EntryPageContainer.findViewById(R.id.entry_page_tab_container);
 		m_GridViewContainer = this.findViewById(R.id.grid_view_container);
 		m_FilmstripContainer = this.findViewById(R.id.filmstrip_container);
+		
+		// setup margins
+		this.updateUIMargins(this.get(PROP_IS_STATUS_BAR_VISIBLE));
 		
 		// create fragments
 		FragmentManager fragmentManager = this.getFragmentManager();
@@ -648,5 +690,51 @@ public class OPGalleryActivity extends GalleryActivity
 				return ((Fragment)object).getView() == view;
 			}
 		});
+		m_EntryViewPager.addOnPageChangeListener(new ViewPager.OnPageChangeListener()
+		{
+			@Override
+			public void onPageSelected(int position)
+			{
+				onEntryViewPagerPageSelected(position);
+			}
+			
+			@Override
+			public void onPageScrolled(int position, float arg1, int arg2)
+			{}
+			
+			@Override
+			public void onPageScrollStateChanged(int state)
+			{}
+		});
+		this.onEntryViewPagerPageSelected(0);
+		
+		// setup entry tab control
+		for(int i = m_EntryPageTabContainer.getChildCount() - 1 ; i >= 0 ; --i)
+		{
+			final int position = i;
+			m_EntryPageTabContainer.getChildAt(i).setOnClickListener(new View.OnClickListener()
+			{
+				@Override
+				public void onClick(View v)
+				{
+					m_EntryViewPager.setCurrentItem(position, true);
+				}
+			});
+		}
+	}
+	
+	
+	// Update UI margins according to current state.
+	private void updateUIMargins(boolean isStatusBarVisible)
+	{
+		// check state
+		if(m_EntryPageContainer == null)
+			return;
+		
+		// update margins
+		ScreenSize screenSize = this.get(PROP_SCREEN_SIZE);
+		int topMargin = (isStatusBarVisible ? screenSize.getStatusBarSize() : 0);
+		ViewUtils.setMargins(m_EntryPageContainer, 0, topMargin, 0, 0);
+		ViewUtils.setMargins(m_GridViewContainer, 0, topMargin, 0, 0);
 	}
 }
