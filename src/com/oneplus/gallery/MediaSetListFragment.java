@@ -39,14 +39,13 @@ import com.oneplus.gallery.media.MediaList;
 import com.oneplus.gallery.media.MediaSet;
 import com.oneplus.gallery.media.MediaSetList;
 import com.oneplus.media.BitmapPool;
+import com.oneplus.media.CenterCroppedBitmapPool;
 
 /**
  * Fragment to display media set list.
  */
 public class MediaSetListFragment extends GalleryFragment
 {
-	private static final int MONITORED_RAGE = 5;
-	
 	// Fields
 	private Activity m_Activity;
 	private Button m_AddAlbumButton;
@@ -55,6 +54,7 @@ public class MediaSetListFragment extends GalleryFragment
 	private MediaSetList m_MediaSetList;
 	private Hashtable<MediaSet, Object> m_MediaSetCoverImageTable = new Hashtable<>();
 	private LinkedList<MediaSet> m_MediaSetDecodeQueue = new LinkedList<>();
+	private static BitmapPool m_SmallBitmapPool = new CenterCroppedBitmapPool("MediaSetListFragmentSmallBitmapPool", 32 << 20, Bitmap.Config.RGB_565, 4, BitmapPool.FLAG_NO_EMBEDDED_THUMB);
 	
 	
 	/**
@@ -191,6 +191,10 @@ public class MediaSetListFragment extends GalleryFragment
 							Log.v(TAG, "onPropertyChanged() - new media count : "+e.getNewValue());
 							m_MediaSetDecodeQueue.add(mediaSet);
 							createMediaListCoverImageFromQueue();
+							
+							// notify data changed
+							if(m_MediaSetListAdapter != null)
+								m_MediaSetListAdapter.notifyDataSetChanged();
 						}
 					});
 				}
@@ -254,7 +258,8 @@ public class MediaSetListFragment extends GalleryFragment
 			}
 			
 			viewInfo.titleText.setText(String.valueOf(mediaSet.get(MediaSet.PROP_NAME)));
-			viewInfo.sizeTextView.setText(String.valueOf(mediaSet.get(MediaSet.PROP_MEDIA_COUNT)));
+			Integer mediaCount = mediaSet.get(MediaSet.PROP_MEDIA_COUNT);
+			viewInfo.sizeTextView.setText(mediaCount != null ? String.valueOf(mediaCount) : "");
 			if(m_MediaSetCoverImageTable.get(mediaSet) instanceof Bitmap)
 				viewInfo.coverImage.setImageBitmap((Bitmap)m_MediaSetCoverImageTable.get(mediaSet));
 			else
@@ -269,7 +274,7 @@ public class MediaSetListFragment extends GalleryFragment
 	{
 		if(m_MediaSetDecodeQueue.isEmpty())
 		{
-			Log.w(TAG, "createMediaListCoverImageFromQueue() - m_MediaSetDecodeQueue is empty");
+			//Log.w(TAG, "createMediaListCoverImageFromQueue() - m_MediaSetDecodeQueue is empty");
 			return;
 		}
 		
@@ -324,10 +329,9 @@ public class MediaSetListFragment extends GalleryFragment
 
 			@Override
 			public void onEventReceived(EventSource source, EventKey<ListChangeEventArgs> key, ListChangeEventArgs e) {
-				//Log.v(TAG, "onEventReceived() - m_MediaAddedHandler : e.getStartIndex() is "+e.getStartIndex()+" , e.getEndIndex() is "+e.getEndIndex());
-				//Log.v(TAG, "onEventReceived() - m_MediaAddedHandler : e.getItemCount() is "+e.getItemCount());
 				
-				if(e.getEndIndex() == targetGridCount-1)
+				// check if updated index located in the range that needs to show images
+				if(e.getStartIndex() <= targetGridCount-1 && e.getEndIndex() >= targetGridCount-1)
 				{
 					if(targetGridCount == 1)
 					{
@@ -350,7 +354,6 @@ public class MediaSetListFragment extends GalleryFragment
 					}
 					else
 					{
-						Log.v(TAG, "onEventReceived() - create gridCoverImage");
 						// create gridCoverImage
 						final int coverWidth = m_Activity.getResources().getDisplayMetrics().widthPixels;
 						final int coverHeight = m_Activity.getResources().getDimensionPixelSize(R.dimen.media_set_list_item_cover_image_height);
@@ -359,12 +362,12 @@ public class MediaSetListFragment extends GalleryFragment
 						
 						final Bitmap gridCover = Bitmap.createBitmap(coverWidth, coverHeight, Bitmap.Config.RGB_565);
 						final Canvas canvas = new Canvas(gridCover);
-						Log.v(TAG, "onEventReceived() - gridSize is :"+gridSize);
 						
 						for(int i=0; i<targetGridCount; i++)
 						{
 							final int index = i;
-							BitmapPool.DEFAULT_THUMBNAIL.decode(mediaList.get(i).getFilePath(), gridSize, gridSize, 0, new BitmapPool.Callback() {
+							
+							m_SmallBitmapPool.decode(mediaList.get(i).getFilePath(), gridSize, gridSize, BitmapPool.FLAG_ASYNC | BitmapPool.FLAG_URGENT, new BitmapPool.Callback() {
 								@Override
 								public void onBitmapDecoded(Handle handle, String filePath, Bitmap bitmap) {
 							
@@ -399,10 +402,9 @@ public class MediaSetListFragment extends GalleryFragment
 									createMediaListCoverImageFromQueue();
 								}
 								
+								
 							}, getHandler());
-						}
-						
-						
+						}		
 					}
 				}
 				else
