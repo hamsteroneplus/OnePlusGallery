@@ -1,5 +1,6 @@
 package com.oneplus.gallery;
 
+import android.app.Activity;
 import com.oneplus.base.BaseFragment;
 import com.oneplus.base.EventKey;
 import com.oneplus.base.PropertyKey;
@@ -16,9 +17,9 @@ public abstract class GalleryFragment extends BaseFragment
 	
 	
 	/**
-	 * Property to get or set action bar visibility.
+	 * Property to get or set action bar can be shown or not.
 	 */
-	public static final PropertyKey<Boolean> PROP_IS_ACTION_BAR_VISIBLE = new PropertyKey<>("IsActionBarVisible", Boolean.class, GalleryFragment.class, false);
+	public static final PropertyKey<Boolean> PROP_HAS_ACTION_BAR = new PropertyKey<>("HasActionBar", Boolean.class, GalleryFragment.class, false);
 	/**
 	 * Property to get or set whether {@link #ACTION_ID_BACK} action is needed or not.
 	 */
@@ -29,4 +30,42 @@ public abstract class GalleryFragment extends BaseFragment
 	 * Raised after clicking action item.
 	 */
 	public static final EventKey<ActionItemEventArgs> EVENT_ACTION_ITEM_CLICKED = new EventKey<>("ActionItemClicked", ActionItemEventArgs.class, GalleryFragment.class);
+	
+	
+	// Fields.
+	private GalleryActivity m_GalleryActivity;
+	
+	
+	/**
+	 * Get {@link GalleryActivity} instance which this fragment attach to.
+	 * @return {@link GalleryActivity}, or Null if this fragment is not attached yet.
+	 */
+	public final GalleryActivity getGalleryActivity()
+	{
+		return m_GalleryActivity;
+	}
+	
+	
+	// Called after attaching to activity.
+	@Override
+	public void onAttach(Activity activity)
+	{
+		// call super
+		super.onAttach(activity);
+		
+		// attach to gallery activity
+		m_GalleryActivity = (GalleryActivity)activity;
+	}
+	
+	
+	// Called after detaching from activity.
+	@Override
+	public void onDetach()
+	{
+		// detach from gallery activity
+		m_GalleryActivity = null;
+		
+		// call super
+		super.onDetach();
+	}
 }

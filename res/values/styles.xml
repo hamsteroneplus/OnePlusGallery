@@ -19,6 +19,11 @@
 		<item name="android:fontFamily">sans-serif</item>
 	</style>
 	
+	<!-- Gallery window -->
+	<style name="GalleryWindow" parent="@android:style/Theme.NoTitleBar.Fullscreen">
+        
+    </style>
+	
 	<!--media set list item title -->
 	<style name="MediaSetListItemTitleText" parent="BaseText">
 		<item name="android:textColor">@color/media_set_list_item_title</item>
