@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 	<integer name="griview_columns">4</integer>
+	<integer name="fake_video_width">1280</integer>
+	<integer name="fake_video_height">720</integer>
+	<integer name="fake_photo_width">640</integer>
+	<integer name="fake_photo_height">480</integer>
 </resources>

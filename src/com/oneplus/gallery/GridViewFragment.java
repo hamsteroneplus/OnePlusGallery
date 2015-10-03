@@ -506,7 +506,7 @@ public class GridViewFragment extends GalleryFragment {
 			@Override
 			public boolean onItemLongClick(AdapterView<?> parent, View view, int position, long id) {
 				Log.d(TAG, "gridview onItemLongClick event item position:" + position);
-				m_Toolbar.setNavigationIcon(R.drawable.ic_cancel);
+				m_Toolbar.setNavigationIcon(R.drawable.button_cancel);
 				m_Toolbar.setVisibility(View.VISIBLE);
 				GridViewFragment.this.set(PROP_IS_SELECTION_MODE, true);
 				onItemSelected(position, view);
@@ -703,7 +703,7 @@ public class GridViewFragment extends GalleryFragment {
 					
 					if(media instanceof VideoMedia) {
 						((ViewGroup)holder.typeIconView.getParent()).setVisibility(View.VISIBLE);
-						holder.typeIconView.setImageResource(R.drawable.about);
+						holder.typeIconView.setImageResource(R.drawable.button_about);
 						holder.durationTextView.setText(getVideoTime((VideoMedia)media));
 					}
 					

@@ -21,4 +21,12 @@
 	<dimen name="gridview_item_height">89dp</dimen>
 	<dimen name="gridview_item_width">89dp</dimen>
 	
+	<!-- Filmstrip Fragment -->
+	<dimen name="filmstrip_item_play_button_width_height">63dp</dimen>
+	<dimen name="filmstrip_header_container_height">50dp</dimen>
+	<dimen name="filmstrip_header_item_padding">9dp</dimen>
+	<dimen name="filmstrip_header_item_margin">7dp</dimen> <!-- 16dp - padding(9dp) -->
+	<dimen name="filmstrip_footer_container_height">50dp</dimen>
+	<dimen name="filmstrip_footer_item_padding">9dp</dimen>
+	
 </resources>

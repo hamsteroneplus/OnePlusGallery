@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent" >
+
+    <!-- Scale image view -->
+    <com.oneplus.widget.ScaleImageView
+		android:id="@+id/filmstrip_item_scale_image_view"
+        android:layout_width="match_parent"
+		android:layout_height="match_parent" />
+    
+    <!-- Controls container -->
+    <RelativeLayout
+        android:id="@+id/filmstrip_item_controls_container"
+	    android:layout_width="match_parent"
+		android:layout_height="match_parent"
+		android:visibility="invisible" >
+	        
+	    <!-- Image play button -->
+	    <ImageView 
+	        android:id="@+id/filmstrip_item_play_button"
+	        android:layout_width="@dimen/filmstrip_item_play_button_width_height"
+	        android:layout_height="@dimen/filmstrip_item_play_button_width_height"
+	        android:layout_centerInParent="true"
+	        android:src="@drawable/review_video_play"/>
+	    	
+	</RelativeLayout>
+    
+</RelativeLayout>
