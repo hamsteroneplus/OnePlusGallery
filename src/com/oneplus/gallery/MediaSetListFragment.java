@@ -1,25 +1,18 @@
 package com.oneplus.gallery;
 
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.content.Context;
-import android.content.DialogInterface;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.os.Bundle;
-import android.text.InputFilter;
-import android.text.InputType;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
-import android.widget.Button;
-import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.ListView;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 
 import java.util.Hashtable;
@@ -48,7 +41,7 @@ public class MediaSetListFragment extends GalleryFragment
 {
 	// Fields
 	private Activity m_Activity;
-	private Button m_AddAlbumButton;
+	private RelativeLayout m_AddAlbumButton;
 	private MediaSetListAdapter m_MediaSetListAdapter;
 	private ListView m_MediaSetListView;
 	private MediaSetList m_MediaSetList;
@@ -100,39 +93,13 @@ public class MediaSetListFragment extends GalleryFragment
 	public void onResume() {
 		super.onResume();
 		
-		m_AddAlbumButton = (Button)getView().findViewById(R.id.add_album_buttom);
+		m_AddAlbumButton = (RelativeLayout)getView().findViewById(R.id.add_album_buttom);
 		m_MediaSetListView = (ListView)getView().findViewById(R.id.media_set_listview);
 		
-		m_AddAlbumButton.setOnClickListener(new View.OnClickListener() {
-			
+		m_AddAlbumButton.setOnClickListener(new View.OnClickListener() {		
 			@Override
 			public void onClick(View v) {
-				// show dialog
-				final EditText input = new EditText(m_Activity);
-				input.setHint("我的最愛");
-				input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(140)});
-				input.setRawInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL);
-		        new AlertDialog.Builder(m_Activity, AlertDialog.THEME_DEVICE_DEFAULT_LIGHT)
-		                .setTitle("新建圖集")
-		                .setView(input)
-		                .setPositiveButton("OK", new DialogInterface.OnClickListener() {
-		                    public void onClick(DialogInterface dialog, int whichButton) {
-		                    	String newAlbumName = input.getText().toString();
-
-		                    	// TODO: create new album
-		                    	
-		            			InputMethodManager imm = (InputMethodManager)m_Activity.getSystemService(Context.INPUT_METHOD_SERVICE);
-		            			imm.hideSoftInputFromWindow(input.getWindowToken(), 0);
-		                    }
-		                })
-		                .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-		                    public void onClick(DialogInterface dialog, int whichButton) {
-		                    	InputMethodManager imm = (InputMethodManager)m_Activity.getSystemService(Context.INPUT_METHOD_SERVICE);
-		            			imm.hideSoftInputFromWindow(input.getWindowToken(), 0);
-		                    	dialog.dismiss();
-		                    }
-		                })
-                .show();
+				//TODO : add album function
 			}
 		});
 		m_MediaSetListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {

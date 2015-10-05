@@ -1,24 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-	android:layout_width="match_parent"
-	android:layout_height="match_parent"
-	android:background="@color/media_set_list_item_background">
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/media_set_list_item_background" >
 
-	<ListView 
-	    android:id="@+id/media_set_listview"
-	    android:layout_width="match_parent"
-	    android:layout_height="wrap_content"
-	    android:divider="@color/media_set_list_item_background"
-	    android:dividerHeight="@dimen/media_set_list_item_divider_height">    
-	</ListView>
-	
-	<Button 
-	    android:id="@+id/add_album_buttom"
-	    android:layout_width="@dimen/media_set_list_add_album_button_size"
-	    android:layout_height="@dimen/media_set_list_add_album_button_size"
-	    android:layout_alignParentRight="true"
-	    android:layout_alignParentBottom="true"
-	    android:layout_marginRight="@dimen/media_set_list_add_album_button_margin_right"
-	    android:layout_marginBottom="@dimen/media_set_list_add_album_button_margin_bottom"/>
+    <ListView
+        android:id="@+id/media_set_listview"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:divider="@color/media_set_list_item_background"
+        android:dividerHeight="@dimen/media_set_list_item_divider_height" >
+    </ListView>
+
+    <RelativeLayout
+        android:id="@+id/add_album_buttom"
+        style="@android:style/Widget.Material.Button.Borderless.Colored"
+        android:layout_width="@dimen/media_set_list_add_album_button_size"
+        android:layout_height="@dimen/media_set_list_add_album_button_size"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentRight="true"
+        android:layout_marginBottom="@dimen/media_set_list_add_album_button_margin_bottom"
+        android:layout_marginRight="@dimen/media_set_list_add_album_button_margin_right"
+        android:background="@drawable/add_album_button"
+        android:elevation="@dimen/media_set_list_add_album_button_elevation" >
+
+        <ImageView
+            android:id="@+id/add_icon"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:src="@drawable/button_add" />
+    </RelativeLayout>
 
 </RelativeLayout>

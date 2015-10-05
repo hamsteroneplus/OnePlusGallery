@@ -14,4 +14,7 @@
 	<color name="media_set_list_item_title">#FFFFFFFF</color>
 	<color name="media_set_list_item_size">#89FFFFFF</color>
 	
+	<color name="add_album_button_background">#FF7870CC</color>
+	<color name="add_album_button_ripple_color">#FFFFFFFF</color>
+	
 </resources>
