@@ -525,8 +525,18 @@ public class GridViewFragment extends GalleryFragment {
 					//TODO
 					break;
 				case R.id.toolbar_share:
-					//TODO
+				{
+					List<Media> selectedMedia = new ArrayList<>();
+					for(Integer index : m_SelectionSet)
+					{
+						if(get(PROP_IS_CAMERA_ROLL))
+							selectedMedia.add(m_MediaList.get(index - 1));
+						else
+							selectedMedia.add(m_MediaList.get(index));
+					}
+					getGalleryActivity().shareMedia(selectedMedia);
 					break;
+				}
 				case R.id.toolbar_delete:
 					//TODO
 					break;

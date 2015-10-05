@@ -1,17 +1,25 @@
 package com.oneplus.gallery;
 
+import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 
+import android.content.Intent;
 import android.content.res.Configuration;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.view.Window;
 
 import com.oneplus.base.BaseActivity;
 import com.oneplus.base.Handle;
+import com.oneplus.base.Log;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.ScreenSize;
+import com.oneplus.gallery.media.Media;
 import com.oneplus.util.ListUtils;
 
 /**
@@ -35,7 +43,12 @@ public abstract class GalleryActivity extends BaseActivity
 	public static final int FLAG_CANCELABLE = 0x1;
 	
 	
+	// Constants.
+	private static final int REQUEST_CODE_SHARE_MEDIA = (Integer.MAX_VALUE - 1);
+	
+	
 	// Fields.
+	private boolean m_IsSharingMedia;
 	private ScreenSize m_ScreenSize;
 	private final List<StatusBarVisibilityHandle> m_StatusBarVisibilityHandles = new ArrayList<>();
 	
@@ -116,6 +129,34 @@ public abstract class GalleryActivity extends BaseActivity
 	}
 	
 	
+	/**
+	 * Delete media.
+	 * @param mediaToDelete Media to delete.
+	 * @return True if media deleted successfully.
+	 */
+	public boolean deleteMedia(Media mediaToDelete)
+	{
+		if(mediaToDelete == null)
+		{
+			Log.e(TAG, "deleteMedia() - No media to delete");
+			return false;
+		}
+		return this.deleteMedia(Arrays.asList(mediaToDelete));
+	}
+	
+	
+	/**
+	 * Delete media.
+	 * @param mediaToDelete Media to delete.
+	 * @return True if media deleted successfully.
+	 */
+	public boolean deleteMedia(Collection<Media> mediaToDelete)
+	{
+		// complete
+		return true;
+	}
+	
+	
 	// Get property.
 	@SuppressWarnings("unchecked")
 	@Override
@@ -124,6 +165,43 @@ public abstract class GalleryActivity extends BaseActivity
 		if(key == PROP_SCREEN_SIZE)
 			return (TValue)m_ScreenSize;
 		return super.get(key);
+	}
+	
+	
+	/**
+	 * Go back to previous state.
+	 */
+	public boolean goBack()
+	{
+		return false;
+	}
+	
+	
+	// Called after getting result from activity.
+	@Override
+	protected void onActivityResult(int requestCode, int resultCode, Intent data)
+	{
+		switch(requestCode)
+		{
+			case REQUEST_CODE_SHARE_MEDIA:
+			{
+				m_IsSharingMedia = false;
+				break;
+			}
+			
+			default:
+				super.onActivityResult(requestCode, resultCode, data);
+				break;
+		}
+	}
+	
+	
+	// Called after pressing back button.
+	@Override
+	public void onBackPressed()
+	{
+		if(!this.goBack())
+			super.onBackPressed();
 	}
 	
 	
@@ -181,6 +259,90 @@ public abstract class GalleryActivity extends BaseActivity
 	}
 	
 	
+	// Prepare sharing single media.
+	private boolean prepareSharingMedia(Intent intent, Media media)
+	{
+		if(media == null)
+		{
+			Log.w(TAG, "prepareSharingMedia() - No media to share");
+			return false;
+		}
+		Uri contentUri = media.getContentUri();
+		if(contentUri != null)
+			intent.putExtra(Intent.EXTRA_STREAM, contentUri);
+		else
+		{
+			String filePath = media.getFilePath();
+			if(filePath == null)
+			{
+				Log.w(TAG, "prepareSharingMedia() - No file path");
+				return false;
+			}
+			intent.putExtra(Intent.EXTRA_STREAM, Uri.fromFile(new File(filePath)));
+		}
+		intent.setAction(Intent.ACTION_SEND);
+		intent.setType(media.getMimeType());
+		return true;
+	}
+	
+	
+	// Prepare sharing multiple media.
+	private boolean prepareSharingMedia(Intent intent, Collection<Media> mediaCollection)
+	{
+		String mimeType = null;
+		String mimeTypePrefix = null;
+		ArrayList<Uri> uriList = new ArrayList<>();
+		for(Media media : mediaCollection)
+		{
+			if(media == null)
+				continue;
+			Uri contentUri = media.getContentUri();
+			if(contentUri != null)
+				uriList.add(contentUri);
+			else
+			{
+				String filePath = media.getFilePath();
+				if(filePath == null)
+					continue;
+				uriList.add(Uri.fromFile(new File(filePath)));
+			}
+			String currentType = media.getMimeType();
+			if(mimeType != null)
+			{
+				if(mimeTypePrefix.equals("*/"))
+					continue;
+				if(!mimeType.equals(currentType))
+				{
+					if(!currentType.startsWith(mimeTypePrefix))
+					{
+						mimeType = "*/*";
+						mimeTypePrefix = "*/";
+					}
+					else if(mimeType.charAt(mimeType.length() - 1) != '*')
+					{
+						mimeType = (mimeTypePrefix + "*");
+					}
+				}
+			}
+			else
+			{
+				mimeType = currentType;
+				int charIndex = currentType.indexOf('/');
+				mimeTypePrefix = (charIndex >= 0 ? currentType.substring(0, charIndex + 1) : "*");
+			}
+		}
+		if(uriList.isEmpty())
+		{
+			Log.w(TAG, "prepareSharingMedia() - No media to share");
+			return false;
+		}
+		intent.setType(mimeType);
+		intent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uriList);
+		intent.setAction(Intent.ACTION_SEND_MULTIPLE);
+		return true;
+	}
+	
+	
 	/**
 	 * Set status bar visibility.
 	 * @param isVisible True to show status bar.
@@ -208,6 +370,76 @@ public abstract class GalleryActivity extends BaseActivity
 		StatusBarVisibilityHandle handle = new StatusBarVisibilityHandle(isVisible, flags);
 		m_StatusBarVisibilityHandles.add(handle);
 		return handle;
+	}
+	
+	
+	/**
+	 * Share media.
+	 * @param mediaToShare Media to share.
+	 * @return True if media shared successfully.
+	 */
+	public boolean shareMedia(Media mediaToShare)
+	{
+		if(mediaToShare == null)
+		{
+			Log.e(TAG, "shareMedia() - No media to share");
+			return false;
+		}
+		return this.shareMedia(Arrays.asList(mediaToShare));
+	}
+	
+	
+	/**
+	 * Share media.
+	 * @param mediaToShare Media to share.
+	 * @return True if media shared successfully.
+	 */
+	public boolean shareMedia(Collection<Media> mediaToShare)
+	{
+		// check state
+		this.verifyAccess();
+		if(m_IsSharingMedia)
+		{
+			Log.e(TAG, "shareMedia() - Waiting for previous sharing result");
+			return false;
+		}
+		if(mediaToShare == null || mediaToShare.isEmpty())
+		{
+			Log.w(TAG, "shareMedia() - No media to share");
+			return false;
+		}
+		
+		// prepare intent
+		Intent intent = new Intent();
+		if(mediaToShare.size() == 1)
+		{
+			Iterator<Media> iterator = mediaToShare.iterator();
+			Media media = null;
+			if(iterator.hasNext())
+				media = iterator.next();
+			if(!this.prepareSharingMedia(intent, media))
+				return false;
+		}
+		else
+		{
+			if(!this.prepareSharingMedia(intent, mediaToShare))
+				return false;
+		}
+		
+		// start activity
+		try
+		{
+			this.startActivityForResult(Intent.createChooser(intent, "Share"), REQUEST_CODE_SHARE_MEDIA);
+		}
+		catch(Throwable ex)
+		{
+			Log.e(TAG, "shareMedia() - Fail to start activity", ex);
+			return false;
+		}
+		
+		// complete
+		m_IsSharingMedia = true;
+		return true;
 	}
 	
 	

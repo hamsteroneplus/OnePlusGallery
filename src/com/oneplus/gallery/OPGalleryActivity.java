@@ -6,7 +6,6 @@ import android.app.FragmentTransaction;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.v4.view.PagerAdapter;
-import android.support.v4.view.ViewPager;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
@@ -16,6 +15,10 @@ import com.oneplus.base.EventKey;
 import com.oneplus.base.EventSource;
 import com.oneplus.base.Handle;
 import com.oneplus.base.Log;
+import com.oneplus.base.PropertyChangeEventArgs;
+import com.oneplus.base.PropertyChangedCallback;
+import com.oneplus.base.PropertyKey;
+import com.oneplus.base.PropertySource;
 import com.oneplus.base.ScreenSize;
 import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaComparator;
@@ -23,6 +26,7 @@ import com.oneplus.gallery.media.MediaList;
 import com.oneplus.gallery.media.MediaManager;
 import com.oneplus.gallery.media.MediaSet;
 import com.oneplus.gallery.media.MediaSetList;
+import com.oneplus.gallery.widget.ViewPager;
 import com.oneplus.widget.ViewUtils;
 
 /**
@@ -102,6 +106,17 @@ public class OPGalleryActivity extends GalleryActivity
 		public void onEventReceived(EventSource source, EventKey<ListChangeEventArgs> key, ListChangeEventArgs e)
 		{
 			onMediaSetRemoved(e);
+		}
+	};
+	
+	
+	// Call-backs.
+	private final PropertyChangedCallback<Boolean> m_IsSelectionModeChangedCallback = new PropertyChangedCallback<Boolean>()
+	{
+		@Override
+		public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+		{
+			onDefaultGridViewSelectionStateChanged(e.getNewValue());
 		}
 	};
 	
@@ -212,15 +227,15 @@ public class OPGalleryActivity extends GalleryActivity
 	}
 	
 	
-	// Called when back button pressed.
+	// Go to previous state.
 	@Override
-	public void onBackPressed()
+	public boolean goBack()
 	{
 		switch(m_Mode)
 		{
 			case GRID_VIEW:
 				this.changeMode(Mode.ENTRY);
-				break;
+				return true;
 				
 			case FILMSTRIP:
 			{
@@ -229,13 +244,39 @@ public class OPGalleryActivity extends GalleryActivity
 					this.changeMode(Mode.GRID_VIEW);
 				else
 					this.changeMode(Mode.ENTRY);
-				break;
+				return true;
 			}
 				
 			default:
-				super.onBackPressed();
+				return super.goBack();
+		}
+	}
+	
+	
+	// Called when pressing back button.
+	@SuppressWarnings("incomplete-switch")
+	@Override
+	public void onBackPressed()
+	{
+		switch(m_Mode)
+		{
+			case ENTRY:
+				if(m_DefaultGridViewFragment != null && m_DefaultGridViewFragment.get(GridViewFragment.PROP_IS_SELECTION_MODE))
+				{
+					m_DefaultGridViewFragment.set(GridViewFragment.PROP_IS_SELECTION_MODE, false);
+					return;
+				}
+				break;
+				
+			case GRID_VIEW:
+				if(m_GridViewFragment != null && m_GridViewFragment.get(GridViewFragment.PROP_IS_SELECTION_MODE))
+				{
+					m_GridViewFragment.set(GridViewFragment.PROP_IS_SELECTION_MODE, false);
+					return;
+				}
 				break;
 		}
+		super.onBackPressed();
 	}
 	
 	
@@ -263,6 +304,7 @@ public class OPGalleryActivity extends GalleryActivity
 		fragment.set(GridViewFragment.PROP_HAS_ACTION_BAR, false);
 		
 		// attach
+		fragment.addCallback(GridViewFragment.PROP_IS_SELECTION_MODE, m_IsSelectionModeChangedCallback);
 		fragment.addHandler(GridViewFragment.EVENT_MEDIA_CLICKED, m_GridViewMediaClickedHandler);
 		
 		// open default media list
@@ -283,12 +325,31 @@ public class OPGalleryActivity extends GalleryActivity
 	}
 	
 	
+	// Called when selection state changed in default grid view.
+	private void onDefaultGridViewSelectionStateChanged(boolean isSelectionMode)
+	{
+		if(isSelectionMode)
+		{
+			m_EntryPageTabContainer.setVisibility(View.GONE);
+			m_EntryViewPager.lockPosition();
+		}
+		else
+		{
+			m_EntryPageTabContainer.setVisibility(View.VISIBLE);
+			m_EntryViewPager.unlockPosition();
+		}
+	}
+	
+	
 	// Called when destroying.
 	protected void onDestroy() 
 	{
 		// detach from fragment
 		if(m_DefaultGridViewFragment != null)
+		{
+			m_DefaultGridViewFragment.removeCallback(GridViewFragment.PROP_IS_SELECTION_MODE, m_IsSelectionModeChangedCallback);
 			m_DefaultGridViewFragment.removeHandler(GridViewFragment.EVENT_MEDIA_CLICKED, m_GridViewMediaClickedHandler);
+		}
 		if(m_GridViewFragment != null)
 			m_GridViewFragment.removeHandler(GridViewFragment.EVENT_MEDIA_CLICKED, m_GridViewMediaClickedHandler);
 		if(m_MediaSetListFragment != null)
@@ -340,6 +401,7 @@ public class OPGalleryActivity extends GalleryActivity
 	private void onGridViewClosed()
 	{
 		m_GridViewContainer.setVisibility(View.GONE);
+		m_GridViewFragment.set(GridViewFragment.PROP_IS_SELECTION_MODE, false);
 		m_GridViewFragment.set(GridViewFragment.PROP_MEDIA_LIST, null);
 		if(m_GridViewFragment.isAdded())
 			this.getFragmentManager().beginTransaction().detach(m_GridViewFragment).commit();
@@ -468,6 +530,10 @@ public class OPGalleryActivity extends GalleryActivity
 		// reset current mode
 		this.changeMode(Mode.ENTRY, false);
 		
+		// cancel selection mode
+		if(m_DefaultGridViewFragment != null)
+			m_DefaultGridViewFragment.set(GridViewFragment.PROP_IS_SELECTION_MODE, false);
+		
 		// show default media set
 		m_EntryViewPager.setCurrentItem(0, false);
 	}
@@ -539,6 +605,7 @@ public class OPGalleryActivity extends GalleryActivity
 		
 		// open
 		m_FilmstripContainer.setVisibility(View.VISIBLE);
+		m_FilmstripContainer.requestFocus();
 		if(animate)
 		{
 			m_FilmstripContainer.setAlpha(0f);
@@ -574,6 +641,7 @@ public class OPGalleryActivity extends GalleryActivity
 		// open
 		ScreenSize screenSize = this.get(PROP_SCREEN_SIZE);
 		m_GridViewContainer.setVisibility(View.VISIBLE);
+		m_GridViewContainer.requestFocus();
 		if(animate)
 		{
 			m_GridViewContainer.setTranslationY(screenSize.getHeight());

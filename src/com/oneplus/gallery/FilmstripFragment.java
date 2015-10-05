@@ -549,8 +549,7 @@ public class FilmstripFragment extends GalleryFragment
 	// Close fragment
 	private void closeFragment()
 	{
-		// raise action back
-		this.raise(EVENT_ACTION_ITEM_CLICKED, new ActionItemEventArgs(ACTION_ID_BACK));
+		this.getGalleryActivity().goBack();
 	}
 	
 	
@@ -646,7 +645,7 @@ public class FilmstripFragment extends GalleryFragment
 
 		// TODO: delete page from activity
 		Media media = m_MediaList.get(position);
-		GalleryActivity galleryActivity = this.getGalleryActivity();
+		this.getGalleryActivity().deleteMedia(media);
 	}
 	
 	
@@ -1443,7 +1442,7 @@ public class FilmstripFragment extends GalleryFragment
 
 		// TODO: share page from activity
 		Media media = m_MediaList.get(position);
-		GalleryActivity galleryActivity = this.getGalleryActivity();
+		this.getGalleryActivity().shareMedia(media);
 	}
 	
 	

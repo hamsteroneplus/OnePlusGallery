@@ -33,7 +33,7 @@
 		</LinearLayout>
 		
 		<!-- View pager -->
-	    <android.support.v4.view.ViewPager
+	    <com.oneplus.gallery.widget.ViewPager
 			android:id="@+id/entry_view_pager"
 			android:layout_width="match_parent"
 			android:layout_height="match_parent"/>
@@ -46,6 +46,7 @@
 		android:layout_height="match_parent"
 		android:background="#000000"
 		android:orientation="vertical"
+		android:focusable="true"
 		android:visibility="gone">
 	    
 		<FrameLayout android:id="@+id/grid_view_fragment_container"
@@ -60,6 +61,7 @@
 		android:layout_height="match_parent"
 		android:background="#000000"
 		android:orientation="vertical"
+		android:focusable="true"
 		android:visibility="gone">
 	    
 		<FrameLayout android:id="@+id/filmstrip_fragment_container"

@@ -89,4 +89,12 @@ public final class GalleryApplication extends Application implements HandlerObje
 		// initialize static components
 		MediaManager.initialize();
 	}
+	
+	
+	// Throws exception if current thread is not main thread.
+	private void verifyAccess()
+	{
+		if(Thread.currentThread() != m_MainThread)
+			throw new IllegalAccessError("Cross-thread access");
+	}
 }
