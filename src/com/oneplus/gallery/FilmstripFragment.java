@@ -1,6 +1,7 @@
 package com.oneplus.gallery;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
 
@@ -32,6 +33,7 @@ import com.oneplus.base.PropertyKey;
 import com.oneplus.base.ScreenSize;
 import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaList;
+import com.oneplus.gallery.media.PhotoMedia;
 import com.oneplus.gallery.media.VideoMedia;
 import com.oneplus.media.BitmapPool;
 import com.oneplus.widget.FilmstripView;
@@ -62,6 +64,8 @@ public class FilmstripFragment extends GalleryFragment
 	private final static BitmapPool BITMAP_POOL_LOW_RESOLUTION = new BitmapPool("FilmstripLowResBitmapPool", 32 << 20, 16 << 20, Bitmap.Config.RGB_565, 3, 0);
 	private final static BitmapPool BITMAP_POOL_MEDIUM_RESOLUTION = new BitmapPool("FilmstripMediumResBitmapPool", 32 << 20, 16 << 20, Bitmap.Config.ARGB_8888, 3, 0);
 	private static final long DURATION_ANIMATION = 150;
+	private static final int PRE_DECODE_THUMB_WINDOW_SIZE = 2;
+	private static final int PRE_DECODE_THUMB_WINDOW_SIZE_SMALL = 3;
 
 	
 	// Fields
@@ -78,16 +82,22 @@ public class FilmstripFragment extends GalleryFragment
 	private FilmstripView.Adapter m_FilmstripAdapter = new FilmstripView.Adapter()
 	{	
 		@Override
+		public int getCount()
+		{
+			return FilmstripFragment.this.onGetCount();
+		}
+		
+		@Override
 		public void prepareItemView(int position, ViewGroup container)
 		{
 			FilmstripFragment.this.onPrepareItemView(position, container);
 		}
 		
 		@Override
-		public int getCount()
+		public void releaseItemView(int position, ViewGroup container)
 		{
-			return FilmstripFragment.this.onGetCount();
-		}
+			FilmstripFragment.this.onReleaseItemView(position, container);
+		};
 	};
 	private Queue<FilmstripItem> m_FilmstripItemPool = new ArrayDeque<>();
 	private final SparseArray<FilmstripItem> m_FilmstripItems = new SparseArray<>();
@@ -119,7 +129,7 @@ public class FilmstripFragment extends GalleryFragment
 			FilmstripFragment.this.onLowResImageDecoded(handle, filePath, bitmap);
 		}
 	};
-	private Handle m_LowResBitmapDecodeHandle;
+	private List<BitmapDecodeInfo> m_LowResBitmapDecodeInfos = new ArrayList<>();
 	private EventHandler<ListChangeEventArgs> m_MediaChangedEventHandler = new EventHandler<ListChangeEventArgs>()
 	{
 		@Override
@@ -138,7 +148,8 @@ public class FilmstripFragment extends GalleryFragment
 			FilmstripFragment.this.onMediumResImageDecoded(handle, filePath, bitmap);
 		}
 	};
-	private Handle m_MediumResBitmapDecodeHandle;
+	private List<BitmapDecodeInfo> m_MediumResBitmapDecodeInfos = new ArrayList<>();
+	private Queue<BitmapDecodeInfo> m_ReusedBitmapDecodeInfos = new ArrayDeque<>();
 	private float m_ScaleFactor;
 	private View m_ShareButton;
 	private ViewVisibilityState m_ToolbarVisibilityState = ViewVisibilityState.INVISIBLE;
@@ -300,6 +311,12 @@ public class FilmstripFragment extends GalleryFragment
 			m_ScaleImageView.setImageDrawable(drawable);
 		}
 		
+		// Set media
+		public void setMedia(Media media)
+		{
+			m_Media = media;
+		}
+		
 		// Set position
 		public void setPosition(int position)
 		{
@@ -347,8 +364,16 @@ public class FilmstripFragment extends GalleryFragment
 				m_ScaleImageView.setImageScaleRatio(-1, -1);
 			}
 
-			Log.v(TAG, "updateMediaInfo() - File path: ", media.getFilePath(), ", hash: ", this.hashCode());
+			Log.v(TAG, "updateMedia() - File path: ", media.getFilePath(), ", hash: ", this.hashCode());
 		}
+	}
+	
+	
+	// Bitmap decode info
+	private static final class BitmapDecodeInfo
+	{
+		public Handle decodeHandle;
+		public String filePath;
 	}
 	
 	
@@ -363,13 +388,46 @@ public class FilmstripFragment extends GalleryFragment
 	}
 	
 	
+	// Cancel decoding images
+	private void cancelDecodingImages()
+	{
+		Log.v(TAG, "cancelDecodingImages()");
+		
+		for(int i = m_LowResBitmapDecodeInfos.size() - 1 ; i >= 0 ; --i)
+		{
+			BitmapDecodeInfo info = m_LowResBitmapDecodeInfos.get(i);
+			info.decodeHandle = Handle.close(info.decodeHandle);
+			m_ReusedBitmapDecodeInfos.add(info);
+		}
+		for(int i = m_MediumResBitmapDecodeInfos.size() - 1 ; i >= 0 ; --i)
+		{
+			BitmapDecodeInfo info = m_MediumResBitmapDecodeInfos.get(i);
+			info.decodeHandle = Handle.close(info.decodeHandle);
+			m_ReusedBitmapDecodeInfos.add(info);
+		}
+		m_HighResBitmapDecodeHandle = Handle.close(m_HighResBitmapDecodeHandle);
+		m_LowResBitmapDecodeInfos.clear();
+		m_ReusedBitmapDecodeInfos.clear();
+	}
+	
+	
 	// Cancel decoding low resolution image
 	private void cancelDecodingLowResolutionImage(Media media)
 	{
-		if(Handle.isValid(m_LowResBitmapDecodeHandle))
+		if(m_LowResBitmapDecodeInfos.size() > 0)
 		{
-			Log.v(TAG, "cancelDecodingLowResolutionImage() - Cancel decoding low-resolution bitmap : ", media.getFilePath());
-			m_LowResBitmapDecodeHandle = Handle.close(m_LowResBitmapDecodeHandle);
+			for(int i = m_LowResBitmapDecodeInfos.size() - 1; i >= 0 ; i--)
+			{
+				BitmapDecodeInfo info = m_LowResBitmapDecodeInfos.get(i);
+				if(info.filePath.equals(media.getFilePath()))
+				{
+					Log.v(TAG, "cancelDecodingLowResolutionImage() - Cancel decoding low-resolution bitmap : ", media.getFilePath());
+					m_LowResBitmapDecodeInfos.remove(i);
+					info.decodeHandle = Handle.close(info.decodeHandle);
+					m_ReusedBitmapDecodeInfos.add(info);
+					break;
+				}
+			}
 		}
 	}
 	
@@ -377,10 +435,20 @@ public class FilmstripFragment extends GalleryFragment
 	// Cancel decoding medium resolution image
 	private void cancelDecodingMediumResolutionImage(Media media)
 	{
-		if(Handle.isValid(m_MediumResBitmapDecodeHandle))
+		if(m_MediumResBitmapDecodeInfos.size() > 0)
 		{
-			Log.v(TAG, "cancelDecodingMediumResolutionImage() - Cancel decoding medium-resolution bitmap : ", media.getFilePath());
-			m_MediumResBitmapDecodeHandle = Handle.close(m_MediumResBitmapDecodeHandle);
+			for(int i = m_MediumResBitmapDecodeInfos.size() - 1; i >= 0; i--)
+			{
+				BitmapDecodeInfo info = m_MediumResBitmapDecodeInfos.get(i);
+				if(info.filePath.equals(media.getFilePath()))
+				{
+					Log.v(TAG, "cancelDecodingMediumResolutionImage() - Cancel decoding medium-resolution bitmap : ", media.getFilePath());
+					m_MediumResBitmapDecodeInfos.remove(i);
+					info.decodeHandle = Handle.close(info.decodeHandle);
+					m_ReusedBitmapDecodeInfos.add(info);
+					break;
+				}
+			}
 		}
 	}
 	
@@ -396,6 +464,85 @@ public class FilmstripFragment extends GalleryFragment
 			m_IsActionEditSupported = true;
 		else
 			m_IsActionEditSupported = false;
+	}
+	
+	
+	// Check image decoding
+	private void checkImageDecoding(int position)
+	{
+		// check state
+		if(m_MediaList == null)
+			return;
+		boolean decodeImage = true;
+		if(position < 0 || position > (m_MediaList.size() - 1))
+			decodeImage = false;
+		
+		// prepare index
+		int center = position;
+		int maxIndex = m_MediaList.size() - 1;
+		int preDecodeStart = center - PRE_DECODE_THUMB_WINDOW_SIZE;
+		int preDecodeEnd = center + PRE_DECODE_THUMB_WINDOW_SIZE;
+		int preDecodeLowStart = preDecodeStart - PRE_DECODE_THUMB_WINDOW_SIZE_SMALL;
+		int preDecodeLowEnd = preDecodeEnd + PRE_DECODE_THUMB_WINDOW_SIZE_SMALL;
+		if(preDecodeStart < 0)
+			preDecodeStart = 0;
+		if(preDecodeLowStart < 0)
+			preDecodeLowStart = 0;
+		if(preDecodeEnd > maxIndex)
+			preDecodeEnd = maxIndex;
+		if(preDecodeLowEnd > maxIndex)
+			preDecodeLowEnd = maxIndex;
+		
+		Log.v(TAG, "checkImageDecoding() - Center: ", center, ", start: ", preDecodeStart, ", end: ", preDecodeEnd, ", low start: ", preDecodeLowStart, ", low end: ", preDecodeLowEnd);
+		
+		// check cancel
+		for(int i = m_LowResBitmapDecodeInfos.size() - 1; i >= 0 ; i--)
+		{
+			BitmapDecodeInfo decodeInfo = m_LowResBitmapDecodeInfos.get(i);
+			boolean cancel = true;
+			for(int j = preDecodeLowStart ; j <= preDecodeLowEnd ; j++)
+			{
+				if(decodeInfo.filePath.equals(m_MediaList.get(j).getFilePath()))
+				{
+					cancel = false;
+					break;
+				}
+			}
+			if(cancel)
+			{
+				m_LowResBitmapDecodeInfos.remove(i);
+				m_ReusedBitmapDecodeInfos.add(decodeInfo);
+				decodeInfo.decodeHandle = Handle.close(decodeInfo.decodeHandle);
+			}
+		}
+		for(int i = m_MediumResBitmapDecodeInfos.size() - 1; i >= 0 ; i--)
+		{
+			BitmapDecodeInfo decodeInfo = m_MediumResBitmapDecodeInfos.get(i);
+			boolean cancel = true;
+			for(int j = preDecodeStart ; j <= preDecodeEnd ; j++)
+			{
+				if(decodeInfo.filePath.equals(m_MediaList.get(j).getFilePath()))
+				{
+					cancel = false;
+					break;
+				}
+			}
+			if(cancel)
+			{
+				m_MediumResBitmapDecodeInfos.remove(i);
+				m_ReusedBitmapDecodeInfos.add(decodeInfo);
+				decodeInfo.decodeHandle = Handle.close(decodeInfo.decodeHandle);
+			}
+		}
+		
+		// start decode
+		if(decodeImage)
+		{
+			for(int i = preDecodeLowStart; i <= preDecodeLowEnd; i++)
+				this.decodeLowResolutionImage(m_MediaList.get(i), (i == center));
+			for(int i = preDecodeStart; i <= preDecodeEnd; i++)
+				this.decodeMediumResolutionImage(m_MediaList.get(i), (i == center));
+		}
 	}
 	
 	
@@ -443,20 +590,50 @@ public class FilmstripFragment extends GalleryFragment
 	
 	
 	// Start decode low resolution image
-	private void decodeLowResolutionImage(Media media)
+	private void decodeLowResolutionImage(Media media, boolean urgent)
 	{
-		Log.v(TAG, "decodeLowResolutionImage() - Start decoding low-resolution bitmap : ", media.getFilePath());
-		m_LowResBitmapDecodeHandle = Handle.close(m_LowResBitmapDecodeHandle);
-		m_LowResBitmapDecodeHandle = BITMAP_POOL_LOW_RESOLUTION.decode(media.getFilePath(), 512, 512, BitmapPool.FLAG_ASYNC | BitmapPool.FLAG_URGENT, m_LowResBitmapDecodeCallback, this.getHandler());
+		// check media & decode
+		String filePath = media.getFilePath();
+		BitmapDecodeInfo decodeInfo = this.findBitmapDecodeInfo(m_LowResBitmapDecodeInfos, filePath);
+		if((media instanceof PhotoMedia) && (decodeInfo == null || urgent))
+		{
+			// if media is photo and it's not decoding or urgent, decode it 
+			if(decodeInfo == null)
+			{
+				decodeInfo = m_ReusedBitmapDecodeInfos.poll();
+				if(decodeInfo == null)
+					decodeInfo = new BitmapDecodeInfo();
+				decodeInfo.filePath = filePath;
+				m_LowResBitmapDecodeInfos.add(decodeInfo);
+			}
+			decodeInfo.decodeHandle = BITMAP_POOL_LOW_RESOLUTION.decode(media.getFilePath(), 512, 512, BitmapPool.FLAG_URGENT, m_LowResBitmapDecodeCallback, this.getHandler());
+			
+			Log.v(TAG, "decodeLowResolutionImage() - Start decoding low-resolution bitmap : ", filePath);
+		}
 	}
 	
 	
 	// Start decode medium resolution image
-	private void decodeMediumResolutionImage(Media media)
+	private void decodeMediumResolutionImage(Media media, boolean urgent)
 	{
-		Log.v(TAG, "decodeMediumResolutionImage() - Start decoding medium-resolution bitmap : ", media.getFilePath());
-		m_MediumResBitmapDecodeHandle = Handle.close(m_MediumResBitmapDecodeHandle);
-		m_MediumResBitmapDecodeHandle = BITMAP_POOL_MEDIUM_RESOLUTION.decode(media.getFilePath(), 1920, 1920, BitmapPool.FLAG_ASYNC | BitmapPool.FLAG_URGENT, m_MediumResBitmapDecodeCallback, this.getHandler());
+		// check media & decode
+		String filePath = media.getFilePath();
+		BitmapDecodeInfo decodeInfo = this.findBitmapDecodeInfo(m_MediumResBitmapDecodeInfos, filePath);
+		if(decodeInfo == null || urgent)
+		{
+			// if media is photo and it's not decoding or urgent, decode it 
+			if(decodeInfo == null)
+			{
+				decodeInfo = m_ReusedBitmapDecodeInfos.poll();
+				if(decodeInfo == null)
+					decodeInfo = new BitmapDecodeInfo();
+				decodeInfo.filePath = filePath;
+				m_MediumResBitmapDecodeInfos.add(decodeInfo);
+			}
+			decodeInfo.decodeHandle = BITMAP_POOL_MEDIUM_RESOLUTION.decode(media.getFilePath(), 1920, 1920, BitmapPool.FLAG_URGENT, m_MediumResBitmapDecodeCallback, this.getHandler());
+			
+			Log.v(TAG, "decodeMediumResolutionImage() - Start decoding medium-resolution bitmap : ", filePath);
+		}
 	}
 	
 	
@@ -483,6 +660,21 @@ public class FilmstripFragment extends GalleryFragment
 		// TODO: editor page from activity
 		Media media = m_MediaList.get(position);
 		GalleryActivity galleryActivity = this.getGalleryActivity();
+	}
+	
+	
+	// Find bitmap decode info
+	private BitmapDecodeInfo findBitmapDecodeInfo(List<BitmapDecodeInfo> list, String filePath)
+	{
+		if(list == null || filePath == null)
+			return null;
+		for(int i = list.size() - 1 ; i >= 0 ; --i)
+		{
+			BitmapDecodeInfo info = list.get(i);
+			if(filePath.equals(info.filePath))
+				return info;
+		}
+		return null;
 	}
 	
 	
@@ -534,6 +726,21 @@ public class FilmstripFragment extends GalleryFragment
 		View view = inflater.inflate(R.layout.fragment_filmstrip, null);
 		m_FilmstripView = (FilmstripView)view.findViewById(R.id.filmstrip_view);
 		m_FilmstripView.setAdapter(m_FilmstripAdapter);
+		m_FilmstripView.setScrollListener(new FilmstripView.ScrollListener()
+		{
+			@Override
+			public void onItemSelected(int position)
+			{
+				FilmstripFragment.this.setCurrentMediaIndexProp(position, false);
+			}
+		});
+		if(m_MediaList != null && m_CurrentMediaIndex >= 0 && m_CurrentMediaIndex <= m_MediaList.size() - 1)
+		{
+			// set current item and check bitmap decoding
+			m_FilmstripView.setCurrentItem(m_CurrentMediaIndex, false);
+			this.checkImageDecoding(m_CurrentMediaIndex);
+		}
+			
 		
 		// header
 		m_HeaderContainer = view.findViewById(R.id.filmstrip_header_container);
@@ -609,7 +816,7 @@ public class FilmstripFragment extends GalleryFragment
 	// Call when filmstrip view get count
 	private int onGetCount()
 	{
-		return (m_MediaList != null) ? m_MediaList.size() : 0;
+		return (m_MediaList != null && m_CurrentMediaIndex != -1) ? m_MediaList.size() : 0;
 	}
 	
 	
@@ -662,14 +869,16 @@ public class FilmstripFragment extends GalleryFragment
 	private void onLowResImageDecoded(Handle handle, String filePath, Bitmap bitmap)
 	{
 		// check state
-		if(m_LowResBitmapDecodeHandle != handle)
+		BitmapDecodeInfo decodeInfo = this.findBitmapDecodeInfo(m_LowResBitmapDecodeInfos, filePath);
+		if(decodeInfo == null)
 		{
 			Log.v(TAG, "onLowResImageDecoded() - Drop bitmap : ", filePath);
 			return;
 		}
 
 		// update state
-		m_LowResBitmapDecodeHandle = null;
+		m_LowResBitmapDecodeInfos.remove(decodeInfo);
+		m_ReusedBitmapDecodeInfos.add(decodeInfo);
 		if(bitmap == null)
 		{
 			Log.w(TAG, "onLowResImageDecoded() - Fail to decode bitmap");
@@ -701,25 +910,20 @@ public class FilmstripFragment extends GalleryFragment
 	}
 	
 	
-	// Call when media index updated
-	private void onMediaIndexUpdated()
-	{
-		m_FilmstripView.setCurrentItem(m_CurrentMediaIndex, false);
-	}
-	
-	
 	// Call when medium resolution image decoded
 	private void onMediumResImageDecoded(Handle handle, String filePath, Bitmap bitmap)
 	{
 		// check state
-		if(m_MediumResBitmapDecodeHandle != handle)
+		BitmapDecodeInfo decodeInfo = this.findBitmapDecodeInfo(m_MediumResBitmapDecodeInfos, filePath);
+		if(decodeInfo == null)
 		{
 			Log.v(TAG, "onMediumResImageDecoded() - Drop bitmap : ", filePath);
 			return;
 		}
 
 		// update state
-		m_MediumResBitmapDecodeHandle = null;
+		m_MediumResBitmapDecodeInfos.remove(decodeInfo);
+		m_ReusedBitmapDecodeInfos.add(decodeInfo);
 		if(bitmap == null)
 		{
 			Log.w(TAG, "onMediumResImageDecoded() - Fail to decode bitmap");
@@ -773,7 +977,7 @@ public class FilmstripFragment extends GalleryFragment
 		{
 			// set default item to -1
 			m_FilmstripAdapter.notifyDataSetChanged();
-			m_FilmstripView.setCurrentItem(-1, false);
+			this.setCurrentMediaIndexProp(-1, true);
 		}
 		else
 		{
@@ -784,7 +988,7 @@ public class FilmstripFragment extends GalleryFragment
 			else if(newPosition >= startIndex && newPosition <= endIndex)
 				newPosition += (newPosition - startIndex + 1);
 			m_FilmstripAdapter.notifyDataSetChanged();
-			m_FilmstripView.setCurrentItem(newPosition, false);
+			this.setCurrentMediaIndexProp(newPosition, true);
 		}
 	}
 	
@@ -796,10 +1000,16 @@ public class FilmstripFragment extends GalleryFragment
 		// reset
 		this.resetFilmstripState();
 		
+		// cancel decoding
+		this.cancelDecodingImages();
+		
 		// deactivate bitmap pools
 		m_HighResBitmapActiveHandle = Handle.close(m_HighResBitmapActiveHandle);
 		m_MediumResBitmapActiveHandle = Handle.close(m_MediumResBitmapActiveHandle);
 		m_LowResBitmapActiveHandle = Handle.close(m_LowResBitmapActiveHandle);
+		
+		// restore status bar
+		this.setStatusBarVisibility(true);
 		
 		// call super
 		super.onPause();
@@ -831,11 +1041,36 @@ public class FilmstripFragment extends GalleryFragment
 		// add to filmstrip items
 		m_FilmstripItems.put(position, filmstripItem);
 		
-		// decode thumbnail images
+		// reset states
 		filmstripItem.setImageDecodeState(ImageDecodeState.NONE);
 		filmstripItem.setImageDrawable(m_DummyThumbDrawable);
-		this.decodeLowResolutionImage(media);
-		this.decodeMediumResolutionImage(media);
+		
+		// check decoding
+		this.checkImageDecoding(position);
+	}
+	
+	
+	private void onReleaseItemView(int position, ViewGroup container)
+	{
+		Log.v(TAG, "onReleaseItemView() - Position: ", position);
+		
+		// add releasing view back to pool to reuse it
+		FilmstripItem reusedItem = (FilmstripItem)container.getTag();
+		if(reusedItem != null)
+		{
+			// update state
+			m_FilmstripItemPool.add(reusedItem);
+			container.setTag(null);
+			reusedItem.setImageDrawable(m_DummyThumbDrawable);
+			reusedItem.setMedia(null);
+		}
+		m_FilmstripItems.remove(position);
+
+		// check decoding
+		this.checkImageDecoding(position);
+		
+		// remove all views
+		container.removeAllViews();
 	}
 	
 	
@@ -910,8 +1145,8 @@ public class FilmstripFragment extends GalleryFragment
 			if(filmstripItem != null)
 			{
 				filmstripItem.setImageDecodeState(ImageDecodeState.NONE);
-				this.decodeLowResolutionImage(media);
-				this.decodeMediumResolutionImage(media);
+				this.decodeLowResolutionImage(media, true);
+				this.decodeMediumResolutionImage(media, true);
 			}
 			else
 				Log.e(TAG, "onScaleImageBoundsTypeChanged() - No filmstrip item");
@@ -939,7 +1174,7 @@ public class FilmstripFragment extends GalleryFragment
 		switch(m_FilmstripState)
 		{
 			case BROWSE_SINGLE_PAGE:
-				if(!(media instanceof VideoMedia) && !item.isStretchedImage())
+				if((media instanceof PhotoMedia) && !item.isStretchedImage())
 					this.setFilmstripState(FilmstripState.VIEW_DETAILS);
 				return false;
 			case VIEW_DETAILS:
@@ -976,7 +1211,7 @@ public class FilmstripFragment extends GalleryFragment
 			case BROWSE_SINGLE_PAGE:
 				if(m_ScaleFactor > 1)
 				{
-					if(!(media instanceof VideoMedia) && !item.isStretchedImage())
+					if((media instanceof PhotoMedia) && !item.isStretchedImage())
 						this.setFilmstripState(FilmstripState.VIEW_DETAILS);
 				}
 				return false;
@@ -1052,8 +1287,7 @@ public class FilmstripFragment extends GalleryFragment
 		this.setFilmstripState(FilmstripState.BACKGROUND);
 		
 		// reset media index
-		m_CurrentMediaIndex = -1;
-		this.onMediaIndexUpdated();
+		this.setCurrentMediaIndexProp(-1, true);
 	}
 
 	
@@ -1062,7 +1296,7 @@ public class FilmstripFragment extends GalleryFragment
 	public <TValue> boolean set(PropertyKey<TValue> key, TValue value)
 	{
 		if(key == PROP_CURRENT_MEDIA_INDEX)
-			return this.setCurrentMediaIndexProp((Integer)value);
+			return this.setCurrentMediaIndexProp((Integer)value, true);
 		if(key == PROP_MEDIA_LIST)
 			return this.setMediaListProp((MediaList)value);
 		return super.set(key, value);
@@ -1070,18 +1304,24 @@ public class FilmstripFragment extends GalleryFragment
 	
 	
 	// Set PROP_CURRENT_MEDIA_INDEX
-	private boolean setCurrentMediaIndexProp(Integer value)
+	private boolean setCurrentMediaIndexProp(Integer value, boolean updateFilmstrip)
 	{
 		// check state
 		if(m_CurrentMediaIndex == value)
 			return true;
+		if(value < 0 || m_MediaList == null || (value > m_MediaList.size() - 1))
+			value = -1;
 		
 		// set value
 		int oldValue = m_CurrentMediaIndex;
 		m_CurrentMediaIndex = value;
 		
-		// update media index
-		this.onMediaIndexUpdated();
+		// set current item
+		if(updateFilmstrip)
+			m_FilmstripView.setCurrentItem(m_CurrentMediaIndex, false);
+		
+		// check image decoding
+		this.checkImageDecoding(m_CurrentMediaIndex);
 		
 		// complete
 		return this.notifyPropertyChanged(PROP_CURRENT_MEDIA_INDEX, oldValue, value);
