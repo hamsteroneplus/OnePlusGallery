@@ -714,6 +714,7 @@ public class FilmstripFragment extends GalleryFragment
 		// enable logs
 		this.enablePropertyLogs(PROP_CURRENT_MEDIA_INDEX, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_MEDIA_LIST, LOG_PROPERTY_CHANGE);
+		this.enablePropertyLogs(PROP_FILMSTRIP_STATE, LOG_PROPERTY_CHANGE);
 	}
 	
 	
@@ -721,6 +722,8 @@ public class FilmstripFragment extends GalleryFragment
 	@Override
 	public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
 	{
+		Log.v(TAG, "onCreateView() - Fragment: ", this.hashCode());
+		
 		// setup film strip view
 		View view = inflater.inflate(R.layout.fragment_filmstrip, null);
 		m_FilmstripView = (FilmstripView)view.findViewById(R.id.filmstrip_view);
@@ -996,8 +999,7 @@ public class FilmstripFragment extends GalleryFragment
 	@Override
 	public void onPause()
 	{
-		// reset
-		this.resetFilmstripState();
+		Log.v(TAG, "onPause()");
 		
 		// cancel decoding
 		this.cancelDecodingImages();
@@ -1006,6 +1008,9 @@ public class FilmstripFragment extends GalleryFragment
 		m_HighResBitmapActiveHandle = Handle.close(m_HighResBitmapActiveHandle);
 		m_MediumResBitmapActiveHandle = Handle.close(m_MediumResBitmapActiveHandle);
 		m_LowResBitmapActiveHandle = Handle.close(m_LowResBitmapActiveHandle);
+		
+		// hide tool bar
+		this.setToolbarVisibility(false, false);
 		
 		// restore status bar
 		this.setStatusBarVisibility(true);
@@ -1080,6 +1085,8 @@ public class FilmstripFragment extends GalleryFragment
 		// call super
 		super.onResume();
 		
+		Log.v(TAG, "onResume()");
+		
 		// active bitmap pools
 		m_HighResBitmapActiveHandle = BITMAP_POOL_HIGH_RESOLUTION.activate();
 		m_MediumResBitmapActiveHandle = BITMAP_POOL_MEDIUM_RESOLUTION.activate();
@@ -1120,6 +1127,10 @@ public class FilmstripFragment extends GalleryFragment
 	// Call when scale image view bounds type changed
 	private void onScaleImageBoundsTypeChanged(ScaleImageView view, ScaleImageView.BoundsType oldType, ScaleImageView.BoundsType newType)
 	{
+		// check media list
+		if(m_MediaList == null)
+			return;
+		
 		Log.v(TAG, "onScaleImageBoundsTypeChanged() - Old: ", oldType, ", new: ", newType, ", scale image view: ", view.hashCode());
 		
 		// check old type & new type
@@ -1241,6 +1252,33 @@ public class FilmstripFragment extends GalleryFragment
 	{
 		m_ScaleFactor = 1;
 		m_IsScaled = false;
+	}
+	
+	
+	// Call when onStop
+	@Override
+	public void onStop()
+	{
+		Log.v(TAG, "onStop()");
+		
+		// reset
+		this.resetFilmstripState();
+		
+		// call super 
+		super.onStop();
+	}
+	
+	
+	// Call when onDestroyView
+	@Override
+	public void onDestroyView()
+	{
+		Log.v(TAG, "onDestroyView()");
+		
+		// destroy view
+		
+		// call super
+		super.onDestroyView();
 	}
 	
 	
@@ -1475,6 +1513,8 @@ public class FilmstripFragment extends GalleryFragment
 			if(m_MediaList == null || m_MediaList.size() <= 0)
 				return;
 			int position = m_FilmstripView.getCurrentItem();
+			if(position < 0)
+				return;
 			boolean isVideo = (m_MediaList.get(position) instanceof VideoMedia);
 			if(isVideo)
 				m_EditorButtonContainer.setVisibility(View.GONE);
