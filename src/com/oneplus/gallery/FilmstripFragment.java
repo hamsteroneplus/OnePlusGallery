@@ -21,11 +21,15 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.RelativeLayout;
 
+import com.oneplus.base.EventHandler;
+import com.oneplus.base.EventKey;
+import com.oneplus.base.EventSource;
 import com.oneplus.base.Handle;
 import com.oneplus.base.Log;
 import com.oneplus.base.PropertyKey;
-import com.oneplus.base.Rotation;
+import com.oneplus.base.ScreenSize;
 import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaList;
 import com.oneplus.gallery.media.VideoMedia;
@@ -57,7 +61,6 @@ public class FilmstripFragment extends GalleryFragment
 	private final static BitmapPool BITMAP_POOL_HIGH_RESOLUTION = new BitmapPool("FilmstripHighResBitmapPool", 64 << 20, 16 << 20, Bitmap.Config.ARGB_8888, 2, 0);
 	private final static BitmapPool BITMAP_POOL_LOW_RESOLUTION = new BitmapPool("FilmstripLowResBitmapPool", 32 << 20, 16 << 20, Bitmap.Config.RGB_565, 3, 0);
 	private final static BitmapPool BITMAP_POOL_MEDIUM_RESOLUTION = new BitmapPool("FilmstripMediumResBitmapPool", 32 << 20, 16 << 20, Bitmap.Config.ARGB_8888, 3, 0);
-	private final static int DISTANCE_ANIMATION_TRANSLATION = 50;
 	private static final long DURATION_ANIMATION = 150;
 
 	
@@ -117,6 +120,14 @@ public class FilmstripFragment extends GalleryFragment
 		}
 	};
 	private Handle m_LowResBitmapDecodeHandle;
+	private EventHandler<ListChangeEventArgs> m_MediaChangedEventHandler = new EventHandler<ListChangeEventArgs>()
+	{
+		@Override
+		public void onEventReceived(EventSource source, EventKey<ListChangeEventArgs> key, ListChangeEventArgs e)
+		{
+			FilmstripFragment.this.onMediaListUpdated(e.getStartIndex(), e.getEndIndex());
+		}
+	};
 	private MediaList m_MediaList;
 	private Handle m_MediumResBitmapActiveHandle;
 	private final BitmapPool.Callback m_MediumResBitmapDecodeCallback = new BitmapPool.Callback() 
@@ -545,6 +556,12 @@ public class FilmstripFragment extends GalleryFragment
 			}
 		});
 		
+		// set header margin top
+		GalleryActivity galleryActivity = this.getGalleryActivity();
+		ScreenSize screenSize = galleryActivity.get(GalleryActivity.PROP_SCREEN_SIZE);
+		RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams)m_HeaderContainer.getLayoutParams();
+		params.setMargins(0, screenSize.getStatusBarSize(), 0, 0);
+		
 		// footer
 		m_FooterContainer = view.findViewById(R.id.filmstrip_footer_container);
 		m_ShareButton = view.findViewById(R.id.filmstrip_footer_button_share);
@@ -740,6 +757,10 @@ public class FilmstripFragment extends GalleryFragment
 	}
 	private void onMediaListUpdated(int startIndex, int endIndex)
 	{
+		// check media list
+		if(m_MediaList == null)
+			return;
+		
 		// check index
 		if(startIndex > endIndex)
 			return;
@@ -1128,11 +1149,31 @@ public class FilmstripFragment extends GalleryFragment
 		MediaList oldList = m_MediaList;
 		m_MediaList = list;
 		
+		// setup call-backs
+		if(oldList != null)
+		{
+			oldList.removeHandler(MediaList.EVENT_MEDIA_ADDED, m_MediaChangedEventHandler);
+			oldList.removeHandler(MediaList.EVENT_MEDIA_REMOVED, m_MediaChangedEventHandler);
+		}
+		if(m_MediaList != null)
+		{
+			m_MediaList.addHandler(MediaList.EVENT_MEDIA_ADDED, m_MediaChangedEventHandler);
+			m_MediaList.addHandler(MediaList.EVENT_MEDIA_REMOVED, m_MediaChangedEventHandler);
+		}
+		
 		// update media list
 		this.onMediaListUpdated();
 
 		// complete
 		return this.notifyPropertyChanged(PROP_MEDIA_LIST, oldList, list);
+	}
+	
+	
+	// Set status bar visibility
+	private void setStatusBarVisibility(boolean visible)
+	{
+		GalleryActivity galleryActivity = this.getGalleryActivity();
+		galleryActivity.setStatusBarVisibility(visible);
 	}
 	
 	
@@ -1144,6 +1185,9 @@ public class FilmstripFragment extends GalleryFragment
 		
 		// check edit button
 		this.updateEditButtonVisibility();
+		
+		// set status bar visibility
+		this.setStatusBarVisibility(visible);
 		
 		// update
 		this.updateToolbarVisibility(animation);
@@ -1231,12 +1275,10 @@ public class FilmstripFragment extends GalleryFragment
 						// set header init state
 						m_HeaderContainer.setVisibility(View.VISIBLE);
 						m_HeaderContainer.setAlpha(0);
-						m_HeaderContainer.setTranslationY(-DISTANCE_ANIMATION_TRANSLATION);
 	
 						// set footer init state
 						m_FooterContainer.setVisibility(View.VISIBLE);
 						m_FooterContainer.setAlpha(0);
-						m_FooterContainer.setTranslationY(DISTANCE_ANIMATION_TRANSLATION);
 						break;
 	
 					case OUT_ANIMATING:
@@ -1251,7 +1293,7 @@ public class FilmstripFragment extends GalleryFragment
 				}
 
 				// header animation
-				m_HeaderContainer.animate().alpha(1f).translationY(0f).setDuration(DURATION_ANIMATION).withEndAction(new Runnable()
+				m_HeaderContainer.animate().alpha(1f).setDuration(DURATION_ANIMATION).withEndAction(new Runnable()
 				{	
 					@Override
 					public void run()
@@ -1261,7 +1303,7 @@ public class FilmstripFragment extends GalleryFragment
 				}).start();
 
 				// footer animation
-				m_FooterContainer.animate().alpha(1f).translationY(0f).setDuration(DURATION_ANIMATION).withEndAction(new Runnable()
+				m_FooterContainer.animate().alpha(1f).setDuration(DURATION_ANIMATION).withEndAction(new Runnable()
 				{	
 					@Override
 					public void run()
@@ -1278,12 +1320,10 @@ public class FilmstripFragment extends GalleryFragment
 				// header
 				m_HeaderContainer.setVisibility(View.VISIBLE);
 				m_HeaderContainer.setAlpha(1);
-				m_HeaderContainer.setTranslationY(0);
 
 				// footer
 				m_FooterContainer.setVisibility(View.VISIBLE);
 				m_FooterContainer.setAlpha(1);
-				m_FooterContainer.setTranslationY(0);
 
 				// change visibility state
 				m_ToolbarVisibilityState = ViewVisibilityState.VISIBLE;
@@ -1298,11 +1338,9 @@ public class FilmstripFragment extends GalleryFragment
 					case VISIBLE:
 						// set header init state
 						m_HeaderContainer.setAlpha(1);
-						m_HeaderContainer.setTranslationY(0);
 	
 						// set footer init state
 						m_FooterContainer.setAlpha(1);
-						m_FooterContainer.setTranslationY(0);
 						break;
 	
 					case IN_ANIMATING:
@@ -1317,7 +1355,7 @@ public class FilmstripFragment extends GalleryFragment
 				}
 
 				// header animation
-				m_HeaderContainer.animate().alpha(0f).translationY(-DISTANCE_ANIMATION_TRANSLATION).setDuration(DURATION_ANIMATION).withEndAction(new Runnable()
+				m_HeaderContainer.animate().alpha(0f).setDuration(DURATION_ANIMATION).withEndAction(new Runnable()
 				{	
 					@Override
 					public void run()
@@ -1328,7 +1366,7 @@ public class FilmstripFragment extends GalleryFragment
 				}).start();
 
 				// footer animation
-				m_FooterContainer.animate().alpha(0f).translationY(DISTANCE_ANIMATION_TRANSLATION).setDuration(DURATION_ANIMATION).withEndAction(new Runnable()
+				m_FooterContainer.animate().alpha(0f).setDuration(DURATION_ANIMATION).withEndAction(new Runnable()
 				{	
 					@Override
 					public void run()
