@@ -7,12 +7,17 @@ import android.net.Uri;
 import android.os.Handler;
 import android.provider.MediaStore.Images;
 import android.provider.MediaStore.MediaColumns;
+import android.provider.MediaStore.Images.ImageColumns;
 
 /**
  * Media store based photo media.
  */
-class PhotoMediaStoreMedia extends MediaStoreMedia
+class PhotoMediaStoreMedia extends MediaStoreMedia implements PhotoMedia
 {
+	// Fields.
+	private volatile int m_Orientation;
+	
+	
 	// Constructor.
 	PhotoMediaStoreMedia(Cursor cursor, Handler handler)
 	{
@@ -31,5 +36,38 @@ class PhotoMediaStoreMedia extends MediaStoreMedia
 		if(id > 0)
 			return Uri.parse(Images.Media.EXTERNAL_CONTENT_URI + "/" + id);
 		return null;
+	}
+	
+	
+	// Get orientation.
+	@Override
+	public int getOrientation()
+	{
+		return m_Orientation;
+	}
+	
+	
+	// Setup photo size.
+	@Override
+	protected void setupSize(Cursor cursor, int[] result)
+	{
+		// call super
+		super.setupSize(cursor, result);
+		
+		// get orientation
+		m_Orientation = CursorUtils.getInt(cursor, ImageColumns.ORIENTATION, 0);
+		
+		// rotate size
+		switch(m_Orientation)
+		{
+			case 90:
+			case 270:
+			{
+				int temp = result[0];
+				result[0] = result[1];
+				result[1] = temp;
+				break;
+			}
+		}
 	}
 }
