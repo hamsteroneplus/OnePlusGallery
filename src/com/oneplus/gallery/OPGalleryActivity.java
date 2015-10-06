@@ -566,6 +566,9 @@ public class OPGalleryActivity extends GalleryActivity
 		if(m_DefaultGridViewFragment != null)
 			m_DefaultGridViewFragment.set(GridViewFragment.PROP_IS_SELECTION_MODE, false);
 		
+		if(m_MediaSetListFragment != null)
+			m_MediaSetListFragment.set(MediaSetListFragment.PROP_IS_SELECTION_MODE, false);
+		
 		// show default media set
 		m_EntryViewPager.setCurrentItem(0, false);
 	}

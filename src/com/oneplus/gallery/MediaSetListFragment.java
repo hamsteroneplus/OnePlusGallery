@@ -146,6 +146,7 @@ public class MediaSetListFragment extends GalleryFragment
 		});
 		m_MediaSetListView.setAdapter(m_MediaSetListAdapter);
 		
+		m_Toolbar.getMenu().clear();
 		m_Toolbar.inflateMenu(R.menu.media_set_toolbar_menu);
 		m_Toolbar.setNavigationIcon(R.drawable.button_cancel);
 		m_Toolbar.setOnMenuItemClickListener(new OnMenuItemClickListener() {
@@ -169,6 +170,15 @@ public class MediaSetListFragment extends GalleryFragment
 		setToolBarVisibility(false);
 	}
 	
+	@SuppressWarnings("unchecked")
+	@Override
+	public <TValue> TValue get(PropertyKey<TValue> key)
+	{
+		if(key == PROP_IS_SELECTION_MODE)
+			return (TValue)((Boolean)m_IsSelectionMode);
+		return super.get(key);
+	}
+	
 	// Set property value.
 	@SuppressWarnings("unchecked")
 	@Override
@@ -182,40 +192,14 @@ public class MediaSetListFragment extends GalleryFragment
 		return super.set(key, value);
 	}
 	
-	private void updateSelectedMediaSet(MediaSet mediaSet)
-	{
-		if(!m_IsSelectionMode)
-		{
-			Log.e(TAG, "updateSelectedMediaSet() - not in selection mode");
-			return;
-		}
-		
-		// update list
-		if(m_SelectedMediaSet.contains(mediaSet))
-			m_SelectedMediaSet.remove(mediaSet);
-		else
-			m_SelectedMediaSet.add(mediaSet);
-		
-		// leave selection mode is nothing is selected
-		if(m_SelectedMediaSet.isEmpty())
-			set(PROP_IS_SELECTION_MODE, false);	
-		else
-		{
-			// update tool bar title
-			String selectedItems = String.format(getString(R.string.toolbar_selection_total), m_SelectedMediaSet.size());
-			m_Toolbar.setTitle(selectedItems);
-		}
-		
-		// notify data set changed
-		if(m_MediaSetListAdapter != null)
-			m_MediaSetListAdapter.notifyDataSetChanged();
-	}
 	
 	private boolean setIsSelectionMode(boolean isSelectionMode)
 	{
+		Log.v(TAG, "setIsSelectionMode() -  isSelectionMode is "+isSelectionMode);	
+		
 		if(m_IsSelectionMode == isSelectionMode)
 			return false;
-		
+
 		m_IsSelectionMode = isSelectionMode;
 		
 		if(m_IsSelectionMode)
@@ -238,7 +222,7 @@ public class MediaSetListFragment extends GalleryFragment
 			setToolBarVisibility(false);
 		}	
 		
-		return true;
+		return this.notifyPropertyChanged(PROP_IS_SELECTION_MODE, !m_IsSelectionMode, m_IsSelectionMode);
 	}
 	
 	private void setToolBarVisibility(boolean isVisible)
@@ -298,6 +282,35 @@ public class MediaSetListFragment extends GalleryFragment
 		}
 		
 		return this.notifyPropertyChanged(PROP_MEDIA_SET_LIST, oldList, newList);
+	}
+	
+	private void updateSelectedMediaSet(MediaSet mediaSet)
+	{
+		if(!m_IsSelectionMode)
+		{
+			Log.e(TAG, "updateSelectedMediaSet() - not in selection mode");
+			return;
+		}
+		
+		// update list
+		if(m_SelectedMediaSet.contains(mediaSet))
+			m_SelectedMediaSet.remove(mediaSet);
+		else
+			m_SelectedMediaSet.add(mediaSet);
+		
+		// leave selection mode is nothing is selected
+		if(m_SelectedMediaSet.isEmpty())
+			set(PROP_IS_SELECTION_MODE, false);	
+		else
+		{
+			// update tool bar title
+			String selectedItems = String.format(getString(R.string.toolbar_selection_total), m_SelectedMediaSet.size());
+			m_Toolbar.setTitle(selectedItems);
+		}
+		
+		// notify data set changed
+		if(m_MediaSetListAdapter != null)
+			m_MediaSetListAdapter.notifyDataSetChanged();
 	}
 	
 	private class MediaSetListAdapter extends BaseAdapter {
