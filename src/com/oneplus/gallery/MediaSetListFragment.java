@@ -15,6 +15,7 @@ import android.widget.ListView;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
+import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.LinkedList;
 
@@ -48,6 +49,7 @@ public class MediaSetListFragment extends GalleryFragment
 	private MediaSetList m_MediaSetList;
 	private Hashtable<MediaSet, Object> m_MediaSetCoverImageTable = new Hashtable<>();
 	private LinkedList<MediaSet> m_MediaSetDecodeQueue = new LinkedList<>();
+	private ArrayList<MediaSet> m_SelectedMediaSet = new ArrayList<MediaSet>();
 	private static BitmapPool m_SmallBitmapPool = new CenterCroppedBitmapPool("MediaSetListFragmentSmallBitmapPool", 32 << 20, Bitmap.Config.RGB_565, 4, BitmapPool.FLAG_NO_EMBEDDED_THUMB);
 	
 	/**
@@ -111,13 +113,26 @@ public class MediaSetListFragment extends GalleryFragment
 			@Override
 			public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
 				MediaSet set = m_MediaSetList.get(position);
-				raise(EVENT_MEDIA_SET_CLICKED, new ListItemEventArgs<MediaSet>(position, set));
+				
+				if(m_IsSelectionMode)
+					updateSelectedMediaSet(set);		
+				else
+					raise(EVENT_MEDIA_SET_CLICKED, new ListItemEventArgs<MediaSet>(position, set));	
 			}
 		});
-		m_MediaSetListView.setOnLongClickListener(new View.OnLongClickListener() {
-			
+		m_MediaSetListView.setOnItemLongClickListener(new AdapterView.OnItemLongClickListener() {
+
 			@Override
-			public boolean onLongClick(View v) {
+			public boolean onItemLongClick(AdapterView<?> parent, View view, int position, long id) {
+				
+				// enter selection mode
+				if(!m_IsSelectionMode)
+					set(PROP_IS_SELECTION_MODE, true);		
+				
+				// update selected set
+				MediaSet set = m_MediaSetList.get(position);
+				updateSelectedMediaSet(set);
+				
 				return true;
 			}
 		});
@@ -137,9 +152,52 @@ public class MediaSetListFragment extends GalleryFragment
 		return super.set(key, value);
 	}
 	
+	private void updateSelectedMediaSet(MediaSet mediaSet)
+	{
+		if(!m_IsSelectionMode)
+		{
+			Log.e(TAG, "updateSelectedMediaSet() - not in selection mode");
+			return;
+		}
+		
+		// update list
+		if(m_SelectedMediaSet.contains(mediaSet))
+			m_SelectedMediaSet.remove(mediaSet);
+		else
+			m_SelectedMediaSet.add(mediaSet);
+		
+		// leave selection mode is nothing is selected
+		if(m_SelectedMediaSet.isEmpty())
+			set(PROP_IS_SELECTION_MODE, false);	
+		
+		// notify data set changed
+		if(m_MediaSetListAdapter != null)
+			m_MediaSetListAdapter.notifyDataSetChanged();
+	}
 	
 	private boolean setIsSelectionMode(boolean isSelectionMode)
 	{
+		if(m_IsSelectionMode == isSelectionMode)
+			return false;
+		
+		m_IsSelectionMode = isSelectionMode;
+		
+		if(m_IsSelectionMode)
+		{
+			// TODO : show action bar
+		}
+		else
+		{
+			// clear all selection
+			if(!m_SelectedMediaSet.isEmpty())
+			{
+				m_SelectedMediaSet.clear();
+				
+				if(m_MediaSetListAdapter != null)
+					m_MediaSetListAdapter.notifyDataSetChanged();
+			}	
+		}	
+		
 		return true;
 	}
 	
@@ -226,6 +284,7 @@ public class MediaSetListFragment extends GalleryFragment
 				viewInfo.titleText = (TextView)convertView.findViewById(R.id.media_set_title);
 				viewInfo.sizeTextView = (TextView)convertView.findViewById(R.id.media_set_size);
 				viewInfo.coverImage = (ImageView)convertView.findViewById(R.id.media_set_cover_image);
+				viewInfo.selectedIcon = (ImageView)convertView.findViewById(R.id.selected_icon);
 				
 				convertView.setTag(viewInfo);
 			}
@@ -249,6 +308,16 @@ public class MediaSetListFragment extends GalleryFragment
 				viewInfo.coverImage.setImageBitmap((Bitmap)m_MediaSetCoverImageTable.get(mediaSet));
 			else
 				viewInfo.coverImage.setImageDrawable(null);
+			
+			if(m_IsSelectionMode)
+			{
+				if(m_SelectedMediaSet.contains(mediaSet))
+					viewInfo.selectedIcon.setVisibility(View.VISIBLE);
+				else
+					viewInfo.selectedIcon.setVisibility(View.INVISIBLE);
+			}
+			else
+				viewInfo.selectedIcon.setVisibility(View.INVISIBLE);
 			
 			return convertView;
 		}
@@ -406,6 +475,7 @@ public class MediaSetListFragment extends GalleryFragment
 		public TextView titleText;
 		public TextView sizeTextView; 
 		public ImageView coverImage;
+		public ImageView selectedIcon;
 	}
 	
 }
