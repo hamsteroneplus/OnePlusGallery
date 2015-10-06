@@ -42,6 +42,7 @@ public class MediaSetListFragment extends GalleryFragment
 	// Fields
 	private Activity m_Activity;
 	private RelativeLayout m_AddAlbumButton;
+	private boolean m_IsSelectionMode;
 	private MediaSetListAdapter m_MediaSetListAdapter;
 	private ListView m_MediaSetListView;
 	private MediaSetList m_MediaSetList;
@@ -49,7 +50,10 @@ public class MediaSetListFragment extends GalleryFragment
 	private LinkedList<MediaSet> m_MediaSetDecodeQueue = new LinkedList<>();
 	private static BitmapPool m_SmallBitmapPool = new CenterCroppedBitmapPool("MediaSetListFragmentSmallBitmapPool", 32 << 20, Bitmap.Config.RGB_565, 4, BitmapPool.FLAG_NO_EMBEDDED_THUMB);
 	
-	
+	/**
+	 * Property to get or set selection mode.
+	 */
+	public static final PropertyKey<Boolean> PROP_IS_SELECTION_MODE = new PropertyKey<>("IsSelectionMode", Boolean.class, MediaSetListFragment.class, PropertyKey.FLAG_NOT_NULL, false);
 	/**
 	 * Property to get or set MediaSet
 	 */
@@ -110,6 +114,13 @@ public class MediaSetListFragment extends GalleryFragment
 				raise(EVENT_MEDIA_SET_CLICKED, new ListItemEventArgs<MediaSet>(position, set));
 			}
 		});
+		m_MediaSetListView.setOnLongClickListener(new View.OnLongClickListener() {
+			
+			@Override
+			public boolean onLongClick(View v) {
+				return true;
+			}
+		});
 		m_MediaSetListView.setAdapter(m_MediaSetListAdapter);
 	}
 	
@@ -120,10 +131,17 @@ public class MediaSetListFragment extends GalleryFragment
 	{
 		if(key == PROP_MEDIA_SET_LIST)
 			return this.setMediaSetList((MediaSetList)value);
+		else if(key == PROP_IS_SELECTION_MODE)
+			return this.setIsSelectionMode((boolean)value);
 		
 		return super.set(key, value);
 	}
 	
+	
+	private boolean setIsSelectionMode(boolean isSelectionMode)
+	{
+		return true;
+	}
 	
 	private boolean setMediaSetList(MediaSetList newList) {	
 		
