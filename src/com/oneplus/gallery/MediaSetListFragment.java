@@ -22,8 +22,6 @@ import android.widget.Toolbar.OnMenuItemClickListener;
 import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.LinkedList;
-import java.util.List;
-
 import com.oneplus.base.EventHandler;
 import com.oneplus.base.EventKey;
 import com.oneplus.base.EventSource;
@@ -33,7 +31,6 @@ import com.oneplus.base.PropertyChangeEventArgs;
 import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.PropertySource;
-import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaComparator;
 import com.oneplus.gallery.media.MediaList;
 import com.oneplus.gallery.media.MediaSet;
@@ -206,6 +203,9 @@ public class MediaSetListFragment extends GalleryFragment
 		{
 			// show tool bar
 			setToolBarVisibility(true);
+			
+			// hide add album button
+			m_AddAlbumButton.setVisibility(View.INVISIBLE);
 		}
 		else
 		{
@@ -220,6 +220,9 @@ public class MediaSetListFragment extends GalleryFragment
 			
 			// hide tool bar
 			setToolBarVisibility(false);
+			
+			// show add album button
+			m_AddAlbumButton.setVisibility(View.VISIBLE);
 		}	
 		
 		return this.notifyPropertyChanged(PROP_IS_SELECTION_MODE, !m_IsSelectionMode, m_IsSelectionMode);
