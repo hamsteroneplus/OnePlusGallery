@@ -165,7 +165,6 @@ public class MediaSetListFragment extends GalleryFragment
 		
 		m_Toolbar.getMenu().clear();
 		m_Toolbar.inflateMenu(R.menu.media_set_toolbar_menu);
-		m_Toolbar.setNavigationIcon(R.drawable.button_cancel);
 		m_Toolbar.setOnMenuItemClickListener(new OnMenuItemClickListener() {
 			@Override
 			public boolean onMenuItemClick(MenuItem item) {
@@ -181,6 +180,7 @@ public class MediaSetListFragment extends GalleryFragment
 		m_Toolbar.setNavigationOnClickListener(new OnClickListener() {
 			@Override
 			public void onClick(View v) {
+				m_Toolbar.setNavigationIcon(null);
 				set(PROP_IS_SELECTION_MODE, false);					
 			}
 		});
@@ -230,14 +230,8 @@ public class MediaSetListFragment extends GalleryFragment
 	
 	private void setToolBarVisibility(boolean isVisible)
 	{
-		RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams)m_Toolbar.getLayoutParams();
-		
-		if(isVisible)
-			params.height = getActivity().getResources().getDimensionPixelSize(R.dimen.action_bar_height);
-		else
-			params.height = 0;
-		
-		m_Toolbar.requestLayout();
+		m_Toolbar.setNavigationIcon(R.drawable.button_cancel);
+		m_Toolbar.setVisibility(isVisible ? View.VISIBLE : View.GONE);
 	}
 	
 	private boolean setMediaSetList(MediaSetList newList) {	
