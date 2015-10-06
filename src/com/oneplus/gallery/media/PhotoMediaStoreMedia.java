@@ -3,6 +3,7 @@ package com.oneplus.gallery.media;
 import com.oneplus.database.CursorUtils;
 
 import android.database.Cursor;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Handler;
 import android.provider.MediaStore.Images;
@@ -53,6 +54,25 @@ class PhotoMediaStoreMedia extends MediaStoreMedia implements PhotoMedia
 	{
 		// call super
 		super.setupSize(cursor, result);
+		
+		// decode size
+		if(result[0] <= 0 || result[1] <= 0)
+		{
+			String filePath = this.getFilePath();
+			if(filePath != null)
+			{
+				try
+				{
+					BitmapFactory.Options options = new BitmapFactory.Options();
+					options.inJustDecodeBounds = true;
+					BitmapFactory.decodeFile(filePath, options);
+					result[0] = options.outWidth;
+					result[1] = options.outHeight;
+				}
+				catch(Throwable ex)
+				{}
+			}
+		}
 		
 		// get orientation
 		m_Orientation = CursorUtils.getInt(cursor, ImageColumns.ORIENTATION, 0);

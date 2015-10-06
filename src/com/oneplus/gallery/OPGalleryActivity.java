@@ -116,7 +116,10 @@ public class OPGalleryActivity extends GalleryActivity
 		@Override
 		public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
 		{
-			onDefaultGridViewSelectionStateChanged(e.getNewValue());
+			if(source == m_DefaultGridViewFragment)
+				onDefaultGridViewSelectionStateChanged(e.getNewValue());
+			else if(source == m_MediaSetListFragment)
+				onMediaSetListSelectionStateChanged(e.getNewValue());
 		}
 	};
 	
@@ -184,6 +187,10 @@ public class OPGalleryActivity extends GalleryActivity
 		// check state
 		if(m_FilmstripContainer == null || m_FilmstripContainer.getVisibility() != View.VISIBLE)
 			return;
+		
+		// show status bar
+		if(!this.get(PROP_IS_STATUS_BAR_VISIBLE))
+			this.setStatusBarVisibility(true, FLAG_CANCELABLE);
 		
 		// close
 		if(animate)
@@ -264,6 +271,11 @@ public class OPGalleryActivity extends GalleryActivity
 				if(m_DefaultGridViewFragment != null && m_DefaultGridViewFragment.get(GridViewFragment.PROP_IS_SELECTION_MODE))
 				{
 					m_DefaultGridViewFragment.set(GridViewFragment.PROP_IS_SELECTION_MODE, false);
+					return;
+				}
+				if(m_MediaSetListFragment != null && m_MediaSetListFragment.get(MediaSetListFragment.PROP_IS_SELECTION_MODE))
+				{
+					m_MediaSetListFragment.set(MediaSetListFragment.PROP_IS_SELECTION_MODE, false);
 					return;
 				}
 				break;
@@ -353,7 +365,10 @@ public class OPGalleryActivity extends GalleryActivity
 		if(m_GridViewFragment != null)
 			m_GridViewFragment.removeHandler(GridViewFragment.EVENT_MEDIA_CLICKED, m_GridViewMediaClickedHandler);
 		if(m_MediaSetListFragment != null)
+		{
+			m_MediaSetListFragment.removeCallback(MediaSetListFragment.PROP_IS_SELECTION_MODE, m_IsSelectionModeChangedCallback);
 			m_MediaSetListFragment.removeHandler(MediaSetListFragment.EVENT_MEDIA_SET_CLICKED, m_MediaSetClickedHandler);
+		}
 		
 		// release media set list
 		this.releaseMediaSetList();
@@ -506,10 +521,27 @@ public class OPGalleryActivity extends GalleryActivity
 		fragment.set(MediaSetListFragment.PROP_HAS_ACTION_BAR, false);
 		
 		// attach
+		fragment.addCallback(MediaSetListFragment.PROP_IS_SELECTION_MODE, m_IsSelectionModeChangedCallback);
 		fragment.addHandler(MediaSetListFragment.EVENT_MEDIA_SET_CLICKED, m_MediaSetClickedHandler);
 		
 		// set media set list
 		fragment.set(MediaSetListFragment.PROP_MEDIA_SET_LIST, m_MediaSetList);
+	}
+	
+	
+	// Called when selection state changed in media set list.
+	private void onMediaSetListSelectionStateChanged(boolean isSelectionMode)
+	{
+		if(isSelectionMode)
+		{
+			m_EntryPageTabContainer.setVisibility(View.GONE);
+			m_EntryViewPager.lockPosition();
+		}
+		else
+		{
+			m_EntryPageTabContainer.setVisibility(View.VISIBLE);
+			m_EntryViewPager.unlockPosition();
+		}
 	}
 	
 	
