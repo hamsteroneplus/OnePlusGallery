@@ -2,15 +2,15 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent" 
-    >
+    android:background="@null">
     
-    <include 
+    <Toolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="@dimen/action_bar_height"
         android:layout_alignParentTop="true"
         android:visibility="gone"
-        layout="@layout/toolbar"/>
+        />
     
     <!-- Device has Photos -->
     <GridView
@@ -21,7 +21,8 @@
         android:columnWidth="89dp"
         android:stretchMode="spacingWidth"
         android:horizontalSpacing="1dp"
-        android:verticalSpacing="1dp" />
+        android:verticalSpacing="1dp"
+        android:background="@null" />
     
     <!-- Device has no Photos -->
 	<RelativeLayout 
@@ -38,7 +39,7 @@
 	        android:layout_alignParentTop="true"
 	        android:layout_centerHorizontal="true"
 	        android:layout_marginTop="210dp"
-	        android:scaleType="center"
+	        android:scaleType="centerCrop"
 	        android:src="@drawable/camera_big"/>
 	    
 	    <!-- Text -->
