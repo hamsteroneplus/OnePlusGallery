@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android" >
+
+    <item
+        android:id="@+id/toolbar_delete"
+        android:icon="@drawable/button_delete_normal"
+        android:showAsAction="always"
+        android:title="@string/toolbar_selection_delete"/>
+
+</menu>

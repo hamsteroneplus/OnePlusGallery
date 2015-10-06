@@ -163,9 +163,10 @@ public class MediaSetListFragment extends GalleryFragment
 		m_Toolbar.setNavigationOnClickListener(new OnClickListener() {
 			@Override
 			public void onClick(View v) {
-				set(PROP_IS_SELECTION_MODE, false);		
+				set(PROP_IS_SELECTION_MODE, false);					
 			}
 		});
+		setToolBarVisibility(false);
 	}
 	
 	// Set property value.
@@ -220,7 +221,7 @@ public class MediaSetListFragment extends GalleryFragment
 		if(m_IsSelectionMode)
 		{
 			// show tool bar
-			m_Toolbar.setVisibility(View.VISIBLE);
+			setToolBarVisibility(true);
 		}
 		else
 		{
@@ -234,10 +235,22 @@ public class MediaSetListFragment extends GalleryFragment
 			}	
 			
 			// hide tool bar
-			m_Toolbar.setVisibility(View.GONE);
+			setToolBarVisibility(false);
 		}	
 		
 		return true;
+	}
+	
+	private void setToolBarVisibility(boolean isVisible)
+	{
+		RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams)m_Toolbar.getLayoutParams();
+		
+		if(isVisible)
+			params.height = getActivity().getResources().getDimensionPixelSize(R.dimen.action_bar_height);
+		else
+			params.height = 0;
+		
+		m_Toolbar.requestLayout();
 	}
 	
 	private boolean setMediaSetList(MediaSetList newList) {	
