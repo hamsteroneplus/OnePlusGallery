@@ -1,6 +1,7 @@
 package com.oneplus.gallery.media;
 
 import com.oneplus.database.CursorUtils;
+import com.oneplus.gallery.MediaType;
 
 import android.database.Cursor;
 import android.graphics.BitmapFactory;
@@ -20,9 +21,9 @@ class PhotoMediaStoreMedia extends MediaStoreMedia implements PhotoMedia
 	
 	
 	// Constructor.
-	PhotoMediaStoreMedia(Cursor cursor, Handler handler)
+	PhotoMediaStoreMedia(Cursor cursor, boolean isOriginal, Handler handler)
 	{
-		super(getContentUri(cursor), cursor, handler);
+		super(getContentUri(cursor), cursor, isOriginal, handler);
 	}
 	
 	
@@ -45,6 +46,14 @@ class PhotoMediaStoreMedia extends MediaStoreMedia implements PhotoMedia
 	public int getOrientation()
 	{
 		return m_Orientation;
+	}
+	
+	
+	// Get media type.
+	@Override
+	public MediaType getType()
+	{
+		return MediaType.PHOTO;
 	}
 	
 	

@@ -22,7 +22,7 @@ public class DirectoryMediaSet extends MediaStoreMediaSet
 	public DirectoryMediaSet(String directoryPath, int id)
 	{
 		// call super
-		super(Type.APPLICATION);
+		super(Type.APPLICATION, true);
 		
 		// setup name
 		super.set(PROP_NAME, Path.getFileName(directoryPath));

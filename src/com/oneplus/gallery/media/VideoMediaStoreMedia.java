@@ -1,6 +1,7 @@
 package com.oneplus.gallery.media;
 
 import com.oneplus.database.CursorUtils;
+import com.oneplus.gallery.MediaType;
 
 import android.database.Cursor;
 import android.media.MediaMetadataRetriever;
@@ -20,10 +21,10 @@ class VideoMediaStoreMedia extends MediaStoreMedia implements VideoMedia
 	
 	
 	// Constructor.
-	VideoMediaStoreMedia(Cursor cursor, Handler handler)
+	VideoMediaStoreMedia(Cursor cursor, boolean isOriginal, Handler handler)
 	{
 		// call super
-		super(getContentUri(cursor), cursor, handler);
+		super(getContentUri(cursor), cursor, isOriginal, handler);
 		
 		// get duration
 		m_Duration = CursorUtils.getLong(cursor, VideoColumns.DURATION, 0);
@@ -49,6 +50,14 @@ class VideoMediaStoreMedia extends MediaStoreMedia implements VideoMedia
 	public long getDuration()
 	{
 		return m_Duration;
+	}
+	
+	
+	// Get media type.
+	@Override
+	public MediaType getType()
+	{
+		return MediaType.VIDEO;
 	}
 	
 	

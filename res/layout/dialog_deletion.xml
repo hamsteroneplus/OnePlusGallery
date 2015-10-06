@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+	xmlns:android="http://schemas.android.com/apk/res/android"
+	android:orientation="vertical"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent">
+
+	<ProgressBar android:id="@android:id/progress"
+		android:layout_width="match_parent"
+		android:layout_height="@dimen/deletion_dialog_progress_bar_height"
+		android:layout_marginStart="@dimen/deletion_dialog_progress_bar_margin_left"
+		android:layout_marginTop="@dimen/deletion_dialog_progress_bar_margin_top"
+		android:layout_marginEnd="@dimen/deletion_dialog_progress_bar_margin_right"
+		android:layout_marginBottom="@dimen/deletion_dialog_progress_bar_margin_bottom"
+		android:max="1000"
+		style="@style/Widget.ProgressBar.Horizontal"/>
+    
+</LinearLayout>

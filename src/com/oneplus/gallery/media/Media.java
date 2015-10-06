@@ -3,6 +3,7 @@ package com.oneplus.gallery.media;
 import android.net.Uri;
 
 import com.oneplus.base.HandlerObject;
+import com.oneplus.gallery.MediaType;
 
 /**
  * Interface to represent a media item.
@@ -45,8 +46,22 @@ public interface Media extends HandlerObject
 	
 	
 	/**
+	 * Get media type.
+	 * @return Media type.
+	 */
+	MediaType getType();
+	
+	
+	/**
 	 * Get media width.
 	 * @return Media width.
 	 */
 	int getWidth();
+	
+	
+	/**
+	 * Check whether this is original file or not.
+	 * @return True if this is original file.
+	 */
+	boolean isOriginal();
 }

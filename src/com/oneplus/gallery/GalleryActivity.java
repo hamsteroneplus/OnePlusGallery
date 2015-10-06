@@ -7,12 +7,16 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 
+import android.app.AlertDialog;
+import android.app.Dialog;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.view.Window;
+import android.widget.ProgressBar;
 
 import com.oneplus.base.BaseActivity;
 import com.oneplus.base.Handle;
@@ -51,6 +55,26 @@ public abstract class GalleryActivity extends BaseActivity
 	private boolean m_IsSharingMedia;
 	private ScreenSize m_ScreenSize;
 	private final List<StatusBarVisibilityHandle> m_StatusBarVisibilityHandles = new ArrayList<>();
+	
+	
+	/**
+	 * Media deletion call-back interface.
+	 */
+	public interface MediaDeletionCallback
+	{
+		/**
+		 * Called after deleting media.
+		 * @param media Media which is deleted.
+		 * @param success True if media deleted successfully.
+		 */
+		void onDeletionCompleted(Media media, boolean success);
+		
+		/**
+		 * Called before deleting media.
+		 * @param media Media to be deleted.
+		 */
+		void onDeletionStart(Media media);
+	}
 	
 	
 	// Handle for status bar visibility.
@@ -138,7 +162,7 @@ public abstract class GalleryActivity extends BaseActivity
 	{
 		if(mediaToDelete == null)
 		{
-			Log.e(TAG, "deleteMedia() - No media to delete");
+			Log.w(TAG, "deleteMedia() - No media to delete");
 			return false;
 		}
 		return this.deleteMedia(Arrays.asList(mediaToDelete));
@@ -150,10 +174,178 @@ public abstract class GalleryActivity extends BaseActivity
 	 * @param mediaToDelete Media to delete.
 	 * @return True if media deleted successfully.
 	 */
-	public boolean deleteMedia(Collection<Media> mediaToDelete)
+	public boolean deleteMedia(final Collection<Media> mediaToDelete)
 	{
+		// check state
+		this.verifyAccess();
+		if(mediaToDelete == null || mediaToDelete.isEmpty())
+		{
+			Log.w(TAG, "deleteMedia() - No media to delete");
+			return false;
+		}
+		
+		// collect media
+		boolean deleteOriginal = false;
+		MediaType mediaType = null;
+		final List<Media> mediaList = new ArrayList<Media>(mediaToDelete.size());
+		for(Media media : mediaToDelete)
+		{
+			if(media != null)
+			{
+				if(mediaType == null)
+					mediaType = media.getType();
+				else if(mediaType != MediaType.UNKNOWN && mediaType != media.getType())
+					mediaType = MediaType.UNKNOWN;
+				if(media.isOriginal())
+					deleteOriginal = true;
+				mediaList.add(media);
+			}
+		}
+		if(mediaList.isEmpty())
+		{
+			Log.w(TAG, "deleteMedia() - No media to delete");
+			return false;
+		}
+		
+		// select messages
+		String title = null;
+		String message = null;
+		if(mediaList.size() == 1)
+		{
+			switch(mediaType)
+			{
+				case PHOTO:
+					title = this.getString(R.string.delete_message_title_photo);
+					message = this.getString(deleteOriginal ? R.string.delete_message_photos_original : R.string.delete_message_photos);
+					break;
+				case VIDEO:
+					title = this.getString(R.string.delete_message_title_video);
+					message = this.getString(deleteOriginal ? R.string.delete_message_videos_original : R.string.delete_message_videos);
+					break;
+				default:
+					Log.e(TAG, "deleteMedia() - Unknown media type");
+					return false;
+			}
+		}
+		else
+		{
+			switch(mediaType)
+			{
+				case PHOTO:
+					title = String.format(this.getString(R.string.delete_message_title_photos), mediaList.size());
+					message = this.getString(deleteOriginal ? R.string.delete_message_photos_original : R.string.delete_message_photos);
+					break;
+				case VIDEO:
+					title = String.format(this.getString(R.string.delete_message_title_videos), mediaList.size());
+					message = this.getString(deleteOriginal ? R.string.delete_message_videos_original : R.string.delete_message_videos);
+					break;
+				default:
+					title = String.format(this.getString(R.string.delete_message_title_files), mediaList.size());
+					message = this.getString(deleteOriginal ? R.string.delete_message_files_original : R.string.delete_message_files);
+					break;
+			}
+		}
+		
+		// confirm
+		final MediaType finalMediaType = mediaType;
+		AlertDialog dialog = new AlertDialog.Builder(this)
+			.setTitle(title)
+			.setMessage(message)
+			.setPositiveButton(R.string.dialog_button_delete, new DialogInterface.OnClickListener()
+			{
+				@Override
+				public void onClick(DialogInterface dialog, int which)
+				{
+					deleteMedia(mediaList, finalMediaType, null);
+				}
+			})
+			.setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener()
+			{
+				@Override
+				public void onClick(DialogInterface dialog, int which)
+				{
+					dialog.cancel();
+				}
+			})
+			.create();
+		dialog.show();
+		
 		// complete
 		return true;
+	}
+	
+	
+	// Delete media directly.
+	private void deleteMedia(List<Media> mediaList, MediaType mediaType, MediaDeletionCallback callback)
+	{
+		// select title
+		Dialog dialog = new Dialog(this);
+		String title;
+		if(mediaList.size() == 1)
+		{
+			switch(mediaType)
+			{
+				case PHOTO:
+					title = this.getString(R.string.delete_message_title_deleting_photo);
+					break;
+				case VIDEO:
+					title = this.getString(R.string.delete_message_title_deleting_video);
+					break;
+				default:
+					Log.e(TAG, "deleteMediaDirectly() - Unknown media type");
+					return;
+			}
+		}
+		else
+		{
+			switch(mediaType)
+			{
+				case PHOTO:
+					title = String.format(this.getString(R.string.delete_message_title_deleting_photos), mediaList.size());
+					break;
+				case VIDEO:
+					title = String.format(this.getString(R.string.delete_message_title_deleting_videos), mediaList.size());
+					break;
+				default:
+					title = String.format(this.getString(R.string.delete_message_title_deleting_files), mediaList.size());
+					break;
+			}
+		}
+		dialog.setTitle(title);
+		
+		// prepare content
+		dialog.setContentView(R.layout.dialog_deletion);
+		ProgressBar progressBar = (ProgressBar)dialog.findViewById(android.R.id.progress);
+		
+		// show dialog
+		dialog.setCancelable(false);
+		dialog.show();
+		
+		// delete media
+		this.deleteMedia(mediaList, 0, dialog, progressBar, callback);
+	}
+	
+	
+	// Start deleting single media.
+	private void deleteMedia(final List<Media> mediaList, final int index, final Dialog dialog, final ProgressBar progressBar, final MediaDeletionCallback callback)
+	{
+		//
+		this.getHandler().postDelayed(new Runnable()
+		{
+			@Override
+			public void run()
+			{
+				if(progressBar != null)
+					progressBar.setProgress(Math.round((float)(index + 1) / mediaList.size() * progressBar.getMax()));
+				if(index >= (mediaList.size() - 1))
+				{
+					if(dialog != null)
+						dialog.dismiss();
+					return;
+				}
+				deleteMedia(mediaList, index + 1, dialog, progressBar, callback);
+			}
+		}, 500);
 	}
 	
 	

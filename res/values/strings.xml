@@ -3,6 +3,27 @@
 	<!-- Application -->
 	<string name="app_name">Gallery</string>
 	
+	<!-- Delete media -->
+	<string name="delete_message_files">Files will be deleted from album, but still in your device.</string>
+	<string name="delete_message_files_original">Files will be deleted from device, and cannot be recovered.</string>
+	<string name="delete_message_photos">Photos will be deleted from album, but still in your device.</string>
+	<string name="delete_message_photos_original">Photos will be deleted from device, and cannot be recovered.</string>
+	<string name="delete_message_videos">Videos will be deleted from album, but still in your device.</string>
+	<string name="delete_message_videos_original">Videos will be deleted from device, and cannot be recovered.</string>
+	<string name="delete_message_title_deleting_files" formatted="false">Deleting %d files</string>
+	<string name="delete_message_title_deleting_photo">Deleting 1 photo</string>
+	<string name="delete_message_title_deleting_photos" formatted="false">Deleting %d photos</string>
+	<string name="delete_message_title_deleting_video">Deleting 1 video</string>
+	<string name="delete_message_title_deleting_videos" formatted="false">Deleting %d videos</string>
+	<string name="delete_message_title_files" formatted="false">Delete %d files?</string>
+	<string name="delete_message_title_photo">Delete 1 photo?</string>
+	<string name="delete_message_title_photos" formatted="false">Delete %d photos?</string>
+	<string name="delete_message_title_video">Delete 1 video?</string>
+	<string name="delete_message_title_videos" formatted="false">Delete %d videos?</string>
+	
+	<!-- Dialog -->
+	<string name="dialog_button_delete">Delete</string>
+	
 	<!-- Entry page -->
 	<string name="entry_page_tab_default_grid_view">Photos</string>
 	<string name="entry_page_tab_media_set_list">Albums</string>
@@ -19,4 +40,5 @@
 	<string name="toolbar_selection_share">Share</string>
 	<string name="toolbar_selection_delete">Delete</string>
 	<string name="toolbar_selection_total">"%1$d items selected"</string>
+	
 </resources>

@@ -42,6 +42,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	// Fields.
 	private List<MediaListImpl> m_ActiveMediaLists;
 	private boolean m_IsMediaStoreContentChanged;
+	private final boolean m_IsOriginalMedia;
 	private volatile Handle m_MediaCountRefreshHandle;
 	private final MediaManager.ActiveStateCallback m_MediaManagerActiveStateCB = new MediaManager.ActiveStateCallback()
 	{
@@ -117,13 +118,15 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	/**
 	 * Initialize new MediaStoreMediaSet instance.
 	 * @param type Media set type.
+	 * @param isOriginalMedia True if media in this set is(are) original file(s).
 	 */
-	protected MediaStoreMediaSet(Type type)
+	protected MediaStoreMediaSet(Type type, boolean isOriginalMedia)
 	{
 		super(true);
 		if(type == null)
 			throw new IllegalArgumentException("No type specified.");
 		m_Type = type;
+		m_IsOriginalMedia = isOriginalMedia;
 		MediaManager.addActiveStateCallback(m_MediaManagerActiveStateCB);
 	}
 	
@@ -326,7 +329,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 					{
 						while(cursor.moveToNext())
 						{
-							Media media = MediaStoreMedia.create(cursor, handler);
+							Media media = MediaStoreMedia.create(cursor, m_IsOriginalMedia, handler);
 							if(media == null)
 								continue;
 							if(isFirstMedia)
@@ -445,7 +448,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 							Uri uri = MediaStoreMedia.getContentUri(cursor);
 							if(uri == null || srcContentUris.remove(uri))
 								continue;
-							Media media = MediaStoreMedia.create(cursor, handler);
+							Media media = MediaStoreMedia.create(cursor, m_IsOriginalMedia, handler);
 							if(media != null)
 								HandlerUtils.sendMessage(MediaStoreMediaSet.this, MSG_ADD_MEDIA_TO_MEDIA_LIST, new Object[]{ mediaList, media });
 						}

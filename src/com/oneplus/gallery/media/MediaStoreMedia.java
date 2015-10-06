@@ -36,6 +36,7 @@ public abstract class MediaStoreMedia implements Media
 	private final Uri m_ContentUri;
 	private final String m_FilePath;
 	private final Handler m_Handler;
+	private final boolean m_IsOriginal;
 	private final String m_MimeType;
 	private final int[] m_Size = new int[2];
 	private long m_TakenTime;
@@ -45,9 +46,10 @@ public abstract class MediaStoreMedia implements Media
 	 * Initialize new MediaStoreMedia instance.
 	 * @param contentUri Content URI.
 	 * @param cursor Cursor to read data.
+	 * @param isOriginal True if this is original file.
 	 * @param handler Handler.
 	 */
-	protected MediaStoreMedia(Uri contentUri, Cursor cursor, Handler handler)
+	protected MediaStoreMedia(Uri contentUri, Cursor cursor, boolean isOriginal, Handler handler)
 	{
 		// check parameter
 		if(handler == null)
@@ -56,13 +58,10 @@ public abstract class MediaStoreMedia implements Media
 		// save handler
 		m_Handler = handler;
 		
-		// get content URI
+		// save info
 		m_ContentUri = contentUri;
-		
-		// get file path
+		m_IsOriginal = isOriginal;
 		m_FilePath = CursorUtils.getString(cursor, MediaColumns.DATA);
-		
-		// get MIME type
 		m_MimeType = CursorUtils.getString(cursor, FileColumns.MIME_TYPE);
 		
 		// get size
@@ -76,18 +75,19 @@ public abstract class MediaStoreMedia implements Media
 	/**
 	 * Create {@link MediaStoreMedia} instance.
 	 * @param cursor Cursor to read data.
+	 * @param isOriginal True if this is original file.
 	 * @param handler Handler.
 	 * @return Create media instance, or Null if fail to create.
 	 */
-	public static MediaStoreMedia create(Cursor cursor, Handler handler)
+	public static MediaStoreMedia create(Cursor cursor, boolean isOriginal, Handler handler)
 	{
 		// create media by media type
 		switch(CursorUtils.getInt(cursor, FileColumns.MEDIA_TYPE, FileColumns.MEDIA_TYPE_NONE))
 		{
 			case FileColumns.MEDIA_TYPE_IMAGE:
-				return new PhotoMediaStoreMedia(cursor, handler);
+				return new PhotoMediaStoreMedia(cursor, isOriginal, handler);
 			case FileColumns.MEDIA_TYPE_VIDEO:
-				return new VideoMediaStoreMedia(cursor, handler);
+				return new VideoMediaStoreMedia(cursor, isOriginal, handler);
 			case FileColumns.MEDIA_TYPE_NONE:
 				break;
 			default:
@@ -99,9 +99,9 @@ public abstract class MediaStoreMedia implements Media
 		if(mimeType != null)
 		{
 			if(mimeType.startsWith("image/"))
-				return new PhotoMediaStoreMedia(cursor, handler);
+				return new PhotoMediaStoreMedia(cursor, isOriginal, handler);
 			if(mimeType.startsWith("video/"))
-				return new VideoMediaStoreMedia(cursor, handler);
+				return new VideoMediaStoreMedia(cursor, isOriginal, handler);
 		}
 		
 		// cannot check file type
@@ -211,6 +211,14 @@ public abstract class MediaStoreMedia implements Media
 	public boolean isDependencyThread()
 	{
 		return (m_Handler.getLooper().getThread() == Thread.currentThread());
+	}
+	
+	
+	// Check whether this is original file or not.
+	@Override
+	public boolean isOriginal()
+	{
+		return m_IsOriginal;
 	}
 	
 	
