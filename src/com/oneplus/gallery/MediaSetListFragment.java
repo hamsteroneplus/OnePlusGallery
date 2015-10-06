@@ -46,7 +46,6 @@ public class MediaSetListFragment extends GalleryFragment
 	// Fields
 	private Activity m_Activity;
 	private RelativeLayout m_AddAlbumButton;
-	private boolean m_IsSelectionMode;
 	private MediaSetListAdapter m_MediaSetListAdapter;
 	private ListView m_MediaSetListView;
 	private MediaSetList m_MediaSetList;
@@ -71,7 +70,16 @@ public class MediaSetListFragment extends GalleryFragment
 	 */
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public static final EventKey<ListItemEventArgs<MediaSet>> EVENT_MEDIA_SET_CLICKED = new EventKey<ListItemEventArgs<MediaSet>>("MediaSetClicked", (Class)ListItemEventArgs.class, MediaSetListFragment.class);
-	
+		
+	// Call-backs.
+	private final PropertyChangedCallback<Boolean> m_IsSelectionModeChangedCallback = new PropertyChangedCallback<Boolean>()
+	{
+		@Override
+		public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+		{
+			onSelectionModeChanged(e.getNewValue());
+		}
+	};
 	
 	/**
 	 * Initialize new MediaSetListFragment instance.
@@ -89,6 +97,8 @@ public class MediaSetListFragment extends GalleryFragment
 		
 		m_Activity =  this.getActivity();
 		m_MediaSetListAdapter = new MediaSetListAdapter();
+		
+		addCallback(PROP_IS_SELECTION_MODE, m_IsSelectionModeChangedCallback);
 	}
 
 	// Create view.
@@ -97,6 +107,16 @@ public class MediaSetListFragment extends GalleryFragment
 	{
 		return inflater.inflate(R.layout.fragment_media_set_list, container, false);
 	}
+
+	
+
+	@Override
+	public void onDestroy() {
+		super.onDestroy();
+		
+		removeCallback(PROP_IS_SELECTION_MODE, m_IsSelectionModeChangedCallback);
+	}
+
 
 
 	@Override
@@ -119,7 +139,7 @@ public class MediaSetListFragment extends GalleryFragment
 			public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
 				MediaSet set = m_MediaSetList.get(position);
 				
-				if(m_IsSelectionMode)
+				if(get(PROP_IS_SELECTION_MODE))
 					updateSelectedMediaSet(set);		
 				else
 					raise(EVENT_MEDIA_SET_CLICKED, new ListItemEventArgs<MediaSet>(position, set));	
@@ -131,7 +151,7 @@ public class MediaSetListFragment extends GalleryFragment
 			public boolean onItemLongClick(AdapterView<?> parent, View view, int position, long id) {
 				
 				// enter selection mode
-				if(!m_IsSelectionMode)
+				if(!get(PROP_IS_SELECTION_MODE))
 					set(PROP_IS_SELECTION_MODE, true);		
 				
 				// update selected set
@@ -164,42 +184,13 @@ public class MediaSetListFragment extends GalleryFragment
 				set(PROP_IS_SELECTION_MODE, false);					
 			}
 		});
-		setToolBarVisibility(false);
-	}
-	
-	@SuppressWarnings("unchecked")
-	@Override
-	public <TValue> TValue get(PropertyKey<TValue> key)
-	{
-		if(key == PROP_IS_SELECTION_MODE)
-			return (TValue)((Boolean)m_IsSelectionMode);
-		return super.get(key);
-	}
-	
-	// Set property value.
-	@SuppressWarnings("unchecked")
-	@Override
-	public <TValue> boolean set(PropertyKey<TValue> key, TValue value)
-	{
-		if(key == PROP_MEDIA_SET_LIST)
-			return this.setMediaSetList((MediaSetList)value);
-		else if(key == PROP_IS_SELECTION_MODE)
-			return this.setIsSelectionMode((boolean)value);
-		
-		return super.set(key, value);
+		onSelectionModeChanged(get(PROP_IS_SELECTION_MODE));
 	}
 	
 	
-	private boolean setIsSelectionMode(boolean isSelectionMode)
+	private void onSelectionModeChanged(boolean isSelectionMode)
 	{
-		Log.v(TAG, "setIsSelectionMode() -  isSelectionMode is "+isSelectionMode);	
-		
-		if(m_IsSelectionMode == isSelectionMode)
-			return false;
-
-		m_IsSelectionMode = isSelectionMode;
-		
-		if(m_IsSelectionMode)
+		if(isSelectionMode)
 		{
 			// show tool bar
 			setToolBarVisibility(true);
@@ -224,8 +215,17 @@ public class MediaSetListFragment extends GalleryFragment
 			// show add album button
 			m_AddAlbumButton.setVisibility(View.VISIBLE);
 		}	
+	}
+	
+	// Set property value.
+	@SuppressWarnings("unchecked")
+	@Override
+	public <TValue> boolean set(PropertyKey<TValue> key, TValue value)
+	{
+		if(key == PROP_MEDIA_SET_LIST)
+			return this.setMediaSetList((MediaSetList)value);
 		
-		return this.notifyPropertyChanged(PROP_IS_SELECTION_MODE, !m_IsSelectionMode, m_IsSelectionMode);
+		return super.set(key, value);
 	}
 	
 	private void setToolBarVisibility(boolean isVisible)
@@ -289,7 +289,7 @@ public class MediaSetListFragment extends GalleryFragment
 	
 	private void updateSelectedMediaSet(MediaSet mediaSet)
 	{
-		if(!m_IsSelectionMode)
+		if(!get(PROP_IS_SELECTION_MODE))
 		{
 			Log.e(TAG, "updateSelectedMediaSet() - not in selection mode");
 			return;
@@ -377,7 +377,7 @@ public class MediaSetListFragment extends GalleryFragment
 			else
 				viewInfo.coverImage.setImageDrawable(null);
 			
-			if(m_IsSelectionMode)
+			if(get(PROP_IS_SELECTION_MODE))
 			{
 				if(m_SelectedMediaSet.contains(mediaSet))
 					viewInfo.selectedIcon.setVisibility(View.VISIBLE);
