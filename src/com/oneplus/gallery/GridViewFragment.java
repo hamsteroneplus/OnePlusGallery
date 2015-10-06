@@ -37,8 +37,6 @@ import android.os.Handler;
 import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.view.LayoutInflater;
-import android.view.Menu;
-import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
@@ -74,8 +72,7 @@ public class GridViewFragment extends GalleryFragment {
 	private int m_GridviewItemHeight;
 	private boolean m_IsSelectionMode = false;
 	private PreDecodeBitmapRunnable m_PreDecodeBitmapRunnable;
-	private ImageView m_SelectedImage;
-	private HashSet<Integer> m_SelectionSet = new HashSet<>(); 
+	private List<Media> m_SelectionMeidaList = new ArrayList<>();
 	private Toolbar m_Toolbar;
 	private int m_TouchedPosition = GridView.INVALID_POSITION;
 	private int m_AnchorPosition; // Keep the very first selected item position
@@ -264,7 +261,7 @@ public class GridViewFragment extends GalleryFragment {
 			    }
 			  }
 		}
-		m_SelectionSet.clear();
+		m_SelectionMeidaList.clear();
 		
 	}
 	
@@ -285,18 +282,12 @@ public class GridViewFragment extends GalleryFragment {
 	 */
 	public List<Media> getSelectedMedia()
 	{
-		if(m_SelectionSet == null)
+		if(m_SelectionMeidaList == null)
 			return null;
-		if(m_SelectionSet.isEmpty()) 
+		if(m_SelectionMeidaList.isEmpty()) 
 			return null;
 		// Prepare selected media list
-		List<Media> mediaList = new ArrayList<>();
-		for(int selectedItem : m_SelectionSet) {
-			Media media = m_MediaList.get(selectedItem)	;
-			mediaList.add(media);
-		}
-		
-		return mediaList;
+		return m_SelectionMeidaList;
 	}
 	
 	
@@ -346,29 +337,30 @@ public class GridViewFragment extends GalleryFragment {
 		if(view == null || index == 0) 
 			return;
 		Log.d(TAG, "onItemSelected m_AnchorPosition: " + m_AnchorPosition);
-		m_SelectedImage = (ImageView) view.findViewById(R.id.item_selected);
+		ImageView selectedImage = (ImageView) view.findViewById(R.id.item_selected);
 		// De-Select
-		if(!m_SelectionSet.isEmpty() && m_SelectionSet.contains(Integer.valueOf(index))) {
+		Media media = (Media) m_GridViewItemAdapter.getItem(index);
+		if(!m_SelectionMeidaList.isEmpty() && m_SelectionMeidaList.contains(media)) {
 			if(index != m_AnchorPosition) {
-				m_SelectionSet.remove(index);
-				m_SelectedImage.setVisibility(View.GONE);	
+				m_SelectionMeidaList.remove(media);
+				selectedImage.setVisibility(View.GONE);	
 			}
 			
 		}else {
-			m_SelectedImage.setVisibility(View.VISIBLE);
-			m_SelectionSet.add(index);	
+			selectedImage.setVisibility(View.VISIBLE);
+			m_SelectionMeidaList.add(media);
 		}
 		
 		
 		// Exit selection mode if selection set is empty and is not in selection mode
-		if(m_IsSelectionMode && m_SelectionSet.isEmpty()) {
+		if(m_IsSelectionMode && m_SelectionMeidaList.isEmpty()) {
 			this.set(PROP_IS_SELECTION_MODE, false);
 			m_Toolbar.setVisibility(View.GONE);
 			return;
 		}
 		
 		Resources res = this.getActivity().getResources();
-		String selectedItems = String.format(res.getString(R.string.toolbar_selection_total), m_SelectionSet.size());
+		String selectedItems = String.format(res.getString(R.string.toolbar_selection_total), m_SelectionMeidaList.size());
 		m_Toolbar.setTitle(selectedItems);
 	}
 	
@@ -527,7 +519,7 @@ public class GridViewFragment extends GalleryFragment {
 		m_GridView.setOnItemClickListener(new OnItemClickListener() {
 			@Override
 			public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-				Log.d(TAG, "gridview onItemClick event item position:" + position);
+				Log.d(TAG, "onItemClick item position:" + position);
 				if(m_IsSelectionMode) {
 					onItemSelected(position, view);
 				}else {
@@ -605,8 +597,7 @@ public class GridViewFragment extends GalleryFragment {
 						break;
 					}
 					if(multiSelectToggleOn && movingPosition != firstTouchItemPosition) {
-						Log.d(TAG,"gridview ontouch do multiple select");
-						((GridView) view).getParent().requestDisallowInterceptTouchEvent(true);
+						
 						multipleSelect(action, (GridView) view, movingPosition);
 					}
 					
@@ -644,15 +635,7 @@ public class GridViewFragment extends GalleryFragment {
 					break;
 				case R.id.toolbar_share:
 				{
-					List<Media> selectedMedia = new ArrayList<>();
-					for(Integer index : m_SelectionSet)
-					{
-						if(get(PROP_IS_CAMERA_ROLL))
-							selectedMedia.add(m_MediaList.get(index - 1));
-						else
-							selectedMedia.add(m_MediaList.get(index));
-					}
-					getGalleryActivity().shareMedia(selectedMedia);
+					getGalleryActivity().shareMedia(getSelectedMedia());
 					break;
 				}
 				case R.id.toolbar_delete:
@@ -754,12 +737,14 @@ public class GridViewFragment extends GalleryFragment {
 			m_GridView.setOnTouchListener(null);
 			m_GridView = null;
 		}
-		m_EmptyMediaView = null;
+
 		if(m_Toolbar != null) {
 			m_Toolbar.setNavigationOnClickListener(null);
 			m_Toolbar.setOnMenuItemClickListener(null);
 		}
 			
+		m_EmptyMediaView = null;
+		m_EmptyMediaView.setOnClickListener(null);
 		// call super
 		super.onDestroyView();
 	}
@@ -855,12 +840,16 @@ public class GridViewFragment extends GalleryFragment {
 			}
 			holder.thumbnailImageView.setImageDrawable(m_GreySquare);
 			holder.position = position;
+			
+			
 			if(m_IsSelectionMode) {
-				if(m_SelectionSet.contains(holder.position) == false) {
+				if(m_SelectionMeidaList.contains(getItem(holder.position)) == false) {
 					holder.selectedImageView.setVisibility(View.GONE);
 				}else
 					holder.selectedImageView.setVisibility(View.VISIBLE);
 			}
+			
+			
 			holder.thumbDecoded = false;
 			boolean isCameraRoll = get(PROP_IS_CAMERA_ROLL);
 			if(m_MediaList != null) {
