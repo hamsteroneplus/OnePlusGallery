@@ -5,10 +5,19 @@
     android:layout_height="match_parent"
     android:background="@color/media_set_list_item_background" >
 
+    <Toolbar 
+        android:id="@+id/media_set_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:visibility="gone">   
+    </Toolbar>
+    
     <ListView
         android:id="@+id/media_set_listview"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_below="@+id/media_set_toolbar"
         android:divider="@color/media_set_list_item_background"
         android:dividerHeight="@dimen/media_set_list_item_divider_height" >
     </ListView>

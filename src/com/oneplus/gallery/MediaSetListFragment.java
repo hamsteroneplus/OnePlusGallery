@@ -6,18 +6,23 @@ import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.os.Bundle;
 import android.view.LayoutInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.View.OnClickListener;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
+import android.widget.Toolbar;
+import android.widget.Toolbar.OnMenuItemClickListener;
 
 import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.LinkedList;
+import java.util.List;
 
 import com.oneplus.base.EventHandler;
 import com.oneplus.base.EventKey;
@@ -28,6 +33,7 @@ import com.oneplus.base.PropertyChangeEventArgs;
 import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.PropertySource;
+import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaComparator;
 import com.oneplus.gallery.media.MediaList;
 import com.oneplus.gallery.media.MediaSet;
@@ -51,6 +57,7 @@ public class MediaSetListFragment extends GalleryFragment
 	private LinkedList<MediaSet> m_MediaSetDecodeQueue = new LinkedList<>();
 	private ArrayList<MediaSet> m_SelectedMediaSet = new ArrayList<MediaSet>();
 	private static BitmapPool m_SmallBitmapPool = new CenterCroppedBitmapPool("MediaSetListFragmentSmallBitmapPool", 32 << 20, Bitmap.Config.RGB_565, 4, BitmapPool.FLAG_NO_EMBEDDED_THUMB);
+	private Toolbar m_Toolbar;
 	
 	/**
 	 * Property to get or set selection mode.
@@ -101,6 +108,7 @@ public class MediaSetListFragment extends GalleryFragment
 		
 		m_AddAlbumButton = (RelativeLayout)getView().findViewById(R.id.add_album_buttom);
 		m_MediaSetListView = (ListView)getView().findViewById(R.id.media_set_listview);
+		m_Toolbar = (Toolbar)getView().findViewById(R.id.media_set_toolbar);
 		
 		m_AddAlbumButton.setOnClickListener(new View.OnClickListener() {		
 			@Override
@@ -137,6 +145,27 @@ public class MediaSetListFragment extends GalleryFragment
 			}
 		});
 		m_MediaSetListView.setAdapter(m_MediaSetListAdapter);
+		
+		m_Toolbar.inflateMenu(R.menu.media_set_toolbar_menu);
+		m_Toolbar.setNavigationIcon(R.drawable.button_cancel);
+		m_Toolbar.setOnMenuItemClickListener(new OnMenuItemClickListener() {
+			@Override
+			public boolean onMenuItemClick(MenuItem item) {
+				switch (item.getItemId()) {
+
+					case R.id.toolbar_delete:
+						//TODO : delete function
+						break;
+				}
+				return false;
+			}
+		});
+		m_Toolbar.setNavigationOnClickListener(new OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				set(PROP_IS_SELECTION_MODE, false);		
+			}
+		});
 	}
 	
 	// Set property value.
@@ -169,6 +198,12 @@ public class MediaSetListFragment extends GalleryFragment
 		// leave selection mode is nothing is selected
 		if(m_SelectedMediaSet.isEmpty())
 			set(PROP_IS_SELECTION_MODE, false);	
+		else
+		{
+			// update tool bar title
+			String selectedItems = String.format(getString(R.string.toolbar_selection_total), m_SelectedMediaSet.size());
+			m_Toolbar.setTitle(selectedItems);
+		}
 		
 		// notify data set changed
 		if(m_MediaSetListAdapter != null)
@@ -184,7 +219,8 @@ public class MediaSetListFragment extends GalleryFragment
 		
 		if(m_IsSelectionMode)
 		{
-			// TODO : show action bar
+			// show tool bar
+			m_Toolbar.setVisibility(View.VISIBLE);
 		}
 		else
 		{
@@ -196,6 +232,9 @@ public class MediaSetListFragment extends GalleryFragment
 				if(m_MediaSetListAdapter != null)
 					m_MediaSetListAdapter.notifyDataSetChanged();
 			}	
+			
+			// hide tool bar
+			m_Toolbar.setVisibility(View.GONE);
 		}	
 		
 		return true;
