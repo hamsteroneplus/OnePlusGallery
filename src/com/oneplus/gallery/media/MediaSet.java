@@ -2,7 +2,10 @@ package com.oneplus.gallery.media;
 
 import java.util.Comparator;
 
+import android.os.Handler;
+
 import com.oneplus.base.BaseObject;
+import com.oneplus.base.Handle;
 import com.oneplus.base.HandlerObject;
 import com.oneplus.base.PropertyKey;
 
@@ -43,6 +46,38 @@ public interface MediaSet extends BaseObject, HandlerObject
 		 */
 		OTHER,
 	}
+	
+	
+	/**
+	 * Media deletion call-back interface.
+	 */
+	interface MediaDeletionCallback
+	{
+		/**
+		 * Called after deleting media.
+		 * @param mediaSet {@link MediaSet}.
+		 * @param media Media which is deleted.
+		 * @param success True if media deleted successfully.
+		 */
+		void onDeletionCompleted(MediaSet mediaSet, Media media, boolean success);
+		
+		/**
+		 * Called after starting deletion.
+		 * @param mediaSet {@link MediaSet}.
+		 * @param media Media to be deleted.
+		 */
+		void onDeletionStarted(MediaSet mediaSet, Media media);
+	}
+	
+	
+	/**
+	 * Delete media.
+	 * @param media Media to delete.
+	 * @param callback Call-back to receive deletion state.
+	 * @param handler Handler to perform call-back.
+	 * @return Handle to this operation.
+	 */
+	Handle deleteMedia(Media media, MediaDeletionCallback callback, Handler handler);
 	
 	
 	/**

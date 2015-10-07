@@ -1,7 +1,6 @@
 package com.oneplus.gallery.media;
 
 import android.net.Uri;
-
 import com.oneplus.base.HandlerObject;
 import com.oneplus.gallery.MediaType;
 
@@ -22,6 +21,13 @@ public interface Media extends HandlerObject
 	 * @return File path.
 	 */
 	String getFilePath();
+	
+	
+	/**
+	 * Get {@link MediaSet} which contains this media.
+	 * @return {@link MediaSet}.
+	 */
+	MediaSet getMediaSet();
 	
 	
 	/**

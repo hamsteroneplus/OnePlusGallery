@@ -24,6 +24,10 @@ public abstract class GalleryFragment extends BaseFragment
 	 * Property to get or set whether {@link #ACTION_ID_BACK} action is needed or not.
 	 */
 	public static final PropertyKey<Boolean> PROP_IS_BACK_ACTION_NEEDED = new PropertyKey<>("IsBackActionNeeded", Boolean.class, GalleryFragment.class, PropertyKey.FLAG_NOT_NULL, true);
+	/**
+	 * Property to get or set fragment title.
+	 */
+	public static final PropertyKey<String> PROP_TITLE = new PropertyKey<>("Title", String.class, GalleryFragment.class, 0, null);
 	
 	
 	/**

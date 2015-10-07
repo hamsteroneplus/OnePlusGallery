@@ -501,6 +501,7 @@ public class OPGalleryActivity extends GalleryActivity
 				Log.e(TAG, "onMediaSetClicked() - No grid view fragment");
 				return;
 			}
+			m_GridViewFragment.set(GridViewFragment.PROP_TITLE, set.get(MediaSet.PROP_NAME));
 			m_GridViewFragment.set(GridViewFragment.PROP_MEDIA_LIST, m_MediaList);
 			this.changeMode(Mode.GRID_VIEW);
 		}

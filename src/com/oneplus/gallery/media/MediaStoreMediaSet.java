@@ -115,6 +115,65 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	}
 	
 	
+	// Class for media deletion handle.
+	private final class MediaDeletionHandle extends Handle
+	{
+		public final MediaDeletionCallback callback;
+		public final Handler callbackHandler;
+		public final Media media;
+		
+		public MediaDeletionHandle(Media media, MediaDeletionCallback callback, Handler handler)
+		{
+			super("DeleteMedia");
+			this.media = media;
+			this.callback = callback;
+			this.callbackHandler = handler;
+		}
+		
+		public void callOnDeletionCompleted(final boolean success)
+		{
+			if(this.callback == null)
+				return;
+			if(this.callbackHandler != null && this.callbackHandler.getLooper().getThread() != Thread.currentThread())
+			{
+				this.callbackHandler.post(new Runnable()
+				{
+					@Override
+					public void run()
+					{
+						callback.onDeletionCompleted(MediaStoreMediaSet.this, media, success);
+					}
+				});
+			}
+			else
+				this.callback.onDeletionCompleted(MediaStoreMediaSet.this, this.media, success);
+		}
+		
+		public void callOnDeletionStarted()
+		{
+			if(this.callback == null)
+				return;
+			if(this.callbackHandler != null && this.callbackHandler.getLooper().getThread() != Thread.currentThread())
+			{
+				this.callbackHandler.post(new Runnable()
+				{
+					@Override
+					public void run()
+					{
+						callback.onDeletionStarted(MediaStoreMediaSet.this, media);
+					}
+				});
+			}
+			else
+				this.callback.onDeletionStarted(MediaStoreMediaSet.this, this.media);
+		}
+
+		@Override
+		protected void onClose(int flags)
+		{}
+	}
+	
+	
 	/**
 	 * Initialize new MediaStoreMediaSet instance.
 	 * @param type Media set type.
@@ -141,6 +200,73 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	{
 		if(!mediaList.get(MediaList.PROP_IS_RELEASED))
 			mediaList.addMedia(media, isSorted);
+	}
+	
+	
+	// Delete media.
+	@Override
+	public Handle deleteMedia(Media media, MediaDeletionCallback callback, Handler handler)
+	{
+		// check state
+		this.verifyAccess();
+		if(this.get(PROP_IS_RELEASED))
+		{
+			Log.e(TAG, "deleteMedia() - Media set is released");
+			return null;
+		}
+		
+		// check parameter
+		if(media == null || media.getMediaSet() != this)
+		{
+			Log.e(TAG, "deleteMedia() - Invalid media to delete");
+			return null;
+		}
+		
+		// create handle
+		final MediaDeletionHandle handle = new MediaDeletionHandle(media, callback, handler);
+		
+		// delete asynchronously
+		MediaManager.accessContentProvider(media.getContentUri(), new MediaManager.ContentProviderAccessCallback()
+		{
+			@Override
+			public void onAccessContentProvider(ContentResolver contentResolver, Uri contentUri, ContentProviderClient client) throws RemoteException
+			{
+				if(!Handle.isValid(handle))
+					return;
+				handle.callOnDeletionStarted();
+				boolean success;
+				try
+				{
+					success = deleteMedia(handle.media, contentResolver, contentUri, client);
+				}
+				catch(Throwable ex)
+				{
+					Log.e(TAG, "deleteMedia() - Fail to delete media", ex);
+					success = false;
+				}
+				handle.callOnDeletionCompleted(success);
+			}
+		});
+		
+		// complete
+		return handle;
+	}
+	
+	
+	/**
+	 * Delete media in content thread.
+	 * @param media Media to delete.
+	 * @param contentResolver Content resolver.
+	 * @param contentUri Content URI.
+	 * @param client Content provider client.
+	 * @return True if media deleted successfully.
+	 */
+	protected boolean deleteMedia(Media media, ContentResolver contentResolver, Uri contentUri, ContentProviderClient client) throws RemoteException
+	{
+		if(media.isOriginal())
+			return (client.delete(media.getContentUri(), null, null) > 0);
+		Log.e(TAG, "deleteMedia() - Cannot delete media which is not original");
+		return false;
 	}
 
 	
@@ -297,7 +423,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	public MediaList openMediaList(final MediaComparator comparator, final int maxMediaCount, int flags)
 	{
 		// check state
-		this.verifyAccess();
+		this.verifyReleaseState();
 		
 		// check parameter
 		if(comparator == null)
@@ -329,7 +455,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 					{
 						while(cursor.moveToNext())
 						{
-							Media media = MediaStoreMedia.create(cursor, m_IsOriginalMedia, handler);
+							Media media = MediaStoreMedia.create(MediaStoreMediaSet.this, cursor, m_IsOriginalMedia, handler);
 							if(media == null)
 								continue;
 							if(isFirstMedia)
@@ -448,7 +574,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 							Uri uri = MediaStoreMedia.getContentUri(cursor);
 							if(uri == null || srcContentUris.remove(uri))
 								continue;
-							Media media = MediaStoreMedia.create(cursor, m_IsOriginalMedia, handler);
+							Media media = MediaStoreMedia.create(MediaStoreMediaSet.this, cursor, m_IsOriginalMedia, handler);
 							if(media != null)
 								HandlerUtils.sendMessage(MediaStoreMediaSet.this, MSG_ADD_MEDIA_TO_MEDIA_LIST, new Object[]{ mediaList, media });
 						}

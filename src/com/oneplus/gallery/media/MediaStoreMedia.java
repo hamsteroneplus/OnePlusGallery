@@ -37,6 +37,7 @@ public abstract class MediaStoreMedia implements Media
 	private final String m_FilePath;
 	private final Handler m_Handler;
 	private final boolean m_IsOriginal;
+	private final MediaSet m_MediaSet;
 	private final String m_MimeType;
 	private final int[] m_Size = new int[2];
 	private long m_TakenTime;
@@ -44,14 +45,17 @@ public abstract class MediaStoreMedia implements Media
 	
 	/**
 	 * Initialize new MediaStoreMedia instance.
+	 * @param mediaSet {@link MediaSet}.
 	 * @param contentUri Content URI.
 	 * @param cursor Cursor to read data.
 	 * @param isOriginal True if this is original file.
 	 * @param handler Handler.
 	 */
-	protected MediaStoreMedia(Uri contentUri, Cursor cursor, boolean isOriginal, Handler handler)
+	protected MediaStoreMedia(MediaSet mediaSet, Uri contentUri, Cursor cursor, boolean isOriginal, Handler handler)
 	{
 		// check parameter
+		if(mediaSet == null)
+			throw new IllegalArgumentException("No media set");
 		if(handler == null)
 			throw new IllegalArgumentException("No handler");
 		
@@ -59,6 +63,7 @@ public abstract class MediaStoreMedia implements Media
 		m_Handler = handler;
 		
 		// save info
+		m_MediaSet = mediaSet;
 		m_ContentUri = contentUri;
 		m_IsOriginal = isOriginal;
 		m_FilePath = CursorUtils.getString(cursor, MediaColumns.DATA);
@@ -74,20 +79,21 @@ public abstract class MediaStoreMedia implements Media
 	
 	/**
 	 * Create {@link MediaStoreMedia} instance.
+	 * @param mediaSet {@link MediaSet}.
 	 * @param cursor Cursor to read data.
 	 * @param isOriginal True if this is original file.
 	 * @param handler Handler.
 	 * @return Create media instance, or Null if fail to create.
 	 */
-	public static MediaStoreMedia create(Cursor cursor, boolean isOriginal, Handler handler)
+	public static MediaStoreMedia create(MediaSet mediaSet, Cursor cursor, boolean isOriginal, Handler handler)
 	{
 		// create media by media type
 		switch(CursorUtils.getInt(cursor, FileColumns.MEDIA_TYPE, FileColumns.MEDIA_TYPE_NONE))
 		{
 			case FileColumns.MEDIA_TYPE_IMAGE:
-				return new PhotoMediaStoreMedia(cursor, isOriginal, handler);
+				return new PhotoMediaStoreMedia(mediaSet, cursor, isOriginal, handler);
 			case FileColumns.MEDIA_TYPE_VIDEO:
-				return new VideoMediaStoreMedia(cursor, isOriginal, handler);
+				return new VideoMediaStoreMedia(mediaSet, cursor, isOriginal, handler);
 			case FileColumns.MEDIA_TYPE_NONE:
 				break;
 			default:
@@ -99,9 +105,9 @@ public abstract class MediaStoreMedia implements Media
 		if(mimeType != null)
 		{
 			if(mimeType.startsWith("image/"))
-				return new PhotoMediaStoreMedia(cursor, isOriginal, handler);
+				return new PhotoMediaStoreMedia(mediaSet, cursor, isOriginal, handler);
 			if(mimeType.startsWith("video/"))
-				return new VideoMediaStoreMedia(cursor, isOriginal, handler);
+				return new VideoMediaStoreMedia(mediaSet, cursor, isOriginal, handler);
 		}
 		
 		// cannot check file type
@@ -169,6 +175,14 @@ public abstract class MediaStoreMedia implements Media
 	public int getHeight()
 	{
 		return m_Size[1];
+	}
+	
+	
+	// Get media set.
+	@Override
+	public MediaSet getMediaSet()
+	{
+		return m_MediaSet;
 	}
 	
 	
