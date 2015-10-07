@@ -1,5 +1,6 @@
 package com.oneplus.gallery.media;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -41,7 +42,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	
 	
 	// Fields.
-	private List<MediaListImpl> m_ActiveMediaLists;
+	private List<WeakReference<MediaListImpl>> m_ActiveMediaLists;
 	private boolean m_IsMediaStoreContentChanged;
 	private final boolean m_IsOriginalMedia;
 	private volatile Handle m_MediaCountRefreshHandle;
@@ -322,7 +323,13 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 		if(m_ActiveMediaLists != null)
 		{
 			for(int i = m_ActiveMediaLists.size() - 1 ; i >= 0 ; --i)
-				this.refreshMediaList(m_ActiveMediaLists.get(i));
+			{
+				MediaListImpl mediaList = m_ActiveMediaLists.get(i).get();
+				if(mediaList != null)
+					this.refreshMediaList(mediaList);
+				else
+					m_ActiveMediaLists.remove(i);
+			}
 		}
 	}
 	
@@ -382,15 +389,31 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 		if(m_ActiveMediaLists == null)
 			return;
 		for(int i = m_ActiveMediaLists.size() - 1 ; i >= 0 ; --i)
-			m_ActiveMediaLists.get(i).removeMedia(media);
+		{
+			MediaListImpl mediaList = m_ActiveMediaLists.get(i).get();
+			if(mediaList != null)
+				mediaList.removeMedia(media);
+			else
+				m_ActiveMediaLists.remove(i);
+		}
 	}
 	
 	
 	// Called when media list released.
 	private void onMediaListReleased(MediaListImpl mediaList)
 	{
-		if(m_ActiveMediaLists.remove(mediaList))
-			Log.v(TAG, "onMediaListReleased() - Active media list count : ", m_ActiveMediaLists.size());
+		for(int i = m_ActiveMediaLists.size() - 1 ; i >= 0 ; --i)
+		{
+			MediaListImpl candMediaList = m_ActiveMediaLists.get(i).get();
+			if(candMediaList == mediaList)
+			{
+				m_ActiveMediaLists.remove(i);
+				Log.v(TAG, "onMediaListReleased() - Active media list count : ", m_ActiveMediaLists.size());
+				break;
+			}
+			else if(candMediaList == null)
+				m_ActiveMediaLists.remove(i);
+		}
 	}
 	
 	
@@ -435,7 +458,11 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 		{
 			Log.v(TAG, "onRelease() - Release all media lists");
 			for(int i = m_ActiveMediaLists.size() - 1 ; i >= 0 ; --i)
-				m_ActiveMediaLists.get(i).release();
+			{
+				MediaListImpl mediaList = m_ActiveMediaLists.get(i).get();
+				if(mediaList != null)
+					mediaList.release();
+			}
 		}
 		
 		// cancel refresh
@@ -474,7 +501,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 		final MediaListImpl mediaList = new MediaListImpl(comparator, maxMediaCount);
 		if(m_ActiveMediaLists == null)
 			m_ActiveMediaLists = new ArrayList<>();
-		m_ActiveMediaLists.add(mediaList);
+		m_ActiveMediaLists.add(new WeakReference<MediaListImpl>(mediaList));
 		Log.v(TAG, "openMediaList() - Active media list count : ", m_ActiveMediaLists.size());
 		
 		// start updating media list

@@ -1,5 +1,6 @@
 package com.oneplus.gallery.media;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -46,7 +47,7 @@ public class MediaManager
 					+ FileColumns.MEDIA_TYPE + "=" + FileColumns.MEDIA_TYPE_IMAGE
 					+ " OR " + FileColumns.MEDIA_TYPE + "=" + FileColumns.MEDIA_TYPE_VIDEO
 			+ ")"
-			+ " AND " + FileColumns.DATA + " LIKE ?"
+			+ " AND NOT (" + FileColumns.DATA + " LIKE ?)"
 	;
 	private static final int MSG_ACCESS_CONTENT_PROVIDER = 10000;
 	private static final int MSG_REGISTER_CONTENT_CHANGED_CB = 10010;
@@ -58,7 +59,7 @@ public class MediaManager
 	// Fields.
 	private static final List<Handle> m_ActivateHandles = new ArrayList<>();
 	private static final List<ActiveStateCallback> m_ActiveStateCallbacks = new ArrayList<>();
-	private static final List<MediaSetListImpl> m_ActiveMediaSetLists = new ArrayList<>();
+	private static final List<WeakReference<MediaSetListImpl>> m_ActiveMediaSetLists = new ArrayList<>();
 	private static CameraRollMediaSet m_CameraRollMediaSet;
 	private static HashMap<Uri, ContentObserver> m_ContentObservers;
 	private static ContentResolver m_ContentResolver;
@@ -460,7 +461,7 @@ public class MediaManager
 		
 		// create list
 		MediaSetListImpl list = new MediaSetListImpl();
-		m_ActiveMediaSetLists.add(list);
+		m_ActiveMediaSetLists.add(new WeakReference<MediaSetListImpl>(list));
 		Log.v(TAG, "createMediaSetList() - Active list count : ", m_ActiveMediaSetLists.size());
 		
 		// create system sets
@@ -585,7 +586,13 @@ public class MediaManager
 		DirectoryMediaSet set = new DirectoryMediaSet(path, id);
 		m_DirectoryMediaSets.put(id, set);
 		for(int i = m_ActiveMediaSetLists.size() - 1 ; i >= 0 ; --i)
-			m_ActiveMediaSetLists.get(i).addMediaSet(set);
+		{
+			MediaSetListImpl list = m_ActiveMediaSetLists.get(i).get();
+			if(list != null)
+				list.addMediaSet(set);
+			else
+				m_ActiveMediaSetLists.remove(i);
+		}
 	}
 	
 	
@@ -597,7 +604,13 @@ public class MediaManager
 			return;
 		m_DirectoryMediaSets.remove(id);
 		for(int i = m_ActiveMediaSetLists.size() - 1 ; i >= 0 ; --i)
-			m_ActiveMediaSetLists.get(i).removeMediaSet(set);
+		{
+			MediaSetListImpl list = m_ActiveMediaSetLists.get(i).get();
+			if(list != null)
+				list.removeMediaSet(set);
+			else
+				m_ActiveMediaSetLists.remove(i);
+		}
 		set.release();
 	}
 	
@@ -605,24 +618,32 @@ public class MediaManager
 	// Called when media set list released. (in main thread)
 	private static void onMediaSetListReleased(MediaSetListImpl list)
 	{
-		if(m_ActiveMediaSetLists.remove(list))
+		for(int i = m_ActiveMediaSetLists.size() - 1 ; i >= 0 ; --i)
 		{
-			Log.v(TAG, "onMediaSetListReleased() - Active list count : ", m_ActiveMediaSetLists.size());
-			
-			if(m_ActiveMediaSetLists.isEmpty())
+			MediaSetListImpl candList = m_ActiveMediaSetLists.get(i).get();
+			if(candList == list)
 			{
-				// release system sets
-				if(m_CameraRollMediaSet != null)
-				{
-					m_CameraRollMediaSet.release();
-					m_CameraRollMediaSet = null;
-				}
+				m_ActiveMediaSetLists.remove(i);
 				
-				// release directory sets
-				for(DirectoryMediaSet set : m_DirectoryMediaSets.values())
-					set.release();
-				m_DirectoryMediaSets.clear();
+				Log.v(TAG, "onMediaSetListReleased() - Active list count : ", m_ActiveMediaSetLists.size());
+				
+				if(m_ActiveMediaSetLists.isEmpty())
+				{
+					// release system sets
+					if(m_CameraRollMediaSet != null)
+					{
+						m_CameraRollMediaSet.release();
+						m_CameraRollMediaSet = null;
+					}
+					
+					// release directory sets
+					for(DirectoryMediaSet set : m_DirectoryMediaSets.values())
+						set.release();
+					m_DirectoryMediaSets.clear();
+				}
 			}
+			else if(candList == null)
+				m_ActiveMediaSetLists.remove(i);
 		}
 	}
 	
@@ -669,8 +690,8 @@ public class MediaManager
 			@Override
 			public void onAccessContentProvider(ContentResolver contentResolver, Uri contentUri, ContentProviderClient client) throws RemoteException
 			{
-				String picturesPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES).getAbsolutePath();
-				Cursor cursor = client.query(contentUri, DIR_COLUMNS, DIR_QUERY_CONDITION, new String[]{ picturesPath + "/%" }, null);
+				String dcimPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM).getAbsolutePath();
+				Cursor cursor = client.query(contentUri, DIR_COLUMNS, DIR_QUERY_CONDITION, new String[]{ dcimPath + "/%" }, null);
 				if(cursor != null)
 				{
 					try

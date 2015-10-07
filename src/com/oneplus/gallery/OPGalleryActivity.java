@@ -1,5 +1,7 @@
 package com.oneplus.gallery;
 
+import java.util.Map;
+
 import android.app.Fragment;
 import android.app.FragmentManager;
 import android.app.FragmentTransaction;
@@ -39,6 +41,11 @@ public class OPGalleryActivity extends GalleryActivity
 	private static final String FRAGMENT_TAG_FILMSTRIP = "GalleryActivity.Filmstrip";
 	private static final String FRAGMENT_TAG_GRID_VIEW = "GalleryActivity.GridView";
 	private static final String FRAGMENT_TAG_MEDIA_SET_LIST = "GalleryActivity.MediaSetList";
+	private static final String STATE_KEY_PREFIX = (OPGalleryActivity.class.getName() + ".");
+	private static final String STATE_KEY_MODE = (STATE_KEY_PREFIX + "Mode");
+	private static final String STATE_KEY_MEDIA_SET_LIST = (STATE_KEY_PREFIX + "MediaSetList");
+	private static final String STATE_KEY_DEFAULT_MEDIA_LIST = (STATE_KEY_PREFIX + "DefaultMediaList");
+	private static final String STATE_KEY_MEDIA_LIST = (STATE_KEY_PREFIX + "MediaList");
 	private static final long DURATION_RELEASE_MEDIA_SET_LIST_DELAY = 3000;
 	private static final long DURATION_FRAGMENT_ENTER_ANIMATION = 300;
 	private static final long DURATION_FRAGMENT_EXIT_ANIMATION = 300;
@@ -68,6 +75,7 @@ public class OPGalleryActivity extends GalleryActivity
 	private FilmstripFragment m_FilmstripFragment;
 	private View m_GridViewContainer;
 	private GridViewFragment m_GridViewFragment;
+	private boolean m_IsInstanceStateSaved;
 	private MediaList m_MediaList;
 	private Handle m_MediaManagerActivateHandle;
 	private MediaSetList m_MediaSetList;
@@ -294,16 +302,54 @@ public class OPGalleryActivity extends GalleryActivity
 	
 	// Called when creating.
 	@Override
-	protected void onCreate(Bundle savedInstanceState)
+	protected void onCreate(Bundle savedInstanceState, Map<String, Object> tempInstanceState)
 	{
 		// call super
-		super.onCreate(savedInstanceState);
+		super.onCreate(savedInstanceState, tempInstanceState);
 		
 		// setup media set list
 		this.setupMediaSetList();
 		
+		// check saved state
+		boolean isValidTempState = (tempInstanceState != null);
+		Mode savedMode = null;
+		MediaSetList savedMediaSetList = null;
+		MediaList savedDefaultMediaList = null;
+		MediaList savedMediaList = null;
+		if(isValidTempState)
+		{
+			// get saved states
+			savedMode = (Mode)tempInstanceState.get(STATE_KEY_MODE);
+			savedMediaSetList = (MediaSetList)tempInstanceState.get(STATE_KEY_MEDIA_SET_LIST);
+			savedDefaultMediaList = (MediaList)tempInstanceState.get(STATE_KEY_DEFAULT_MEDIA_LIST);
+			savedMediaList = (MediaList)tempInstanceState.get(STATE_KEY_MEDIA_LIST);
+			
+			// validate saved states
+			isValidTempState = (savedMode != null
+					&& savedMediaSetList == m_MediaSetList
+			);
+			
+			// use of release saved states
+			if(isValidTempState)
+			{
+				m_DefaultMediaList = savedDefaultMediaList;
+				m_MediaList = savedMediaList;
+			}
+			else
+			{
+				if(savedDefaultMediaList != null)
+					savedDefaultMediaList.release();
+				if(savedMediaList != null)
+					savedMediaList.release();
+			}
+		}
+		
 		// setup UI
 		this.setupUI();
+		
+		// restore mode
+		if(isValidTempState)
+			this.changeMode(savedMode, false);
 	}
 	
 	
@@ -594,6 +640,9 @@ public class OPGalleryActivity extends GalleryActivity
 		// deactivate media manager
 		m_MediaManagerActivateHandle = Handle.close(m_MediaManagerActivateHandle);
 		
+		// update state
+		m_IsInstanceStateSaved = false;
+		
 		// call super
 		super.onPause();
 	}
@@ -601,12 +650,23 @@ public class OPGalleryActivity extends GalleryActivity
 	
 	// Called when saving instance state.
 	@Override
-	protected void onSaveInstanceState(Bundle outState)
+	protected void onSaveInstanceState(Bundle outState, Map<String, Object> tempOutState)
 	{
-		//
+		// save current mode
+		tempOutState.put(STATE_KEY_MODE, m_Mode);
+		
+		// save media set list
+		tempOutState.put(STATE_KEY_MEDIA_SET_LIST, m_MediaSetList);
+		
+		// save media lists
+		tempOutState.put(STATE_KEY_DEFAULT_MEDIA_LIST, m_DefaultMediaList);
+		tempOutState.put(STATE_KEY_MEDIA_LIST, m_MediaList);
 		
 		// call super
-		super.onSaveInstanceState(outState);
+		super.onSaveInstanceState(outState, tempOutState);
+		
+		// update state
+		m_IsInstanceStateSaved = true;
 	}
 	
 	
@@ -712,11 +772,19 @@ public class OPGalleryActivity extends GalleryActivity
 			GalleryApplication.current().getHandler().postDelayed(m_ReleaseSharedMediaSetListRunnable, DURATION_RELEASE_MEDIA_SET_LIST_DELAY);
 		}
 		
-		// close default media list
-		if(m_DefaultMediaList != null)
+		// close media lists
+		if(!m_IsInstanceStateSaved)
 		{
-			m_DefaultMediaList.release();
-			m_DefaultMediaList = null;
+			if(m_DefaultMediaList != null)
+			{
+				m_DefaultMediaList.release();
+				m_DefaultMediaList = null;
+			}
+			if(m_MediaList != null)
+			{
+				m_MediaList.release();
+				m_MediaList = null;
+			}
 		}
 		
 		// clear references

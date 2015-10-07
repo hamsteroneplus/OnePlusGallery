@@ -4,8 +4,10 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import android.app.AlertDialog;
 import android.app.Dialog;
@@ -54,7 +56,13 @@ public abstract class GalleryActivity extends BaseActivity
 	
 	
 	// Constants.
+	private static final String STATE_KEY_PREFIX = (GalleryActivity.class.getName() + ".");
+	private static final String STATE_KEY_TEMP_STATE_KEY = (STATE_KEY_PREFIX + "TempInstanceStateKey");
 	private static final int REQUEST_CODE_SHARE_MEDIA = (Integer.MAX_VALUE - 1);
+	
+	
+	// Static fields.
+	private final static HashMap<Integer, Map<String, Object>> m_TempInstanceStates = new HashMap<>();
 	
 	
 	// Fields.
@@ -492,6 +500,22 @@ public abstract class GalleryActivity extends BaseActivity
 	}
 	
 	
+	// Get temporary instance state.
+	private Map<String, Object> getTempInstanceState(Bundle savedInstanceState, boolean remove)
+	{
+		if(savedInstanceState == null)
+			return null;
+		int key = savedInstanceState.getInt(STATE_KEY_TEMP_STATE_KEY, 0);
+		if(key != 0)
+		{
+			if(remove)
+				return m_TempInstanceStates.remove(key);
+			return m_TempInstanceStates.get(key);
+		}
+		return null;
+	}
+	
+	
 	/**
 	 * Go back to previous state.
 	 */
@@ -543,11 +567,20 @@ public abstract class GalleryActivity extends BaseActivity
 	
 	// Called when creating.
 	@Override
-	protected void onCreate(Bundle savedInstanceState)
+	protected final void onCreate(Bundle savedInstanceState)
 	{
-		// call super
 		super.onCreate(savedInstanceState);
-		
+		this.onCreate(savedInstanceState, this.getTempInstanceState(savedInstanceState, false));
+	}
+	
+	
+	/**
+	 * Called when creating activity.
+	 * @param savedInstanceState Saved instance state.
+	 * @param tempInstanceState Temporary instance state.
+	 */
+	protected void onCreate(Bundle savedInstanceState, Map<String, Object> tempInstanceState)
+	{
 		// initialize screen size
 		this.updateScreenSize();
 		
@@ -564,6 +597,46 @@ public abstract class GalleryActivity extends BaseActivity
 		});
 		this.checkStatusBarVisibility(decorView.getSystemUiVisibility(), null);
 	}
+	
+	
+	// Restore instance state
+	@Override
+	protected final void onRestoreInstanceState(Bundle savedInstanceState)
+	{
+		super.onRestoreInstanceState(savedInstanceState);
+		this.onRestoreInstanceState(savedInstanceState, this.getTempInstanceState(savedInstanceState, true));
+	}
+	
+	
+	/**
+	 * Called when restoring instance state.
+	 * @param savedInstanceState Saved instance state.
+	 * @param tempInstanceState Temporary instance state.
+	 */
+	protected void onRestoreInstanceState(Bundle savedInstanceState, Map<String, Object> tempInstanceState)
+	{}
+	
+	
+	// Save instance state.
+	@Override
+	protected final void onSaveInstanceState(Bundle outState)
+	{
+		super.onSaveInstanceState(outState);
+		Map<String, Object> tempOutState = new HashMap<>();
+		this.onSaveInstanceState(outState, tempOutState);
+		int key = this.hashCode();
+		outState.putInt(STATE_KEY_TEMP_STATE_KEY, key);
+		m_TempInstanceStates.put(key, tempOutState);
+	}
+	
+	
+	/**
+	 * Called when saving instance state.
+	 * @param outState Bundle to save instance state.
+	 * @param tempOutState Temporary instance state container.
+	 */
+	protected void onSaveInstanceState(Bundle outState, Map<String, Object> tempOutState)
+	{}
 	
 	
 	/**
