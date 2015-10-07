@@ -639,7 +639,7 @@ public class GridViewFragment extends GalleryFragment {
 					break;
 				}
 				case R.id.toolbar_delete:
-					//TODO
+					getGalleryActivity().shareMedia(getSelectedMedia());
 					break;
 				}
 				return false;
@@ -743,8 +743,11 @@ public class GridViewFragment extends GalleryFragment {
 			m_Toolbar.setOnMenuItemClickListener(null);
 		}
 			
-		m_EmptyMediaView = null;
-		m_EmptyMediaView.setOnClickListener(null);
+		if(m_EmptyMediaView != null) {
+			m_EmptyMediaView.setOnClickListener(null);
+			m_EmptyMediaView = null;	
+		}
+		
 		// call super
 		super.onDestroyView();
 	}
