@@ -46,6 +46,7 @@ public class MediaSetListFragment extends GalleryFragment
 	// Fields
 	private Activity m_Activity;
 	private RelativeLayout m_AddAlbumButton;
+	private ArrayList<Handle> m_DecodingImageHandles = new ArrayList<Handle>();
 	private MediaSetListAdapter m_MediaSetListAdapter;
 	private ListView m_MediaSetListView;
 	private MediaSetList m_MediaSetList;
@@ -184,10 +185,31 @@ public class MediaSetListFragment extends GalleryFragment
 				set(PROP_IS_SELECTION_MODE, false);					
 			}
 		});
+		
+		// decode mediaSetCover image
+		setMediaSetList(m_MediaSetList);
+		
 		onSelectionModeChanged(get(PROP_IS_SELECTION_MODE));
 	}
 	
 	
+	
+	@Override
+	public void onPause() {
+		super.onPause();
+		
+		// clear decoding handles
+		if(!m_DecodingImageHandles.isEmpty())
+		{
+			for(Handle handle : m_DecodingImageHandles)
+				Handle.close(handle);
+			m_DecodingImageHandles.clear();
+		}
+		m_MediaSetCoverImageTable.clear();
+	}
+
+
+
 	private void onSelectionModeChanged(boolean isSelectionMode)
 	{
 		if(isSelectionMode)
@@ -451,7 +473,7 @@ public class MediaSetListFragment extends GalleryFragment
 				{
 					if(targetGridCount == 1)
 					{
-						BitmapPool.DEFAULT_THUMBNAIL.decode(mediaList.get(0).getFilePath(), 512, 512, 0, new BitmapPool.Callback() {
+						Handle handle = BitmapPool.DEFAULT_THUMBNAIL.decode(mediaList.get(0).getFilePath(), 512, 512, 0, new BitmapPool.Callback() {
 							@Override
 							public void onBitmapDecoded(Handle handle, String filePath, Bitmap bitmap) {
 						
@@ -464,9 +486,13 @@ public class MediaSetListFragment extends GalleryFragment
 								
 								// decode next media set
 								createMediaListCoverImageFromQueue();
+								
+								// remove handle
+								m_DecodingImageHandles.remove(handle);
 							}
 							
-						}, getHandler());
+						}, getHandler());		
+						m_DecodingImageHandles.add(handle);
 					}
 					else
 					{
@@ -483,7 +509,7 @@ public class MediaSetListFragment extends GalleryFragment
 						{
 							final int index = i;
 							
-							m_SmallBitmapPool.decode(mediaList.get(i).getFilePath(), gridSize, gridSize, BitmapPool.FLAG_ASYNC | BitmapPool.FLAG_URGENT, new BitmapPool.Callback() {
+							Handle handle = m_SmallBitmapPool.decode(mediaList.get(i).getFilePath(), gridSize, gridSize, BitmapPool.FLAG_ASYNC | BitmapPool.FLAG_URGENT, new BitmapPool.Callback() {
 								@Override
 								public void onBitmapDecoded(Handle handle, String filePath, Bitmap bitmap) {
 							
@@ -516,10 +542,14 @@ public class MediaSetListFragment extends GalleryFragment
 									
 									// decode next media set
 									createMediaListCoverImageFromQueue();
+									
+									// remove handle
+									m_DecodingImageHandles.remove(handle);
 								}
 								
 								
 							}, getHandler());
+							m_DecodingImageHandles.add(handle);
 						}		
 					}
 				}
