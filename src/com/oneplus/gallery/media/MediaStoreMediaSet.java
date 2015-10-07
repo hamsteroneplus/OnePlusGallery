@@ -204,9 +204,30 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	}
 	
 	
+	// Delete this media set.
+	@Override
+	public Handle delete(DeletionCallback callback, Handler handler, int flags)
+	{
+		return null;
+	}
+	
+	
+	/**
+	 * Delete this media set in content thread.
+	 * @param contentResolver Content resolver.
+	 * @param contentUri Content URI.
+	 * @param client Content provider client.
+	 * @return True if media deleted successfully.
+	 */
+	protected boolean delete(ContentResolver contentResolver, Uri contentUri, ContentProviderClient client) throws RemoteException
+	{
+		return false;
+	}
+	
+	
 	// Delete media.
 	@Override
-	public Handle deleteMedia(Media media, MediaDeletionCallback callback, Handler handler)
+	public Handle deleteMedia(Media media, MediaDeletionCallback callback, Handler handler, int flags)
 	{
 		// check state
 		this.verifyAccess();

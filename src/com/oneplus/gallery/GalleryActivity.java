@@ -70,7 +70,7 @@ public abstract class GalleryActivity extends BaseActivity
 	{
 		/**
 		 * Called after deleting media.
-		 * @param media Media which is deleted.
+		 * @param media Media to be deleted.
 		 * @param success True if media deleted successfully.
 		 */
 		public void onDeletionCompleted(Media media, boolean success)
@@ -93,6 +93,40 @@ public abstract class GalleryActivity extends BaseActivity
 		 * @param media Media to be deleted.
 		 */
 		public void onDeletionStarted(Media media)
+		{}
+	}
+	
+	
+	/**
+	 * Media set deletion call-back class.
+	 */
+	public abstract class MediaSetDeletionCallback
+	{
+		/**
+		 * Called after deleting media set.
+		 * @param mediaSet Media set to be deleted.
+		 * @param success True if media set deleted successfully.
+		 */
+		public void onDeletionCompleted(MediaSet mediaSet, boolean success)
+		{}
+		
+		/**
+		 * Called when deletion process completed.
+		 */
+		public void onDeletionProcessCompleted()
+		{}
+		
+		/**
+		 * Called when deletion process started.
+		 */
+		public void onDeletionProcessStarted()
+		{}
+		
+		/**
+		 * Called when media set deletion started.
+		 * @param mediaSet Media set to be deleted.
+		 */
+		public void onDeletionStarted(MediaSet mediaSet)
 		{}
 	}
 	
@@ -175,7 +209,7 @@ public abstract class GalleryActivity extends BaseActivity
 	/**
 	 * Delete media.
 	 * @param mediaToDelete Media to delete.
-	 * @return True if media deleted successfully.
+	 * @return True if deletion process starts successfully.
 	 */
 	public boolean deleteMedia(Media mediaToDelete)
 	{
@@ -187,7 +221,7 @@ public abstract class GalleryActivity extends BaseActivity
 	 * Delete media.
 	 * @param mediaToDelete Media to delete.
 	 * @param callback Call-back to receive deletion state.
-	 * @return True if media deleted successfully.
+	 * @return True if deletion process starts successfully.
 	 */
 	public boolean deleteMedia(Media mediaToDelete, MediaDeletionCallback callback)
 	{
@@ -203,7 +237,7 @@ public abstract class GalleryActivity extends BaseActivity
 	/**
 	 * Delete media.
 	 * @param mediaToDelete Media to delete.
-	 * @return True if media deleted successfully.
+	 * @return True if deletion process starts successfully.
 	 */
 	public boolean deleteMedia(final Collection<Media> mediaToDelete)
 	{
@@ -215,7 +249,7 @@ public abstract class GalleryActivity extends BaseActivity
 	 * Delete media.
 	 * @param mediaToDelete Media to delete.
 	 * @param callback Call-back to receive deletion state.
-	 * @return True if media deleted successfully.
+	 * @return True if deletion process starts successfully.
 	 */
 	public boolean deleteMedia(final Collection<Media> mediaToDelete, MediaDeletionCallback callback)
 	{
@@ -413,8 +447,37 @@ public abstract class GalleryActivity extends BaseActivity
 		for(int i = mediaList.size() - 1 ; i >= 0 ; --i)
 		{
 			Media media = mediaList.get(i);
-			media.getMediaSet().deleteMedia(media, deletionCallback, handler);
+			Handle handle = media.getMediaSet().deleteMedia(media, deletionCallback, handler, 0);
+			if(!Handle.isValid(handle) && callback != null)
+			{
+				callback.onDeletionStarted(media);
+				callback.onDeletionCompleted(media, false);
+			}
 		}
+	}
+	
+	
+	/**
+	 * Delete media set.
+	 * @param mediaSetToDelete Media set to delete.
+	 * @return True if deletion process starts successfully.
+	 */
+	public boolean deleteMediaSet(Collection<MediaSet> mediaSetToDelete)
+	{
+		return this.deleteMediaSet(mediaSetToDelete, null);
+	}
+	
+	
+	/**
+	 * Delete media set.
+	 * @param mediaSetToDelete Media set to delete.
+	 * @param callback Call-back to receive deletion state.
+	 * @return True if deletion process starts successfully.
+	 */
+	public boolean deleteMediaSet(Collection<MediaSet> mediaSetToDelete, MediaSetDeletionCallback callback)
+	{
+		//
+		return false;
 	}
 	
 	

@@ -51,12 +51,26 @@ public interface MediaSet extends BaseObject, HandlerObject
 	/**
 	 * Media deletion call-back interface.
 	 */
+	interface DeletionCallback
+	{
+		/**
+		 * Called after deleting media set.
+		 * @param mediaSet {@link MediaSet} to be deleted.
+		 * @param success True if media set deleted successfully.
+		 */
+		void onDeletionCompleted(MediaSet mediaSet, boolean success);
+	}
+	
+	
+	/**
+	 * Media deletion call-back interface.
+	 */
 	interface MediaDeletionCallback
 	{
 		/**
 		 * Called after deleting media.
 		 * @param mediaSet {@link MediaSet}.
-		 * @param media Media which is deleted.
+		 * @param media Media to be deleted.
 		 * @param success True if media deleted successfully.
 		 */
 		void onDeletionCompleted(MediaSet mediaSet, Media media, boolean success);
@@ -71,13 +85,24 @@ public interface MediaSet extends BaseObject, HandlerObject
 	
 	
 	/**
+	 * Delete this media set.
+	 * @param callback Call-back to receive deletion state.
+	 * @param handler Handler to perform call-back.
+	 * @param flags Flags, reserved.
+	 * @return Handle to this operation.
+	 */
+	Handle delete(DeletionCallback callback, Handler handler, int flags);
+	
+	
+	/**
 	 * Delete media.
 	 * @param media Media to delete.
 	 * @param callback Call-back to receive deletion state.
 	 * @param handler Handler to perform call-back.
+	 * @param flags Flags, reserved.
 	 * @return Handle to this operation.
 	 */
-	Handle deleteMedia(Media media, MediaDeletionCallback callback, Handler handler);
+	Handle deleteMedia(Media media, MediaDeletionCallback callback, Handler handler, int flags);
 	
 	
 	/**
