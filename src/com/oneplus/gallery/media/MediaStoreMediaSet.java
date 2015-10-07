@@ -37,6 +37,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	private static final int MSG_HANDLE_MS_CONTENT_CHANGE = -10001;
 	private static final int MSG_ADD_MEDIA_TO_MEDIA_LIST = -10010;
 	private static final int MSG_REMOVE_MEDIA_FROM_MEDIA_LIST = -10011;
+	private static final int MSG_MEDIA_DELETED = -10020;
 	
 	
 	// Fields.
@@ -244,6 +245,8 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 					Log.e(TAG, "deleteMedia() - Fail to delete media", ex);
 					success = false;
 				}
+				if(success)
+					HandlerUtils.sendMessage(MediaStoreMediaSet.this, MSG_MEDIA_DELETED, handle.media);
 				handle.callOnDeletionCompleted(success);
 			}
 		});
@@ -328,6 +331,10 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 				this.setReadOnly(PROP_MEDIA_COUNT, msg.arg1);
 				break;
 				
+			case MSG_MEDIA_DELETED:
+				this.onMediaDeleted((Media)msg.obj);
+				break;
+				
 			case MSG_REMOVE_MEDIA_FROM_MEDIA_LIST:
 			{
 				Object[] params = (Object[])msg.obj;
@@ -342,6 +349,19 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 				super.handleMessage(msg);
 				break;
 		}
+	}
+	
+	
+	/**
+	 * Called when media has been deleted.
+	 * @param media Deleted media.
+	 */
+	protected void onMediaDeleted(Media media)
+	{
+		if(m_ActiveMediaLists == null)
+			return;
+		for(int i = m_ActiveMediaLists.size() - 1 ; i >= 0 ; --i)
+			m_ActiveMediaLists.get(i).removeMedia(media);
 	}
 	
 	

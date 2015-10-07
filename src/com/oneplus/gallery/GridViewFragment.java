@@ -639,7 +639,7 @@ public class GridViewFragment extends GalleryFragment {
 					break;
 				}
 				case R.id.toolbar_delete:
-					getGalleryActivity().shareMedia(getSelectedMedia());
+					getGalleryActivity().deleteMedia(getSelectedMedia());
 					break;
 				}
 				return false;
