@@ -319,8 +319,9 @@ public class MediaManager
 			int index = Collections.binarySearch(m_List, set, this);
 			if(index < 0)
 				return false;
-			m_List.remove(index);
 			ListChangeEventArgs e = ListChangeEventArgs.obtain(index);
+			this.raise(EVENT_MEDIA_SET_REMOVING, e);
+			m_List.remove(index);
 			this.raise(EVENT_MEDIA_SET_REMOVED, e);
 			e.recycle();
 			return true;

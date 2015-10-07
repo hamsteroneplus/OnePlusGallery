@@ -20,4 +20,8 @@ public interface MediaList extends List<Media>, BaseObject, HandlerObject
 	 * Raised when media removed.
 	 */
 	EventKey<ListChangeEventArgs> EVENT_MEDIA_REMOVED = new EventKey<>("MediaRemoved", ListChangeEventArgs.class, MediaList.class);
+	/**
+	 * Raised before removing media.
+	 */
+	EventKey<ListChangeEventArgs> EVENT_MEDIA_REMOVING = new EventKey<>("MediaRemoving", ListChangeEventArgs.class, MediaList.class);
 }

@@ -320,16 +320,18 @@ public abstract class BasicMediaList extends ListHandlerBaseObject<Media> implem
 	// Remove media from list.
 	private void removeMediaInternal(int index)
 	{
-		m_List.remove(index);
 		ListChangeEventArgs e = ListChangeEventArgs.obtain(index);
+		this.raise(EVENT_MEDIA_REMOVING, e);
+		m_List.remove(index);
 		this.raise(EVENT_MEDIA_REMOVED, e);
 		e.recycle();
 	}
 	private void removeMediaInternal(int startIndex, int endIndex)
 	{
+		ListChangeEventArgs e = ListChangeEventArgs.obtain(startIndex, endIndex);
+		this.raise(EVENT_MEDIA_REMOVING, e);
 		for(int i = startIndex ; i <= endIndex ; ++i)
 			m_List.remove(i);
-		ListChangeEventArgs e = ListChangeEventArgs.obtain(startIndex, endIndex);
 		this.raise(EVENT_MEDIA_REMOVED, e);
 		e.recycle();
 	}
