@@ -453,7 +453,17 @@ public class MediaSetListFragment extends GalleryFragment
 		final int targetGridCount;
 		final int gridPerRow;
 		final int gridPerColumn;
-		if(mediaSetSize <= 20)
+		if(mediaSetSize == 0)
+		{
+			m_MediaSetCoverImageTable.put(mediaSet, new Object());
+			
+			// notify data changed
+			if(m_MediaSetListAdapter != null)
+				m_MediaSetListAdapter.notifyDataSetChanged();
+			
+			return;
+		}
+		else if(mediaSetSize <= 20)
 		{
 			targetGridCount = 1;
 			gridPerRow = 1;
