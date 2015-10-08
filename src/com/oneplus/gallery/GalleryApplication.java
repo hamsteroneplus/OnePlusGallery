@@ -2,7 +2,10 @@ package com.oneplus.gallery;
 
 import com.oneplus.base.HandlerObject;
 import com.oneplus.base.Log;
+import com.oneplus.base.ThreadMonitor;
+import com.oneplus.gallery.cache.CacheManager;
 import com.oneplus.gallery.media.MediaManager;
+import com.oneplus.gallery.media.ThumbnailImageManager;
 
 import android.app.Application;
 import android.os.Handler;
@@ -75,6 +78,9 @@ public final class GalleryApplication extends Application implements HandlerObje
 		
 		Log.v(TAG, "onCreate()");
 		
+		// prepare thread monitor
+		ThreadMonitor.prepare();
+		
 		// create handler
 		m_MainThread = Thread.currentThread();
 		m_Handler = new Handler();
@@ -87,7 +93,24 @@ public final class GalleryApplication extends Application implements HandlerObje
 		}
 		
 		// initialize static components
+		CacheManager.initialize();
+		ThumbnailImageManager.initialize();
 		MediaManager.initialize();
+	}
+	
+	
+	// Called when stopping application.
+	@Override
+	public void onTerminate()
+	{
+		Log.v(TAG, "onTerminate()");
+		
+		// deinitialize static components
+		ThumbnailImageManager.deinitialize();
+		CacheManager.deinitialize();
+		
+		// call super
+		super.onTerminate();
 	}
 	
 	

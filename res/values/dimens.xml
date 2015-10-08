@@ -40,4 +40,7 @@
 	<dimen name="filmstrip_footer_container_height">50dp</dimen>
 	<dimen name="filmstrip_footer_item_padding">9dp</dimen>
 	
+	<!-- Thumbnail image -->
+	<dimen name="thumbnail_image_manager_thumb_size_small">90dp</dimen>
+	
 </resources>

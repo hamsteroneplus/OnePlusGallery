@@ -1,5 +1,7 @@
 package com.oneplus.gallery.media;
 
+import java.io.File;
+
 import com.oneplus.database.CursorUtils;
 
 import android.database.Cursor;
@@ -24,6 +26,7 @@ public abstract class MediaStoreMedia implements Media
 		FileColumns.DATA,
 		FileColumns.SIZE,
 		MediaColumns.MIME_TYPE,
+		MediaColumns.DATE_MODIFIED,
 		ImageColumns.DATE_TAKEN,
 		MediaColumns.WIDTH,
 		MediaColumns.HEIGHT,
@@ -35,8 +38,10 @@ public abstract class MediaStoreMedia implements Media
 	// Fields.
 	private final Uri m_ContentUri;
 	private final String m_FilePath;
+	private volatile long m_FileSize;
 	private final Handler m_Handler;
 	private final boolean m_IsOriginal;
+	private volatile long m_LastModifiedTime;
 	private final MediaSet m_MediaSet;
 	private final String m_MimeType;
 	private final int[] m_Size = new int[2];
@@ -68,6 +73,34 @@ public abstract class MediaStoreMedia implements Media
 		m_IsOriginal = isOriginal;
 		m_FilePath = CursorUtils.getString(cursor, MediaColumns.DATA);
 		m_MimeType = CursorUtils.getString(cursor, FileColumns.MIME_TYPE);
+		
+		// get file size
+		File file = null;
+		m_FileSize = CursorUtils.getLong(cursor, FileColumns.SIZE, 0L);
+		if(m_FileSize <= 0 && m_FilePath != null)
+		{
+			try
+			{
+				file = new File(m_FilePath);
+				m_FileSize = file.length();
+			}
+			catch(Throwable ex)
+			{}
+		}
+		
+		// get modified time
+		m_LastModifiedTime = CursorUtils.getLong(cursor, MediaColumns.DATE_MODIFIED, 0L);
+		if(m_LastModifiedTime <= 0 && m_FilePath != null)
+		{
+			try
+			{
+				if(file == null)
+					file = new File(m_FilePath);
+				m_LastModifiedTime = file.lastModified();
+			}
+			catch(Throwable ex)
+			{}
+		}
 		
 		// get size
 		this.setupSize(cursor, m_Size);
@@ -162,6 +195,14 @@ public abstract class MediaStoreMedia implements Media
 	}
 	
 	
+	// Get file size.
+	@Override
+	public long getFileSize()
+	{
+		return m_FileSize;
+	}
+	
+	
 	// Get handler.
 	@Override
 	public Handler getHandler()
@@ -175,6 +216,14 @@ public abstract class MediaStoreMedia implements Media
 	public int getHeight()
 	{
 		return m_Size[1];
+	}
+	
+	
+	// Get last modified time.
+	@Override
+	public long getLastModifiedTime()
+	{
+		return m_LastModifiedTime;
 	}
 	
 	

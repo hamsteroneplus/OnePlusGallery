@@ -24,6 +24,20 @@ public interface Media extends HandlerObject
 	
 	
 	/**
+	 * Get file size.
+	 * @return File size in bytes.
+	 */
+	long getFileSize();
+	
+	
+	/**
+	 * Get last modified time.
+	 * @return Last modified time.
+	 */
+	long getLastModifiedTime();
+	
+	
+	/**
 	 * Get {@link MediaSet} which contains this media.
 	 * @return {@link MediaSet}.
 	 */

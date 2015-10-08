@@ -19,6 +19,7 @@ import com.oneplus.base.PropertySource;
 import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaList;
 import com.oneplus.gallery.media.MediaSet;
+import com.oneplus.gallery.media.ThumbnailImageManager;
 import com.oneplus.gallery.media.VideoMedia;
 import com.oneplus.media.BitmapPool;
 import com.oneplus.media.CenterCroppedBitmapPool;
@@ -80,13 +81,13 @@ public class GridViewFragment extends GalleryFragment {
 	private MediaList m_MediaList = null;
 	private PreDecodeBitmapRunnable m_PreDecodeBitmapRunnable;
 	private List<Media> m_SelectionMeidaList = new ArrayList<>();
+	private Handle m_ThumbManagerActivateHandle;
 	private Toolbar m_Toolbar;
 	private String m_ToolbarTitle = null;
 	private boolean m_ToolbarActionShared = false;
 	private int m_TouchedPosition = GridView.INVALID_POSITION;
 //	private boolean m_SetEmptyMediaView = false;
 	
-	private static BitmapPool m_BitmapPool = new CenterCroppedBitmapPool("GridViewFragmentBitmapPool", 64 << 20, Bitmap.Config.ARGB_8888, 3);
 	private static BitmapPool m_SmallBitmapPool = new CenterCroppedBitmapPool("GridViewFragmentSmallBitmapPool", 32 << 20, Bitmap.Config.RGB_565, 4, BitmapPool.FLAG_USE_EMBEDDED_THUMB_ONLY);
 	private GalleryActivity.MediaDeletionCallback m_DeleteCallback = new GalleryActivity.MediaDeletionCallback() {
 		@Override
@@ -143,23 +144,15 @@ public class GridViewFragment extends GalleryFragment {
 			}
 		};
 		public Handle smallThumbDecodeHandle;
-		public final BitmapPool.Callback thumbDecodeCallback = new BitmapPool.Callback()
+		public final ThumbnailImageManager.DecodingCallback thumbDecodeCallback = new ThumbnailImageManager.DecodingCallback()
 		{
-			public void onBitmapDecoded(Handle handle, Uri contentUri, Bitmap bitmap) 
+			@Override
+			public void onThumbnailImageDecoded(Handle handle, Media media, Bitmap thumb)
 			{
-				if(handle == thumbDecodeHandle && bitmap != null)
+				if(handle == thumbDecodeHandle && thumb != null)
 				{
 					thumbDecoded = true;
-					thumbnailImageView.setImageBitmap(bitmap);
-					GridViewFragment.this.removeDecodingHandle(handle);
-				}
-			}
-			public void onBitmapDecoded(Handle handle, String filePath, Bitmap bitmap)
-			{
-				if(handle == thumbDecodeHandle && bitmap != null)
-				{
-					thumbDecoded = true;
-					thumbnailImageView.setImageBitmap(bitmap);
+					thumbnailImageView.setImageBitmap(thumb);
 					GridViewFragment.this.removeDecodingHandle(handle);
 				}
 			}
@@ -195,15 +188,12 @@ public class GridViewFragment extends GalleryFragment {
 				m_HandleSet.clear();
 			}
 		}
-		
-		private final BitmapPool.Callback preDecodeCallback = new BitmapPool.Callback()
+		private final ThumbnailImageManager.DecodingCallback preDecodeCallback = new ThumbnailImageManager.DecodingCallback()
 		{
-			public void onBitmapDecoded(Handle handle, String filePath, Bitmap bitmap)
+			@Override
+			public void onThumbnailImageDecoded(Handle handle, Media media, Bitmap thumb)
 			{
-				if(bitmap != null)
-				{
-					m_HandleSet.remove(handle);
-				}
+				m_HandleSet.remove(handle);
 			}
 		};
 		@Override
@@ -214,19 +204,17 @@ public class GridViewFragment extends GalleryFragment {
 					return;
 				final int visibleLastposition = m_ActivityRef.get().m_GridView.getLastVisiblePosition();
 				final int visibleFirstposition = m_ActivityRef.get().m_GridView.getFirstVisiblePosition();
-				final int itemWidth = m_ActivityRef.get().m_GridviewItemWidth;
-				final int itemHeight = m_ActivityRef.get().m_GridviewItemHeight;
 				final Handler handler = m_ActivityRef.get().getHandler();
 				// visibleLastPosition could be -1
 				for(int i = visibleLastposition; i >= 0 && i < (visibleLastposition + PRE_DECODE_BITMAP_COUNTS) && i < medialist.size() ; ++i) {
 					Media media = medialist.get(i);
-					Handle handle = m_BitmapPool.decode(media.getFilePath(), itemWidth, itemHeight, BitmapPool.FLAG_ASYNC, preDecodeCallback, handler);
+					Handle handle = ThumbnailImageManager.decodeSmallThumbnailImage(media, ThumbnailImageManager.FLAG_ASYNC, preDecodeCallback, handler);
 					m_HandleSet.add(handle);
 				}
 				
 				for(int i = visibleFirstposition; i > (visibleFirstposition - PRE_DECODE_BITMAP_COUNTS) && i >= 0; --i) {
 					Media media = medialist.get(i);
-					Handle handle = m_BitmapPool.decode(media.getFilePath(), itemWidth, itemHeight, BitmapPool.FLAG_ASYNC, preDecodeCallback, handler);
+					Handle handle = ThumbnailImageManager.decodeSmallThumbnailImage(media, ThumbnailImageManager.FLAG_ASYNC, preDecodeCallback, handler);
 					m_HandleSet.add(handle);
 				}
 				
@@ -481,7 +469,6 @@ public class GridViewFragment extends GalleryFragment {
 	public void onResume() {
 //		Log.d(TAG, "onResume() m_SetEmptyMediaView:" + m_SetEmptyMediaView);
 		super.onResume();
-			
 	}
 
 
@@ -494,7 +481,6 @@ public class GridViewFragment extends GalleryFragment {
 		else
 			Log.e(TAG, "m_MediaList size: 0 or NPE");
 		// Shrink BitmapPool size to 16MB when Gallery is not visible
-		m_BitmapPool.shrink(16 << 20);
 		m_SmallBitmapPool.shrink(16 << 20);
 		
 		// Cancel on-going visible gridview items 
@@ -513,6 +499,9 @@ public class GridViewFragment extends GalleryFragment {
 			}
 			m_ToolbarActionShared = false;
 		}
+		
+		// deactivate thumbnail image manager
+		m_ThumbManagerActivateHandle = Handle.close(m_ThumbManagerActivateHandle);
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -606,6 +595,10 @@ public class GridViewFragment extends GalleryFragment {
 			}
 			m_ToolbarActionShared = false;
 		}
+		
+		// activate thumbnail image manager
+		if(!Handle.isValid(m_ThumbManagerActivateHandle))
+			m_ThumbManagerActivateHandle = ThumbnailImageManager.activate();
 	} 
 
 
@@ -954,7 +947,6 @@ public class GridViewFragment extends GalleryFragment {
 				//recycled view
 				holder = (GridViewItemHolder) convertView.getTag();
 				((ViewGroup)holder.typeIconView.getParent()).setVisibility(View.GONE);
-				holder.thumbnailImageView.setScaleType(ScaleType.CENTER_CROP);
 				
 			}
 			holder.thumbnailImageView.setImageDrawable(m_GreySquare);
@@ -981,6 +973,7 @@ public class GridViewFragment extends GalleryFragment {
 					holder.thumbDecodeHandle = null;
 				}else {
 					holder.thumbnailImageView.setBackground(null);
+					holder.thumbnailImageView.setScaleType(ScaleType.CENTER_CROP);
 //					Log.e(TAG, "holder.m_ItemPosition: " + holder.position);
 					// -1 for the first one for CameraIcon to start camera activity
 					Media media = m_MediaList.get(m_IsCameraRoll ? position - 1 : position);
@@ -990,14 +983,13 @@ public class GridViewFragment extends GalleryFragment {
 					if(filePath != null)
 					{
 						holder.smallThumbDecodeHandle = m_SmallBitmapPool.decode(media.getFilePath(), m_GridviewItemWidth, m_GridviewItemHeight, BitmapPool.FLAG_ASYNC | BitmapPool.FLAG_URGENT, holder.smallThumbDecodeCallback, GridViewFragment.this.getHandler());
-						holder.thumbDecodeHandle = m_BitmapPool.decode(media.getFilePath(), m_GridviewItemWidth, m_GridviewItemHeight, BitmapPool.FLAG_ASYNC | BitmapPool.FLAG_URGENT, holder.thumbDecodeCallback, GridViewFragment.this.getHandler());
 					}
 					else
 					{
 						int mediaType = (media instanceof VideoMedia ? BitmapPool.MEDIA_TYPE_VIDEO : BitmapPool.MEDIA_TYPE_PHOTO);
 						holder.smallThumbDecodeHandle = m_SmallBitmapPool.decode(getActivity(), holder.contentUri, mediaType, m_GridviewItemWidth, m_GridviewItemHeight, BitmapPool.FLAG_ASYNC | BitmapPool.FLAG_URGENT, holder.smallThumbDecodeCallback, GridViewFragment.this.getHandler());
-						holder.thumbDecodeHandle = m_BitmapPool.decode(getActivity(), holder.contentUri, mediaType, m_GridviewItemWidth, m_GridviewItemHeight, BitmapPool.FLAG_ASYNC | BitmapPool.FLAG_URGENT, holder.thumbDecodeCallback, GridViewFragment.this.getHandler());
 					}
+					holder.thumbDecodeHandle = ThumbnailImageManager.decodeSmallThumbnailImage(media, ThumbnailImageManager.FLAG_ASYNC | ThumbnailImageManager.FLAG_URGENT, holder.thumbDecodeCallback, GridViewFragment.this.getHandler());
 					
 					m_DecodeHandleSet.add(holder.smallThumbDecodeHandle);
 					m_DecodeHandleSet.add(holder.thumbDecodeHandle);

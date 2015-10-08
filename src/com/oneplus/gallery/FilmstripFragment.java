@@ -34,6 +34,7 @@ import com.oneplus.base.ScreenSize;
 import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaList;
 import com.oneplus.gallery.media.PhotoMedia;
+import com.oneplus.gallery.media.ThumbnailImageManager;
 import com.oneplus.gallery.media.VideoMedia;
 import com.oneplus.media.BitmapPool;
 import com.oneplus.widget.FilmstripView;
@@ -61,7 +62,6 @@ public class FilmstripFragment extends GalleryFragment
 	
 	// Constants
 	private final static BitmapPool BITMAP_POOL_HIGH_RESOLUTION = new BitmapPool("FilmstripHighResBitmapPool", 64 << 20, 16 << 20, Bitmap.Config.ARGB_8888, 2, 0);
-	private final static BitmapPool BITMAP_POOL_LOW_RESOLUTION = new BitmapPool("FilmstripLowResBitmapPool", 32 << 20, 16 << 20, Bitmap.Config.RGB_565, 3, 0);
 	private final static BitmapPool BITMAP_POOL_MEDIUM_RESOLUTION = new BitmapPool("FilmstripMediumResBitmapPool", 32 << 20, 16 << 20, Bitmap.Config.ARGB_8888, 3, 0);
 	private static final long DURATION_ANIMATION = 150;
 	private static final int PRE_DECODE_THUMB_WINDOW_SIZE = 2;
@@ -120,13 +120,12 @@ public class FilmstripFragment extends GalleryFragment
 	private boolean m_IsOverScaledDown;
 	private boolean m_IsScaled;
 	private boolean m_IsToolbarVisible;
-	private Handle m_LowResBitmapActiveHandle;
-	private final BitmapPool.Callback m_LowResBitmapDecodeCallback = new BitmapPool.Callback() 
+	private final ThumbnailImageManager.DecodingCallback m_LowResBitmapDecodeCallback = new ThumbnailImageManager.DecodingCallback()
 	{
 		@Override
-		public void onBitmapDecoded(Handle handle, String filePath, Bitmap bitmap) 
+		public void onThumbnailImageDecoded(Handle handle, Media media, Bitmap thumb)
 		{
-			FilmstripFragment.this.onLowResImageDecoded(handle, filePath, bitmap);
+			FilmstripFragment.this.onLowResImageDecoded(handle, media, thumb);
 		}
 	};
 	private List<BitmapDecodeInfo> m_LowResBitmapDecodeInfos = new ArrayList<>();
@@ -152,6 +151,7 @@ public class FilmstripFragment extends GalleryFragment
 	private Queue<BitmapDecodeInfo> m_ReusedBitmapDecodeInfos = new ArrayDeque<>();
 	private float m_ScaleFactor;
 	private View m_ShareButton;
+	private Handle m_ThumbManagerActivateHandle;
 	private ViewVisibilityState m_ToolbarVisibilityState = ViewVisibilityState.INVISIBLE;
 	
 	
@@ -605,7 +605,7 @@ public class FilmstripFragment extends GalleryFragment
 				decodeInfo.filePath = filePath;
 				m_LowResBitmapDecodeInfos.add(decodeInfo);
 			}
-			decodeInfo.decodeHandle = BITMAP_POOL_LOW_RESOLUTION.decode(media.getFilePath(), 512, 512, BitmapPool.FLAG_URGENT, m_LowResBitmapDecodeCallback, this.getHandler());
+			decodeInfo.decodeHandle = ThumbnailImageManager.decodeSmallThumbnailImage(media, ThumbnailImageManager.FLAG_URGENT, m_LowResBitmapDecodeCallback, this.getHandler());
 			
 			Log.v(TAG, "decodeLowResolutionImage() - Start decoding low-resolution bitmap : ", filePath);
 		}
@@ -868,9 +868,10 @@ public class FilmstripFragment extends GalleryFragment
 	
 	
 	// Call when low resolution image decoded
-	private void onLowResImageDecoded(Handle handle, String filePath, Bitmap bitmap)
+	private void onLowResImageDecoded(Handle handle, Media media, Bitmap bitmap)
 	{
 		// check state
+		String filePath = media.getFilePath();
 		BitmapDecodeInfo decodeInfo = this.findBitmapDecodeInfo(m_LowResBitmapDecodeInfos, filePath);
 		if(decodeInfo == null)
 		{
@@ -1007,7 +1008,6 @@ public class FilmstripFragment extends GalleryFragment
 		// deactivate bitmap pools
 		m_HighResBitmapActiveHandle = Handle.close(m_HighResBitmapActiveHandle);
 		m_MediumResBitmapActiveHandle = Handle.close(m_MediumResBitmapActiveHandle);
-		m_LowResBitmapActiveHandle = Handle.close(m_LowResBitmapActiveHandle);
 		
 		// hide tool bar
 		this.setToolbarVisibility(false, false);
@@ -1090,7 +1090,6 @@ public class FilmstripFragment extends GalleryFragment
 		// active bitmap pools
 		m_HighResBitmapActiveHandle = BITMAP_POOL_HIGH_RESOLUTION.activate();
 		m_MediumResBitmapActiveHandle = BITMAP_POOL_MEDIUM_RESOLUTION.activate();
-		m_LowResBitmapActiveHandle = BITMAP_POOL_LOW_RESOLUTION.activate();
 		
 		// set filmstrip state
 		this.setFilmstripState(FilmstripState.BROWSE_SINGLE_PAGE);
@@ -1255,6 +1254,19 @@ public class FilmstripFragment extends GalleryFragment
 	}
 	
 	
+	// Called when onStart
+	@Override
+	public void onStart()
+	{
+		// call super
+		super.onStart();
+		
+		// activate thumbnail image manager
+		if(!Handle.isValid(m_ThumbManagerActivateHandle))
+			m_ThumbManagerActivateHandle = ThumbnailImageManager.activate();
+	}
+	
+	
 	// Call when onStop
 	@Override
 	public void onStop()
@@ -1263,6 +1275,9 @@ public class FilmstripFragment extends GalleryFragment
 		
 		// reset
 		this.resetFilmstripState();
+		
+		// deactivate thumbnail image manager
+		m_ThumbManagerActivateHandle = Handle.close(m_ThumbManagerActivateHandle);
 		
 		// call super 
 		super.onStop();

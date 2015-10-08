@@ -22,6 +22,7 @@ import android.widget.Toolbar.OnMenuItemClickListener;
 import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.LinkedList;
+
 import com.oneplus.base.EventHandler;
 import com.oneplus.base.EventKey;
 import com.oneplus.base.EventSource;
@@ -31,12 +32,13 @@ import com.oneplus.base.PropertyChangeEventArgs;
 import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.PropertySource;
+import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaComparator;
 import com.oneplus.gallery.media.MediaList;
 import com.oneplus.gallery.media.MediaSet;
 import com.oneplus.gallery.media.MediaSetList;
+import com.oneplus.gallery.media.ThumbnailImageManager;
 import com.oneplus.media.BitmapPool;
-import com.oneplus.media.CenterCroppedBitmapPool;
 
 /**
  * Fragment to display media set list.
@@ -53,7 +55,7 @@ public class MediaSetListFragment extends GalleryFragment
 	private Hashtable<MediaSet, Object> m_MediaSetCoverImageTable = new Hashtable<>();
 	private LinkedList<MediaSet> m_MediaSetDecodeQueue = new LinkedList<>();
 	private ArrayList<MediaSet> m_SelectedMediaSet = new ArrayList<MediaSet>();
-	private static BitmapPool m_SmallBitmapPool = new CenterCroppedBitmapPool("MediaSetListFragmentSmallBitmapPool", 32 << 20, Bitmap.Config.RGB_565, 4, BitmapPool.FLAG_NO_EMBEDDED_THUMB);
+	private Handle m_ThumbManagerActivateHandle;
 	private Toolbar m_Toolbar;
 	private GalleryActivity.MediaSetDeletionCallback m_MediaSetDeleteCallback = new GalleryActivity.MediaSetDeletionCallback() {
 
@@ -247,6 +249,29 @@ public class MediaSetListFragment extends GalleryFragment
 			// show add album button
 			m_AddAlbumButton.setVisibility(View.VISIBLE);
 		}	
+	}
+	
+	// Called when started.
+	@Override
+	public void onStart()
+	{
+		// call super
+		super.onStart();
+		
+		// activate thumbnail image manager
+		if(!Handle.isValid(m_ThumbManagerActivateHandle))
+			m_ThumbManagerActivateHandle = ThumbnailImageManager.activate();
+	}
+	
+	// Called when stoped.
+	@Override
+	public void onStop()
+	{
+		// deactivate thumbnail image manager
+		m_ThumbManagerActivateHandle = Handle.close(m_ThumbManagerActivateHandle);
+		
+		// call super
+		super.onStop();
 	}
 	
 	// Set property value.
@@ -529,10 +554,11 @@ public class MediaSetListFragment extends GalleryFragment
 						{
 							final int index = i;
 							
-							Handle handle = m_SmallBitmapPool.decode(mediaList.get(i).getFilePath(), gridSize, gridSize, BitmapPool.FLAG_ASYNC | BitmapPool.FLAG_URGENT, new BitmapPool.Callback() {
+							Handle handle = ThumbnailImageManager.decodeSmallThumbnailImage(mediaList.get(i), ThumbnailImageManager.FLAG_ASYNC, new ThumbnailImageManager.DecodingCallback()
+							{
 								@Override
-								public void onBitmapDecoded(Handle handle, String filePath, Bitmap bitmap) {
-							
+								public void onThumbnailImageDecoded(Handle handle, Media media, Bitmap thumb)
+								{
 									// gridCoverImageRect
 									int rectLeft = (index * gridSize) % coverWidth;
 									int rectTop = (index / gridPerRow) * gridSize;
@@ -541,17 +567,17 @@ public class MediaSetListFragment extends GalleryFragment
 									int bitmapRectLeft = 0;
 									int bitmapRectTop = 0;
 									int shortSide = 0;
-									if(bitmap.getHeight() >= bitmap.getWidth())
+									if(thumb.getHeight() >= thumb.getWidth())
 									{
-										shortSide = bitmap.getWidth();
-										bitmapRectTop = (bitmap.getHeight() - bitmap.getWidth())/2;
+										shortSide = thumb.getWidth();
+										bitmapRectTop = (thumb.getHeight() - thumb.getWidth())/2;
 									}
 									else
 									{
-										shortSide = bitmap.getHeight();
-										bitmapRectLeft = (bitmap.getWidth() - bitmap.getHeight())/2;
+										shortSide = thumb.getHeight();
+										bitmapRectLeft = (thumb.getWidth() - thumb.getHeight())/2;
 									}	
-									canvas.drawBitmap(bitmap, new Rect(bitmapRectLeft, bitmapRectTop, bitmapRectLeft+shortSide, bitmapRectTop+shortSide), new Rect(rectLeft, rectTop, rectLeft+gridSize, rectTop+gridSize), null);
+									canvas.drawBitmap(thumb, new Rect(bitmapRectLeft, bitmapRectTop, bitmapRectLeft+shortSide, bitmapRectTop+shortSide), new Rect(rectLeft, rectTop, rectLeft+gridSize, rectTop+gridSize), null);
 									
 									// update bitmap table
 									m_MediaSetCoverImageTable.put(mediaSet, gridCover);
@@ -566,8 +592,6 @@ public class MediaSetListFragment extends GalleryFragment
 									// remove handle
 									m_DecodingImageHandles.remove(handle);
 								}
-								
-								
 							}, getHandler());
 							m_DecodingImageHandles.add(handle);
 						}		
