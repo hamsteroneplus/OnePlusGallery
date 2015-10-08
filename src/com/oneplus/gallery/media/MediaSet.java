@@ -59,6 +59,12 @@ public interface MediaSet extends BaseObject, HandlerObject
 		 * @param success True if media set deleted successfully.
 		 */
 		void onDeletionCompleted(MediaSet mediaSet, boolean success);
+		
+		/**
+		 * Called after starting deletion.
+		 * @param mediaSet {@link MediaSet}.
+		 */
+		void onDeletionStarted(MediaSet mediaSet);
 	}
 	
 	

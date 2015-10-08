@@ -39,6 +39,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	private static final int MSG_ADD_MEDIA_TO_MEDIA_LIST = -10010;
 	private static final int MSG_REMOVE_MEDIA_FROM_MEDIA_LIST = -10011;
 	private static final int MSG_MEDIA_DELETED = -10020;
+	private static final int MSG_MEDIA_SET_DELETED = -10021;
 	
 	
 	// Fields.
@@ -175,6 +176,61 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 		{}
 	}
 	
+	// Class for media set deletion handle.
+	private final class MediaSetDeletionHandle extends Handle
+	{
+		public final DeletionCallback callback;
+		public final Handler callbackHandler;
+		
+		public MediaSetDeletionHandle(DeletionCallback callback, Handler handler)
+		{
+			super("DeleteMediaSet");
+			this.callback = callback;
+			this.callbackHandler = handler;
+		}
+		
+		public void callOnDeletionCompleted(final boolean success)
+		{
+			if(this.callback == null)
+				return;
+			if(this.callbackHandler != null && this.callbackHandler.getLooper().getThread() != Thread.currentThread())
+			{
+				this.callbackHandler.post(new Runnable()
+				{
+					@Override
+					public void run()
+					{
+						callback.onDeletionCompleted(MediaStoreMediaSet.this, success);
+					}
+				});
+			}
+			else
+				this.callback.onDeletionCompleted(MediaStoreMediaSet.this, success);
+		}
+		
+		public void callOnDeletionStarted()
+		{
+			if(this.callback == null)
+				return;
+			if(this.callbackHandler != null && this.callbackHandler.getLooper().getThread() != Thread.currentThread())
+			{
+				this.callbackHandler.post(new Runnable()
+				{
+					@Override
+					public void run()
+					{
+						callback.onDeletionStarted(MediaStoreMediaSet.this);
+					}
+				});
+			}
+			else
+				this.callback.onDeletionStarted(MediaStoreMediaSet.this);
+		}
+
+		@Override
+		protected void onClose(int flags)
+		{}
+	}
 	
 	/**
 	 * Initialize new MediaStoreMediaSet instance.
@@ -209,7 +265,49 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	@Override
 	public Handle delete(DeletionCallback callback, Handler handler, int flags)
 	{
-		return null;
+		// check state
+		this.verifyAccess();
+		if(this.get(PROP_IS_RELEASED))
+		{
+			Log.e(TAG, "delete() - Media set is released");
+			return null;
+		}
+		
+		// create handle
+		final MediaSetDeletionHandle handle = new MediaSetDeletionHandle(callback, handler);
+		
+		// delete asynchronously
+		MediaManager.accessContentProvider(CONTENT_URI_FILE, new MediaManager.ContentProviderAccessCallback()
+		{
+			@Override
+			public void onAccessContentProvider(ContentResolver contentResolver, Uri contentUri, ContentProviderClient client) throws RemoteException
+			{
+				if(!Handle.isValid(handle))
+					return;
+				handle.callOnDeletionStarted();
+				boolean success;
+				try
+				{
+					success = delete(contentResolver, contentUri, client);
+				}
+				catch(Throwable ex)
+				{
+					Log.e(TAG, "delete() - Fail to delete media set", ex);
+					success = false;
+				}		
+				
+				if(success)
+				{
+					// notify self in UI thread
+					HandlerUtils.sendMessage(MediaStoreMediaSet.this, MSG_MEDIA_SET_DELETED);
+				}
+				
+				handle.callOnDeletionCompleted(success);
+			}
+		});
+		
+		// complete
+		return handle;
 	}
 	
 	
@@ -221,7 +319,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	 * @return True if media deleted successfully.
 	 */
 	protected boolean delete(ContentResolver contentResolver, Uri contentUri, ContentProviderClient client) throws RemoteException
-	{
+	{	
 		return false;
 	}
 	
@@ -363,6 +461,10 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 				this.onMediaDeleted((Media)msg.obj);
 				break;
 				
+			case MSG_MEDIA_SET_DELETED:
+				this.onDeleted();
+				break;
+				
 			case MSG_REMOVE_MEDIA_FROM_MEDIA_LIST:
 			{
 				Object[] params = (Object[])msg.obj;
@@ -379,6 +481,32 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 		}
 	}
 	
+	/**
+	 * Called when media set has been deleted.
+	 */
+	protected void onDeleted()
+	{
+		// notify MediaManager
+		MediaManager.notifyMediaSetDeleted(MediaStoreMediaSet.this);
+		
+		// release all media lists
+		if(m_ActiveMediaLists != null && !m_ActiveMediaLists.isEmpty())
+		{
+			Log.v(TAG, "onDeleted() - Release all media lists");
+			for(int i = m_ActiveMediaLists.size() - 1 ; i >= 0 ; --i)
+			{
+				MediaListImpl mediaList = m_ActiveMediaLists.get(i).get();
+				if(mediaList != null)
+					mediaList.release();
+			}
+		}
+		
+		// cancel refresh
+		m_MediaCountRefreshHandle = Handle.close(m_MediaCountRefreshHandle);
+		
+		// reset media count
+		setReadOnly(PROP_MEDIA_COUNT, 0);
+	}
 	
 	/**
 	 * Called when media has been deleted.

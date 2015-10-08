@@ -578,6 +578,29 @@ public class MediaManager
 	}
 	
 	
+	// Called when media set is deleted 
+	public static void notifyMediaSetDeleted(MediaSet mediaSet)
+	{
+		if(mediaSet == null)
+		{
+			Log.w(TAG, "notifyMediaSetDeleted() - mediaSet is null");
+			return;
+		}
+		
+		if(mediaSet.getType() != Type.SYSTEM)
+		{
+			for(int i = m_ActiveMediaSetLists.size() - 1 ; i >= 0 ; --i)
+			{
+				MediaSetListImpl list = m_ActiveMediaSetLists.get(i).get();
+				if(list != null)
+					list.removeMediaSet(mediaSet);
+				else
+					m_ActiveMediaSetLists.remove(i);
+			}
+			mediaSet.release();
+		}	
+	}
+	
 	// Called when new directory media set created. (in main thread)
 	private static void onDirectoryMediaSetCreated(int id, String path)
 	{
@@ -613,7 +636,6 @@ public class MediaManager
 		}
 		set.release();
 	}
-	
 	
 	// Called when media set list released. (in main thread)
 	private static void onMediaSetListReleased(MediaSetListImpl list)
