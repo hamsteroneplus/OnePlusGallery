@@ -55,6 +55,16 @@ public class MediaSetListFragment extends GalleryFragment
 	private ArrayList<MediaSet> m_SelectedMediaSet = new ArrayList<MediaSet>();
 	private static BitmapPool m_SmallBitmapPool = new CenterCroppedBitmapPool("MediaSetListFragmentSmallBitmapPool", 32 << 20, Bitmap.Config.RGB_565, 4, BitmapPool.FLAG_NO_EMBEDDED_THUMB);
 	private Toolbar m_Toolbar;
+	private GalleryActivity.MediaSetDeletionCallback m_MediaSetDeleteCallback = new GalleryActivity.MediaSetDeletionCallback() {
+
+		@Override
+		public void onDeletionProcessCompleted() {
+			super.onDeletionProcessCompleted();
+			
+			// leave selection mode
+			set(PROP_IS_SELECTION_MODE, false);	
+		}	
+	};
 	
 	/**
 	 * Property to get or set selection mode.
@@ -170,9 +180,9 @@ public class MediaSetListFragment extends GalleryFragment
 			@Override
 			public boolean onMenuItemClick(MenuItem item) {
 				switch (item.getItemId()) {
-
+				
 					case R.id.toolbar_delete:
-						//TODO : delete function
+						getGalleryActivity().deleteMediaSet(m_SelectedMediaSet, m_MediaSetDeleteCallback);
 						break;
 				}
 				return false;

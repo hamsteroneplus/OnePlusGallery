@@ -108,7 +108,7 @@ public abstract class GalleryActivity extends BaseActivity
 	/**
 	 * Media set deletion call-back class.
 	 */
-	public abstract class MediaSetDeletionCallback
+	public static abstract class MediaSetDeletionCallback
 	{
 		/**
 		 * Called after deleting media set.
@@ -482,12 +482,139 @@ public abstract class GalleryActivity extends BaseActivity
 	 * @param callback Call-back to receive deletion state.
 	 * @return True if deletion process starts successfully.
 	 */
-	public boolean deleteMediaSet(Collection<MediaSet> mediaSetToDelete, MediaSetDeletionCallback callback)
+	public boolean deleteMediaSet(final Collection<MediaSet> mediaSetToDelete, final MediaSetDeletionCallback callback)
 	{
-		//
-		return false;
+		// check state
+		this.verifyAccess();
+		if(this.get(PROP_IS_DELETING_MEDIA))
+		{
+			Log.w(TAG, "deleteMedia() - Deleting media");
+			return false;
+		}
+		if(mediaSetToDelete == null || mediaSetToDelete.isEmpty())
+		{
+			Log.w(TAG, "deleteMedia() - No media set to delete");
+			return false;
+		}
+		
+		// collect media
+		boolean deleteOriginal = true;
+		
+		// select messages
+		String title = null;
+		String message = null;
+		if(mediaSetToDelete.size() == 1)
+		{
+			title = String.format(this.getString(R.string.delete_message_title_media_set), ((MediaSet)mediaSetToDelete.toArray()[0]).get(MediaSet.PROP_NAME));	
+		}
+		else
+		{
+			title = String.format(this.getString(R.string.delete_message_title_media_sets), mediaSetToDelete.size());
+		}
+		message = this.getString(deleteOriginal ? R.string.delete_message_media_set_original : R.string.delete_message_media_set);
+		
+		// confirm
+		AlertDialog dialog = new AlertDialog.Builder(this)
+			.setTitle(title)
+			.setMessage(message)
+			.setPositiveButton(R.string.dialog_button_delete, new DialogInterface.OnClickListener()
+			{
+				@Override
+				public void onClick(DialogInterface dialog, int which)
+				{
+					deleteMediaSetInternal(mediaSetToDelete, callback);
+				}
+			})
+			.setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener()
+			{
+				@Override
+				public void onClick(DialogInterface dialog, int which)
+				{
+					dialog.cancel();
+				}
+			})
+			.create();
+		dialog.show();
+		
+		// complete
+		return true;
 	}
 	
+	private void deleteMediaSetInternal(final Collection<MediaSet> mediaSetToDelete, final MediaSetDeletionCallback callback)
+	{
+		// select title
+		final Dialog dialog = new Dialog(this);
+		String title;
+		if(mediaSetToDelete.size() == 1)
+		{
+			title = String.format(this.getString(R.string.delete_message_title_deleting_media_set), ((MediaSet)mediaSetToDelete.toArray()[0]).get(MediaSet.PROP_NAME));
+		}
+		else
+		{
+			title = String.format(this.getString(R.string.delete_message_title_deleting_media_sets), mediaSetToDelete.size());
+		}
+		dialog.setTitle(title);
+		
+		// prepare content
+		dialog.setContentView(R.layout.dialog_deletion);
+		final ProgressBar progressBar = (ProgressBar)dialog.findViewById(android.R.id.progress);
+		
+		// show dialog
+		dialog.setCancelable(false);
+		dialog.show();
+		
+		// create call-back
+		final int[] deletedCount = new int[1];
+		MediaSet.DeletionCallback deletionCallback = new MediaSet.DeletionCallback()
+		{
+			@Override
+			public void onDeletionStarted(MediaSet mediaSet)
+			{
+				if(callback != null)
+					callback.onDeletionStarted(mediaSet);
+			}
+			
+			@Override
+			public void onDeletionCompleted(MediaSet mediaSet, boolean success)
+			{
+				// update state
+				++deletedCount[0];
+				boolean isLastMedia = (deletedCount[0] >= mediaSetToDelete.size());
+				if(isLastMedia)
+					setReadOnly(PROP_IS_DELETING_MEDIA, false);
+				
+				// update UI
+				if(progressBar != null)
+					progressBar.setProgress(Math.round((float)deletedCount[0] / mediaSetToDelete.size() * progressBar.getMax()));
+				if(isLastMedia && dialog != null)
+					dialog.dismiss();
+				
+				if(callback != null)
+				{
+					callback.onDeletionCompleted(mediaSet, success);
+					if(isLastMedia)
+						callback.onDeletionProcessCompleted();
+				}
+			}
+		};
+		
+		// delete media
+		Handler handler = this.getHandler();
+		this.setReadOnly(PROP_IS_DELETING_MEDIA, true);
+		if(callback != null)
+			callback.onDeletionProcessStarted();
+		for(int i = mediaSetToDelete.size() - 1 ; i >= 0 ; --i)
+		{
+			MediaSet mediaSet = (MediaSet)((List)mediaSetToDelete).get(i);
+			Handle handle = mediaSet.delete(deletionCallback, handler, 0);
+
+			if(!Handle.isValid(handle) && callback != null)
+			{
+				callback.onDeletionStarted(mediaSet);
+				callback.onDeletionCompleted(mediaSet, false);
+			}
+		}
+	}
 	
 	// Get property.
 	@SuppressWarnings("unchecked")
