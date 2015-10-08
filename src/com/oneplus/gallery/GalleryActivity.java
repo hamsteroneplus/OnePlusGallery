@@ -74,7 +74,7 @@ public abstract class GalleryActivity extends BaseActivity
 	/**
 	 * Media deletion call-back class.
 	 */
-	public abstract class MediaDeletionCallback
+	public static abstract class MediaDeletionCallback
 	{
 		/**
 		 * Called after deleting media.
@@ -259,7 +259,7 @@ public abstract class GalleryActivity extends BaseActivity
 	 * @param callback Call-back to receive deletion state.
 	 * @return True if deletion process starts successfully.
 	 */
-	public boolean deleteMedia(final Collection<Media> mediaToDelete, MediaDeletionCallback callback)
+	public boolean deleteMedia(final Collection<Media> mediaToDelete, final MediaDeletionCallback callback)
 	{
 		// check state
 		this.verifyAccess();
@@ -346,7 +346,7 @@ public abstract class GalleryActivity extends BaseActivity
 				@Override
 				public void onClick(DialogInterface dialog, int which)
 				{
-					deleteMedia(mediaList, finalMediaType, null);
+					deleteMedia(mediaList, finalMediaType, callback);
 				}
 			})
 			.setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener()

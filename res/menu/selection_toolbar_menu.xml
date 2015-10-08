@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android" >
-    
-    <item android:id="@+id/toolbar_addto" 
-        android:icon="@drawable/button_addto" 
-        android:title="@string/toolbar_selection_addto"
-        android:showAsAction="always"
-    />
-    
-    <item android:id="@+id/toolbar_share" 
-        android:icon="@drawable/button_share_normal" 
-        android:title="@string/toolbar_selection_share"
-        android:showAsAction="always"
-    />
-    
-    <item android:id="@+id/toolbar_delete" 
-        android:icon="@drawable/button_delete_normal" 
-        android:title="@string/toolbar_selection_delete"
-        android:showAsAction="always"
-    />
-
+    <group android:id="@+id/selectModeActionGroup">
+	    <item android:id="@+id/toolbar_addto" 
+	        android:icon="@drawable/button_addto" 
+	        android:title="@string/toolbar_selection_addto"
+	        android:showAsAction="always"
+	    />
+	    
+	    <item android:id="@+id/toolbar_share" 
+	        android:icon="@drawable/button_share_normal" 
+	        android:title="@string/toolbar_selection_share"
+	        android:showAsAction="always"
+	    />
+	    
+	    <item android:id="@+id/toolbar_delete" 
+	        android:icon="@drawable/button_delete_normal" 
+	        android:title="@string/toolbar_selection_delete"
+	        android:showAsAction="always"
+	    />
+	</group>
 </menu>
