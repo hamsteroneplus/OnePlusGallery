@@ -339,7 +339,7 @@ public class GridViewFragment extends GalleryFragment {
 		{
 			if(index == 0)
 			{
-				this.startActivity(new Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA));
+				this.getGalleryActivity().startCamera();
 				return;
 			}
 			--index;
@@ -775,8 +775,7 @@ public class GridViewFragment extends GalleryFragment {
 		m_EmptyMediaView.setOnClickListener(new OnClickListener() {
 			@Override
 			public void onClick(View v) {
-				Intent intent = new Intent("android.media.action.STILL_IMAGE_CAMERA");
-			    startActivity(intent);
+				getGalleryActivity().startCamera();
 			}
 		});
 		

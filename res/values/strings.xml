@@ -36,6 +36,32 @@
 	
 	<!-- Gallery activity -->
 	
+	<!-- Media details -->
+	<string name="media_details">Information</string>
+	<string name="media_details_title">Title</string>
+	<string name="media_details_item_format" formatted="false">%s: %s</string>
+	<string name="media_details_time">Time</string>
+	<string name="media_details_location">Location</string>
+	<string name="media_details_width">Width</string>
+	<string name="media_details_height">Height</string>
+	<string name="media_details_orientation">Orientation</string>
+	<string name="media_details_file_size">File size</string>
+	<string name="media_details_maker">Maker</string>
+	<string name="media_details_model">Model</string>
+	<string name="media_details_manual">Manual</string>
+	<string name="media_details_auto">Auto</string>
+	<string name="media_details_flash">Flash</string>
+	<string name="media_details_flash_on">Flash fired</string>
+	<string name="media_details_flash_off">No flash</string>
+	<string name="media_details_focal_length">Focal Length</string>
+	<string name="media_details_white_balance">White balance</string>
+	<string name="media_details_aperture">Aperture</string>
+	<string name="media_details_exposure_time">Exposure time</string>
+	<string name="media_details_iso">ISO</string>
+	<string name="media_details_duration">Duration</string>
+	<string name="media_details_path">Path</string>
+	<string name="media_details_none">No detailed information.</string>
+	<string name="media_details_processing">Retrieving information...</string>
 	
 	<!-- Media set -->
 	<string name="media_set_name_camera_roll">Camera</string>

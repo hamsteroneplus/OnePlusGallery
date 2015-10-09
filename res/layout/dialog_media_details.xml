@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent" >
+
+	<LinearLayout android:id="@+id/media_details_processing_container"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginStart="@dimen/media_details_dialog_content_margin_start"
+		android:layout_marginTop="@dimen/media_details_dialog_content_margin_top"
+		android:layout_marginEnd="@dimen/media_details_dialog_content_margin_end"
+		android:layout_marginBottom="@dimen/media_details_dialog_content_margin_bottom"
+		android:orientation="horizontal"
+		android:gravity="start|center_vertical"
+		android:visibility="gone">
+		
+		<ProgressBar 
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginEnd="@dimen/media_details_dialog_item_margin"/>
+		
+		<TextView
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:text="@string/media_details_processing"
+			android:singleLine="true"
+			android:ellipsize="end"/>
+	    
+    </LinearLayout>
+	
+	<ScrollView
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginStart="@dimen/media_details_dialog_content_margin_start"
+		android:layout_marginTop="@dimen/media_details_dialog_content_margin_top"
+		android:layout_marginEnd="@dimen/media_details_dialog_content_margin_end"
+		android:layout_marginBottom="@dimen/media_details_dialog_content_margin_bottom">
+		
+	    <LinearLayout android:id="@+id/media_details_container"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:orientation="vertical"/>
+		
+	</ScrollView>
+
+</RelativeLayout>

@@ -1,6 +1,10 @@
 package com.oneplus.gallery.media;
 
+import android.location.Location;
 import android.net.Uri;
+import android.os.Handler;
+
+import com.oneplus.base.Handle;
 import com.oneplus.base.HandlerObject;
 import com.oneplus.gallery.MediaType;
 
@@ -10,10 +14,34 @@ import com.oneplus.gallery.MediaType;
 public interface Media extends HandlerObject
 {
 	/**
+	 * Call-back interface for retrieving media details.
+	 */
+	public interface MediaDetailsCallback
+	{
+		/**
+		 * Called when media details retrieved.
+		 * @param media Media.
+		 * @param handle Handle returned from {@link Media#getDetails(MediaDetailsCallback, Handler) getDetails(MediaDetailsCallback, Handler)}.
+		 * @param details Media details.
+		 */
+		void onMediaDetailsRetrieved(Media media, Handle handle, MediaDetails details);
+	}
+	
+	
+	/**
 	 * Get content URI of this media.
 	 * @return Content URI.
 	 */
 	Uri getContentUri();
+	
+	
+	/**
+	 * Start getting media details.
+	 * @param callback Call-back to receive media details.
+	 * @param handler Handler to perform call-back.
+	 * @return Handle to this operation.
+	 */
+	Handle getDetails(MediaDetailsCallback callback, Handler handler);
 	
 	
 	/**
@@ -35,6 +63,13 @@ public interface Media extends HandlerObject
 	 * @return Last modified time.
 	 */
 	long getLastModifiedTime();
+	
+	
+	/**
+	 * Get geographic location of media.
+	 * @return Location.
+	 */
+	Location getLocation();
 	
 	
 	/**

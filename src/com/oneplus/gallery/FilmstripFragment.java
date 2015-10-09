@@ -1506,9 +1506,9 @@ public class FilmstripFragment extends GalleryFragment
 		if(!validatePosition(position))
 			return;
 
-		// TODO: show page details from activity
+		// show media details
 		Media media = m_MediaList.get(position);
-		GalleryActivity galleryActivity = this.getGalleryActivity();
+		this.getGalleryActivity().showMediaDetails(media);
 	}
 	
 	

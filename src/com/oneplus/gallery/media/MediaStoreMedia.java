@@ -2,10 +2,14 @@ package com.oneplus.gallery.media;
 
 import java.io.File;
 
+import com.oneplus.base.Handle;
+import com.oneplus.base.Log;
 import com.oneplus.database.CursorUtils;
 
 import android.database.Cursor;
+import android.location.Location;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Handler;
 import android.provider.MediaStore.MediaColumns;
 import android.provider.MediaStore.Files.FileColumns;
@@ -30,9 +34,15 @@ public abstract class MediaStoreMedia implements Media
 		ImageColumns.DATE_TAKEN,
 		MediaColumns.WIDTH,
 		MediaColumns.HEIGHT,
+		ImageColumns.LATITUDE,
+		ImageColumns.LONGITUDE,
 		ImageColumns.ORIENTATION,
 		VideoColumns.DURATION,
 	};
+	
+	
+	// Constants
+	private static final String TAG = "MediaStoreMedia";
 	
 	
 	// Fields.
@@ -42,10 +52,63 @@ public abstract class MediaStoreMedia implements Media
 	private final Handler m_Handler;
 	private final boolean m_IsOriginal;
 	private volatile long m_LastModifiedTime;
+	private volatile Location m_Location;
 	private final MediaSet m_MediaSet;
 	private final String m_MimeType;
 	private final int[] m_Size = new int[2];
 	private long m_TakenTime;
+	
+	
+	// Class for media details retrieving handle.
+	private final class MediaDetailsHandle extends Handle
+	{
+		// Fields.
+		public final MediaDetailsCallback callback;
+		public final Handler callbackHandler;
+		public volatile AsyncTask<?, ?, ?> task;
+		
+		// Constructor.
+		public MediaDetailsHandle(MediaDetailsCallback callback, Handler handler)
+		{
+			super("GetMediaDetails");
+			this.callback = callback;
+			this.callbackHandler = handler;
+		}
+		
+		// Complete.
+		public void complete(final MediaDetails details)
+		{
+			if(this.callbackHandler != null && this.callbackHandler.getLooper().getThread() != Thread.currentThread())
+			{
+				this.callbackHandler.post(new Runnable()
+				{
+					@Override
+					public void run()
+					{
+						if(Handle.isValid(MediaDetailsHandle.this))
+						{
+							callback.onMediaDetailsRetrieved(MediaStoreMedia.this, MediaDetailsHandle.this, details);
+							closeDirectly();
+						}
+					}
+				});
+			}
+			else if(Handle.isValid(this))
+			{
+				this.callback.onMediaDetailsRetrieved(MediaStoreMedia.this, this, details);
+				this.closeDirectly();
+			}
+		}
+
+		// Close handle.
+		@Override
+		protected void onClose(int flags)
+		{
+			AsyncTask<?, ?, ?> task = this.task;
+			if(task != null)
+				task.cancel(true);
+		}
+	}
 	
 	
 	/**
@@ -104,6 +167,16 @@ public abstract class MediaStoreMedia implements Media
 		
 		// get size
 		this.setupSize(cursor, m_Size);
+		
+		// get location
+		double lat = CursorUtils.getDouble(cursor, ImageColumns.LATITUDE, Double.NaN);
+		double lng = CursorUtils.getDouble(cursor, ImageColumns.LONGITUDE, Double.NaN);
+		if(!Double.isNaN(lat) && !Double.isNaN(lng))
+		{
+			m_Location = new Location("");
+			m_Location.setLatitude(lat);
+			m_Location.setLongitude(lng);
+		}
 		
 		// get taken time
 		m_TakenTime = this.setupTakenTime(cursor);
@@ -187,6 +260,58 @@ public abstract class MediaStoreMedia implements Media
 	}
 	
 	
+	// Get details.
+	@Override
+	public Handle getDetails(MediaDetailsCallback callback, Handler handler)
+	{
+		// check parameter
+		if(callback == null)
+		{
+			Log.e(TAG, "getDetails() - No call-back");
+			return null;
+		}
+		
+		// create handle
+		final MediaDetailsHandle handle = new MediaDetailsHandle(callback, handler);
+		
+		// start getting details
+		AsyncTask<Void, Void, Void> task = new AsyncTask<Void, Void, Void>()
+		{
+			@Override
+			protected Void doInBackground(Void... params)
+			{
+				if(Handle.isValid(handle))
+				{
+					MediaDetails details;
+					try
+					{
+						details = getDetails();
+					}
+					catch(Throwable ex)
+					{
+						Log.e(TAG, "getDetails() - Unhandled exception", ex);
+						details = null;
+					}
+					handle.complete(details);
+				}
+				return null;
+			}
+		};
+		handle.task = task;
+		task.execute();
+		return handle;
+	}
+	
+	
+	/**
+	 * Get media details in background thread.
+	 */
+	protected MediaDetails getDetails() throws Exception
+	{
+		return null;
+	}
+	
+	
 	// Get file path.
 	@Override
 	public String getFilePath()
@@ -224,6 +349,14 @@ public abstract class MediaStoreMedia implements Media
 	public long getLastModifiedTime()
 	{
 		return m_LastModifiedTime;
+	}
+	
+	
+	// Get location.
+	@Override
+	public Location getLocation()
+	{
+		return m_Location;
 	}
 	
 	
