@@ -57,6 +57,46 @@ public class MediaSetListFragment extends GalleryFragment
 	private ArrayList<MediaSet> m_SelectedMediaSet = new ArrayList<MediaSet>();
 	private Handle m_ThumbManagerActivateHandle;
 	private Toolbar m_Toolbar;
+	private final PropertyChangedCallback<Integer> m_MediaCountChangedCallback = new PropertyChangedCallback<Integer>()
+	{
+		@Override
+		public void onPropertyChanged(PropertySource source, PropertyKey<Integer> key, PropertyChangeEventArgs<Integer> e)
+		{
+			onMediaCountChanged((MediaSet)source, e);
+		}
+	};
+	private final EventHandler<ListChangeEventArgs> m_MediaSetAddedHandler = new EventHandler<ListChangeEventArgs>()
+	{
+		@Override
+		public void onEventReceived(EventSource source, EventKey<ListChangeEventArgs> key, ListChangeEventArgs e)
+		{
+			onMediaSetAdded(e);
+		}
+	};
+	private final PropertyChangedCallback<String> m_MediaSetNameChangedCallback = new PropertyChangedCallback<String>()
+	{
+		@Override
+		public void onPropertyChanged(PropertySource source, PropertyKey<String> key, PropertyChangeEventArgs<String> e)
+		{
+			onMediaSetNameChanged((MediaSet)source, e);
+		}
+	};
+	private final EventHandler<ListChangeEventArgs> m_MediaSetRemovedHandler = new EventHandler<ListChangeEventArgs>()
+	{
+		@Override
+		public void onEventReceived(EventSource source, EventKey<ListChangeEventArgs> key, ListChangeEventArgs e)
+		{
+			onMediaSetRemoved(e);
+		}
+	};
+	private final EventHandler<ListChangeEventArgs> m_MediaSetRemovingHandler = new EventHandler<ListChangeEventArgs>()
+	{
+		@Override
+		public void onEventReceived(EventSource source, EventKey<ListChangeEventArgs> key, ListChangeEventArgs e)
+		{
+			onMediaSetRemoving(e);
+		}
+	};
 	private GalleryActivity.MediaSetDeletionCallback m_MediaSetDeleteCallback = new GalleryActivity.MediaSetDeletionCallback() {
 
 		@Override
@@ -103,6 +143,40 @@ public class MediaSetListFragment extends GalleryFragment
 	}
 	
 	
+	// Attach to media set.
+	private void attachToMediaSet(MediaSet set)
+	{
+		set.addCallback(MediaSet.PROP_MEDIA_COUNT, m_MediaCountChangedCallback);
+		set.addCallback(MediaSet.PROP_NAME, m_MediaSetNameChangedCallback);
+	}
+	
+	
+	// Schedule cover decoding.
+	private void decodeMediaSetCovers()
+	{
+		if(m_MediaSetList != null)
+		{
+			for(int i = m_MediaSetList.size() - 1 ; i >= 0 ; --i)
+			{
+				MediaSet mediaSet = m_MediaSetList.get(i);
+				if(!m_MediaSetCoverImageTable.containsKey(mediaSet))
+				{
+					m_MediaSetCoverImageTable.put(mediaSet, new Object());
+					m_MediaSetDecodeQueue.add(mediaSet);
+				}
+			}
+			this.createMediaListCoverImageFromQueue();
+		}
+	}
+	
+	
+	// Detach from media set.
+	private void detachFromMediaSet(MediaSet set)
+	{
+		set.removeCallback(MediaSet.PROP_MEDIA_COUNT, m_MediaCountChangedCallback);
+		set.removeCallback(MediaSet.PROP_NAME, m_MediaSetNameChangedCallback);
+	}
+	
 	
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
@@ -128,6 +202,53 @@ public class MediaSetListFragment extends GalleryFragment
 		super.onDestroy();
 		
 		removeCallback(PROP_IS_SELECTION_MODE, m_IsSelectionModeChangedCallback);
+	}
+	
+	
+	// Called when media count changed.
+	private void onMediaCountChanged(MediaSet mediaSet, PropertyChangeEventArgs<Integer> e)
+	{
+		Log.v(TAG, "onMediaCountChanged() - new media count : " + e.getNewValue());
+		m_MediaSetDecodeQueue.add(mediaSet);
+		createMediaListCoverImageFromQueue();
+		
+		// notify data changed
+		if(m_MediaSetListAdapter != null)
+			m_MediaSetListAdapter.notifyDataSetChanged();
+	}
+	
+	
+	// Called when media set added.
+	private void onMediaSetAdded(ListChangeEventArgs e)
+	{
+		for(int i = e.getStartIndex(), end = e.getEndIndex() ; i <= end ; ++i)
+			this.attachToMediaSet(m_MediaSetList.get(i));
+		if(m_MediaSetListAdapter != null)
+			m_MediaSetListAdapter.notifyDataSetChanged();
+	}
+	
+	
+	// Called when name of media set changed.
+	private void onMediaSetNameChanged(MediaSet mediaSet, PropertyChangeEventArgs<String> e)
+	{
+		if(m_MediaSetListAdapter != null)
+			m_MediaSetListAdapter.notifyDataSetInvalidated();
+	}
+	
+	
+	// Called when media set removed.
+	private void onMediaSetRemoved(ListChangeEventArgs e)
+	{
+		if(m_MediaSetListAdapter != null)
+			m_MediaSetListAdapter.notifyDataSetChanged();
+	}
+	
+	
+	// Called before removing media set.
+	private void onMediaSetRemoving(ListChangeEventArgs e)
+	{
+		for(int i = e.getStartIndex(), end = e.getEndIndex() ; i <= end ; ++i)
+			this.detachFromMediaSet(m_MediaSetList.get(i));
 	}
 
 
@@ -199,7 +320,7 @@ public class MediaSetListFragment extends GalleryFragment
 		});
 		
 		// decode mediaSetCover image
-		setMediaSetList(m_MediaSetList);
+		this.decodeMediaSetCovers();
 		
 		onSelectionModeChanged(get(PROP_IS_SELECTION_MODE));
 	}
@@ -296,44 +417,41 @@ public class MediaSetListFragment extends GalleryFragment
 		Log.v(TAG, "setMediaSetList()");	
 		
 		MediaSetList oldList = m_MediaSetList;
-		m_MediaSetList = newList;	
+		m_MediaSetList = newList;
+		if(oldList == newList)
+			return false;
+		
+		// detach from previous list
+		if(oldList != null)
+		{
+			oldList.removeHandler(MediaSetList.EVENT_MEDIA_SET_ADDED, m_MediaSetAddedHandler);
+			oldList.removeHandler(MediaSetList.EVENT_MEDIA_SET_REMOVED, m_MediaSetRemovedHandler);
+			oldList.removeHandler(MediaSetList.EVENT_MEDIA_SET_REMOVING, m_MediaSetRemovingHandler);
+			for(int i = oldList.size() - 1 ; i >= 0 ; --i)
+				this.detachFromMediaSet(oldList.get(i));
+			m_MediaSetCoverImageTable.clear();
+		}
 		
 		if(newList == null)
-		{
 			Log.v(TAG, "setMediaSetList() - newList is null");
-			
-			// notify data changed
-			if(m_MediaSetListAdapter != null)
-				m_MediaSetListAdapter.notifyDataSetChanged();
-		}
 		else
 		{
+			// add event handlers
+			newList.addHandler(MediaSetList.EVENT_MEDIA_SET_ADDED, m_MediaSetAddedHandler);
+			newList.addHandler(MediaSetList.EVENT_MEDIA_SET_REMOVED, m_MediaSetRemovedHandler);
+			newList.addHandler(MediaSetList.EVENT_MEDIA_SET_REMOVING, m_MediaSetRemovingHandler);
+			
+			// attach to media sets
+			for(int i = m_MediaSetList.size() - 1 ; i >= 0 ; --i)
+				this.attachToMediaSet(newList.get(i));
+			
 			// start to create cover image
-			for(final MediaSet mediaSet : newList)
-			{
-				if(!m_MediaSetCoverImageTable.containsKey(mediaSet))
-				{
-					m_MediaSetCoverImageTable.put(mediaSet, new Object());
-					m_MediaSetDecodeQueue.add(mediaSet);
-					
-					// add media count property change listener
-					mediaSet.addCallback(MediaSet.PROP_MEDIA_COUNT, new PropertyChangedCallback<Integer>() {
-
-						@Override
-						public void onPropertyChanged(PropertySource source, PropertyKey<Integer> key, PropertyChangeEventArgs<Integer> e) {
-							Log.v(TAG, "onPropertyChanged() - new media count : "+e.getNewValue());
-							m_MediaSetDecodeQueue.add(mediaSet);
-							createMediaListCoverImageFromQueue();
-							
-							// notify data changed
-							if(m_MediaSetListAdapter != null)
-								m_MediaSetListAdapter.notifyDataSetChanged();
-						}
-					});
-				}
-			}	
-			createMediaListCoverImageFromQueue();
+			this.decodeMediaSetCovers();
 		}
+		
+		// notify data changed
+		if(m_MediaSetListAdapter != null)
+			m_MediaSetListAdapter.notifyDataSetChanged();
 		
 		return this.notifyPropertyChanged(PROP_MEDIA_SET_LIST, oldList, newList);
 	}

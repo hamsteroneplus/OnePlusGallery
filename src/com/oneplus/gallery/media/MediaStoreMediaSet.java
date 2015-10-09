@@ -642,7 +642,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 				if(maxMediaCount >= 0)
 					sortOrder += (" LIMIT " + maxMediaCount);
 				Cursor cursor = client.query(contentUri, MediaStoreMedia.MEDIA_COLUMNS, m_QueryCondition, m_QueryConditionArgs, sortOrder);
-				boolean isFirstMedia = true;
+				int mediaReportThreshold = 1;
 				List<Media> tempMediaList = null;
 				Handler handler = getHandler();
 				if(cursor != null)
@@ -654,17 +654,17 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 							Media media = MediaStoreMedia.create(MediaStoreMediaSet.this, cursor, m_IsOriginalMedia, handler);
 							if(media == null)
 								continue;
-							if(isFirstMedia)
+							if(mediaReportThreshold == 1)
 							{
-								isFirstMedia = false;
 								HandlerUtils.sendMessage(MediaStoreMediaSet.this, MSG_ADD_MEDIA_TO_MEDIA_LIST, 1, 0, new Object[]{ mediaList, media });
+								mediaReportThreshold <<= 1;
 							}
 							else
 							{
 								if(tempMediaList == null)
 									tempMediaList = new ArrayList<>();
 								tempMediaList.add(media);
-								if(tempMediaList.size() >= 64)
+								if(tempMediaList.size() >= mediaReportThreshold)
 								{
 									if(mediaList.get(MediaList.PROP_IS_RELEASED))
 									{
@@ -673,6 +673,8 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 									}
 									HandlerUtils.sendMessage(MediaStoreMediaSet.this, MSG_ADD_MEDIA_TO_MEDIA_LIST, 1, 0, new Object[]{ mediaList, tempMediaList });
 									tempMediaList = null;
+									if(mediaReportThreshold < 64)
+										mediaReportThreshold <<= 1;
 								}
 							}
 						}

@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.List;
 
 import com.oneplus.base.Handle;
+import com.oneplus.base.HandleSet;
 import com.oneplus.base.ListHandlerBaseObject;
 import com.oneplus.base.Log;
 import com.oneplus.gallery.GalleryApplication;
@@ -28,6 +29,8 @@ import android.os.Looper;
 import android.os.Message;
 import android.os.RemoteException;
 import android.provider.MediaStore.Files;
+import android.provider.MediaStore.Images;
+import android.provider.MediaStore.Video;
 import android.provider.MediaStore.Files.FileColumns;
 
 /**
@@ -38,6 +41,8 @@ public class MediaManager
 	// Constants.
 	private static final String TAG = "MediaManager";
 	private static final Uri CONTENT_URI_FILE = Files.getContentUri("external");
+	private static final Uri CONTENT_URI_IMAGE = Images.Media.EXTERNAL_CONTENT_URI;
+	private static final Uri CONTENT_URI_VIDEO = Video.Media.EXTERNAL_CONTENT_URI;
 	private static final String[] DIR_COLUMNS = new String[]{
 		FileColumns.PARENT,
 		FileColumns.DATA,
@@ -49,11 +54,13 @@ public class MediaManager
 			+ ")"
 			+ " AND NOT (" + FileColumns.DATA + " LIKE ?)"
 	;
+	private static final long DURATION_REFRESH_MEDIA_SET_LISTS_DELAY = 2000;
 	private static final int MSG_ACCESS_CONTENT_PROVIDER = 10000;
 	private static final int MSG_REGISTER_CONTENT_CHANGED_CB = 10010;
 	private static final int MSG_UNREGISTER_CONTENT_CHANGED_CB = 10011;
 	private static final int MSG_DIR_MEDIA_SET_CREATED = 10020;
 	private static final int MSG_DIR_MEDIA_SET_DELETED = 10021;
+	private static final int MSG_REFRESH_MEDIA_SET_LISTS = 10030;
 	
 	
 	// Fields.
@@ -67,7 +74,29 @@ public class MediaManager
 	private static volatile Handler m_ContentThreadHandler;
 	private static final HashMap<Integer, DirectoryMediaSet> m_DirectoryMediaSets = new HashMap<>();
 	private static volatile Handler m_Handler;
+	private static boolean m_IsMediaSetListsRefreshNeeded;
 	private static final Object m_Lock = new Object();
+	private static Handle m_MediaSetListContentChangeCBHandle;
+	
+	
+	// Call-backs.
+	private static final ContentChangeCallback m_MediaSetListContentChangeCB = new ContentChangeCallback()
+	{
+		@Override
+		public void onContentChanged(Uri contentUri)
+		{
+			if(!m_IsMediaSetListsRefreshNeeded)
+			{
+				if(isActive())
+				{
+					if(!m_Handler.hasMessages(MSG_REFRESH_MEDIA_SET_LISTS))
+						m_Handler.sendEmptyMessageDelayed(MSG_REFRESH_MEDIA_SET_LISTS, DURATION_REFRESH_MEDIA_SET_LISTS_DELAY);
+				}
+				else
+					m_IsMediaSetListsRefreshNeeded = true;
+			}
+		}
+	};
 	
 	
 	/**
@@ -424,6 +453,11 @@ public class MediaManager
 			Log.w(TAG, "activate()");
 			for(int i = m_ActiveStateCallbacks.size() - 1 ; i >= 0 ; --i)
 				m_ActiveStateCallbacks.get(i).onActivated();
+			if(m_IsMediaSetListsRefreshNeeded)
+			{
+				m_IsMediaSetListsRefreshNeeded = false;
+				refreshMediaSetLists();
+			}
 		}
 		
 		// complete
@@ -464,6 +498,15 @@ public class MediaManager
 		m_ActiveMediaSetLists.add(new WeakReference<MediaSetListImpl>(list));
 		Log.v(TAG, "createMediaSetList() - Active list count : ", m_ActiveMediaSetLists.size());
 		
+		// register content change call-back
+		if(m_ActiveMediaSetLists.size() == 1)
+		{
+			HandleSet handles = new HandleSet();
+			handles.addHandle(registerContentChangedCallback(CONTENT_URI_IMAGE, m_MediaSetListContentChangeCB, m_Handler));
+			handles.addHandle(registerContentChangedCallback(CONTENT_URI_VIDEO, m_MediaSetListContentChangeCB, m_Handler));
+			m_MediaSetListContentChangeCBHandle = handles;
+		}
+		
 		// create system sets
 		if(m_CameraRollMediaSet == null)
 			m_CameraRollMediaSet = new CameraRollMediaSet();
@@ -493,6 +536,14 @@ public class MediaManager
 		// call-back
 		for(int i = m_ActiveStateCallbacks.size() - 1 ; i >= 0 ; --i)
 			m_ActiveStateCallbacks.get(i).onDeactivated();
+		
+		// stop refresh media set lists
+		if(m_Handler.hasMessages(MSG_REFRESH_MEDIA_SET_LISTS))
+		{
+			Log.v(TAG, "deactivate() - Refresh media set lists when activating");
+			m_Handler.removeMessages(MSG_REFRESH_MEDIA_SET_LISTS);
+			m_IsMediaSetListsRefreshNeeded = true;
+		}
 	}
 	
 	
@@ -535,6 +586,10 @@ public class MediaManager
 				
 			case MSG_DIR_MEDIA_SET_DELETED:
 				onDirectoryMediaSetDeleted(msg.arg1);
+				break;
+				
+			case MSG_REFRESH_MEDIA_SET_LISTS:
+				refreshMediaSetLists();
 				break;
 		}
 	}
@@ -662,6 +717,9 @@ public class MediaManager
 					for(DirectoryMediaSet set : m_DirectoryMediaSets.values())
 						set.release();
 					m_DirectoryMediaSets.clear();
+					
+					// unregister content change call-back
+					m_MediaSetListContentChangeCBHandle = Handle.close(m_MediaSetListContentChangeCBHandle);
 				}
 			}
 			else if(candList == null)
@@ -740,6 +798,20 @@ public class MediaManager
 				}
 			}
 		});
+	}
+	
+	
+	// Refresh media set lists (in main thread).
+	private static void refreshMediaSetLists()
+	{
+		// check state
+		if(m_ActiveMediaSetLists.isEmpty())
+			return;
+		
+		Log.v(TAG, "refreshMediaSetLists()");
+		
+		// refresh
+		refreshDirectoryMediaSets();
 	}
 	
 	
