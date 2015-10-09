@@ -15,6 +15,7 @@ import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.net.Uri;
 import android.os.Bundle;
@@ -59,8 +60,10 @@ public abstract class GalleryActivity extends BaseActivity
 	
 	
 	// Constants.
+	private static final String STATIC_TAG = GalleryActivity.class.getSimpleName();
 	private static final String STATE_KEY_PREFIX = (GalleryActivity.class.getName() + ".");
 	private static final String STATE_KEY_TEMP_STATE_KEY = (STATE_KEY_PREFIX + "TempInstanceStateKey");
+	private static final String STATE_KEY_IS_DELETING_MEDIA = (STATE_KEY_PREFIX + "IsDeletingMedia");
 	private static final int REQUEST_CODE_SHARE_MEDIA = (Integer.MAX_VALUE - 1);
 	
 	
@@ -301,8 +304,8 @@ public abstract class GalleryActivity extends BaseActivity
 		}
 		
 		// select messages
-		String title = null;
-		String message = null;
+		final String title;
+		final String message;
 		if(mediaList.size() == 1)
 		{
 			switch(mediaType)
@@ -341,27 +344,36 @@ public abstract class GalleryActivity extends BaseActivity
 		
 		// confirm
 		final MediaType finalMediaType = mediaType;
-		AlertDialog dialog = new AlertDialog.Builder(this)
-			.setTitle(title)
-			.setMessage(message)
-			.setPositiveButton(R.string.dialog_button_delete, new DialogInterface.OnClickListener()
+		GalleryDialogFragment dialogFragment = new GalleryDialogFragment()
+		{
+			@Override
+			public Dialog onCreateDialog(Bundle savedInstanceState)
 			{
-				@Override
-				public void onClick(DialogInterface dialog, int which)
-				{
-					deleteMedia(mediaList, finalMediaType, callback);
-				}
-			})
-			.setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener()
-			{
-				@Override
-				public void onClick(DialogInterface dialog, int which)
-				{
-					dialog.cancel();
-				}
-			})
-			.create();
-		dialog.show();
+				this.setRetainInstance(true);
+				return new AlertDialog.Builder(this.getActivity())
+					.setTitle(title)
+					.setMessage(message)
+					.setPositiveButton(R.string.dialog_button_delete, new DialogInterface.OnClickListener()
+					{
+						@Override
+						public void onClick(DialogInterface dialog, int which)
+						{
+							dismiss();
+							deleteMedia(getGalleryActivity(), mediaList, finalMediaType, callback);
+						}
+					})
+					.setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener()
+					{
+						@Override
+						public void onClick(DialogInterface dialog, int which)
+						{
+							dialog.cancel();
+						}
+					})
+					.create();
+			}
+		};
+		dialogFragment.show(this.getFragmentManager(), "GalleryActivity.MediaDeletionConfirmation");
 		
 		// complete
 		return true;
@@ -369,23 +381,23 @@ public abstract class GalleryActivity extends BaseActivity
 	
 	
 	// Delete media directly.
-	private void deleteMedia(final List<Media> mediaList, MediaType mediaType, final MediaDeletionCallback callback)
+	private static void deleteMedia(GalleryActivity activity, final List<Media> mediaList, MediaType mediaType, final MediaDeletionCallback callback)
 	{
 		// select title
-		final Dialog dialog = new Dialog(this);
+		final Dialog dialog = new Dialog(activity);
 		String title;
 		if(mediaList.size() == 1)
 		{
 			switch(mediaType)
 			{
 				case PHOTO:
-					title = this.getString(R.string.delete_message_title_deleting_photo);
+					title = activity.getString(R.string.delete_message_title_deleting_photo);
 					break;
 				case VIDEO:
-					title = this.getString(R.string.delete_message_title_deleting_video);
+					title = activity.getString(R.string.delete_message_title_deleting_video);
 					break;
 				default:
-					Log.e(TAG, "deleteMediaDirectly() - Unknown media type");
+					Log.e(STATIC_TAG, "deleteMediaDirectly() - Unknown media type");
 					return;
 			}
 		}
@@ -394,13 +406,13 @@ public abstract class GalleryActivity extends BaseActivity
 			switch(mediaType)
 			{
 				case PHOTO:
-					title = String.format(this.getString(R.string.delete_message_title_deleting_photos), mediaList.size());
+					title = String.format(activity.getString(R.string.delete_message_title_deleting_photos), mediaList.size());
 					break;
 				case VIDEO:
-					title = String.format(this.getString(R.string.delete_message_title_deleting_videos), mediaList.size());
+					title = String.format(activity.getString(R.string.delete_message_title_deleting_videos), mediaList.size());
 					break;
 				default:
-					title = String.format(this.getString(R.string.delete_message_title_deleting_files), mediaList.size());
+					title = String.format(activity.getString(R.string.delete_message_title_deleting_files), mediaList.size());
 					break;
 			}
 		}
@@ -412,7 +424,16 @@ public abstract class GalleryActivity extends BaseActivity
 		
 		// show dialog
 		dialog.setCancelable(false);
-		dialog.show();
+		dialog.setCanceledOnTouchOutside(false);
+		final GalleryDialogFragment dialogFragment = new GalleryDialogFragment()
+		{
+			@Override
+			public Dialog onCreateDialog(Bundle savedInstanceState)
+			{
+				return dialog;
+			}
+		};
+		dialogFragment.show(activity.getFragmentManager(), "GalleryActivity.MediaDeletion");
 		
 		// create call-back
 		final int[] deletedCount = new int[1];
@@ -432,13 +453,17 @@ public abstract class GalleryActivity extends BaseActivity
 				++deletedCount[0];
 				boolean isLastMedia = (deletedCount[0] >= mediaList.size());
 				if(isLastMedia)
-					setReadOnly(PROP_IS_DELETING_MEDIA, false);
+				{
+					GalleryActivity activity = dialogFragment.getGalleryActivity();
+					if(activity != null)
+						activity.setReadOnly(PROP_IS_DELETING_MEDIA, false);
+				}
 				
 				// update UI
 				if(progressBar != null)
 					progressBar.setProgress(Math.round((float)deletedCount[0] / mediaList.size() * progressBar.getMax()));
-				if(isLastMedia && dialog != null)
-					dialog.dismiss();
+				if(isLastMedia)
+					dialogFragment.dismiss();
 				
 				// call-back
 				if(callback != null)
@@ -451,8 +476,8 @@ public abstract class GalleryActivity extends BaseActivity
 		};
 		
 		// delete media
-		Handler handler = this.getHandler();
-		this.setReadOnly(PROP_IS_DELETING_MEDIA, true);
+		Handler handler = GalleryApplication.current().getHandler();
+		activity.setReadOnly(PROP_IS_DELETING_MEDIA, true);
 		if(callback != null)
 			callback.onDeletionProcessStarted();
 		for(int i = mediaList.size() - 1 ; i >= 0 ; --i)
@@ -714,6 +739,12 @@ public abstract class GalleryActivity extends BaseActivity
 		// initialize screen size
 		this.updateScreenSize();
 		
+		// restore properties
+		if(savedInstanceState != null)
+		{
+			this.setReadOnly(PROP_IS_DELETING_MEDIA, savedInstanceState.getBoolean(STATE_KEY_IS_DELETING_MEDIA, false));
+		}
+		
 		// initialize system UI state
 		View decorView = this.getWindow().getDecorView();
 		decorView.setSystemUiVisibility(decorView.getSystemUiVisibility() | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
@@ -766,7 +797,9 @@ public abstract class GalleryActivity extends BaseActivity
 	 * @param tempOutState Temporary instance state container.
 	 */
 	protected void onSaveInstanceState(Bundle outState, Map<String, Object> tempOutState)
-	{}
+	{
+		outState.putBoolean(STATE_KEY_IS_DELETING_MEDIA, this.get(PROP_IS_DELETING_MEDIA));
+	}
 	
 	
 	/**

@@ -33,7 +33,6 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	private static final Uri CONTENT_URI_FILE = Files.getContentUri("external");
 	private static final Uri CONTENT_URI_IMAGE = Images.Media.EXTERNAL_CONTENT_URI;
 	private static final Uri CONTENT_URI_VIDEO = Video.Media.EXTERNAL_CONTENT_URI;
-	private static final long DURATION_HANDLE_MS_CONTENT_CHANGE_DELAY = 1500;
 	private static final int MSG_MEDIA_COUNT_CHANGED = -10000;
 	private static final int MSG_HANDLE_MS_CONTENT_CHANGE = -10001;
 	private static final int MSG_ADD_MEDIA_TO_MEDIA_LIST = -10010;
@@ -571,9 +570,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	 */
 	protected void onMediaStoreContentChanged(Uri contentUri)
 	{
-		Handler handler = this.getHandler();
-		if(!handler.hasMessages(MSG_HANDLE_MS_CONTENT_CHANGE))
-			handler.sendEmptyMessageDelayed(MSG_HANDLE_MS_CONTENT_CHANGE, DURATION_HANDLE_MS_CONTENT_CHANGE_DELAY);
+		this.getHandler().sendEmptyMessage(MSG_HANDLE_MS_CONTENT_CHANGE);
 	}
 	
 	

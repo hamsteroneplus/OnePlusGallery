@@ -449,7 +449,6 @@ public class GridViewFragment extends GalleryFragment {
 	 * Initialize new GridViewFragment instance.
 	 */
 	public GridViewFragment() {
-		this.setRetainInstance(true);
 		onInitialize();
 	}
 

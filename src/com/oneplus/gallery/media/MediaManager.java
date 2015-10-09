@@ -28,6 +28,7 @@ import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
 import android.os.RemoteException;
+import android.os.SystemClock;
 import android.provider.MediaStore.Files;
 import android.provider.MediaStore.Images;
 import android.provider.MediaStore.Video;
@@ -54,13 +55,14 @@ public class MediaManager
 			+ ")"
 			+ " AND NOT (" + FileColumns.DATA + " LIKE ?)"
 	;
-	private static final long DURATION_REFRESH_MEDIA_SET_LISTS_DELAY = 2000;
+	private static final long INTERVAL_CHECK_CONTENT_CHANGES = 2000;
 	private static final int MSG_ACCESS_CONTENT_PROVIDER = 10000;
 	private static final int MSG_REGISTER_CONTENT_CHANGED_CB = 10010;
 	private static final int MSG_UNREGISTER_CONTENT_CHANGED_CB = 10011;
 	private static final int MSG_DIR_MEDIA_SET_CREATED = 10020;
 	private static final int MSG_DIR_MEDIA_SET_DELETED = 10021;
 	private static final int MSG_REFRESH_MEDIA_SET_LISTS = 10030;
+	private static final int MSG_CHECK_CONTENT_CHANGES = 10040;
 	
 	
 	// Fields.
@@ -74,7 +76,6 @@ public class MediaManager
 	private static volatile Handler m_ContentThreadHandler;
 	private static final HashMap<Integer, DirectoryMediaSet> m_DirectoryMediaSets = new HashMap<>();
 	private static volatile Handler m_Handler;
-	private static boolean m_IsMediaSetListsRefreshNeeded;
 	private static final Object m_Lock = new Object();
 	private static Handle m_MediaSetListContentChangeCBHandle;
 	
@@ -85,16 +86,7 @@ public class MediaManager
 		@Override
 		public void onContentChanged(Uri contentUri)
 		{
-			if(!m_IsMediaSetListsRefreshNeeded)
-			{
-				if(isActive())
-				{
-					if(!m_Handler.hasMessages(MSG_REFRESH_MEDIA_SET_LISTS))
-						m_Handler.sendEmptyMessageDelayed(MSG_REFRESH_MEDIA_SET_LISTS, DURATION_REFRESH_MEDIA_SET_LISTS_DELAY);
-				}
-				else
-					m_IsMediaSetListsRefreshNeeded = true;
-			}
+			m_Handler.sendEmptyMessage(MSG_REFRESH_MEDIA_SET_LISTS);
 		}
 	};
 	
@@ -244,10 +236,21 @@ public class MediaManager
 	private static final class ContentObserver extends android.database.ContentObserver
 	{
 		public final List<ContentChangeCallbackHandle> callbackHandles = new ArrayList<>();
+		public final Uri contentUri;
+		public long lastChangedTime;
 		
-		public ContentObserver(Handler handler)
+		public ContentObserver(Uri contentUri, Handler handler)
 		{
 			super(handler);
+			this.contentUri = contentUri;
+		}
+		
+		public void notifyChange(boolean resetChangeTime)
+		{
+			if(resetChangeTime)
+				this.lastChangedTime = 0;
+			for(int i = this.callbackHandles.size() - 1 ; i >= 0 ; --i)
+				this.callbackHandles.get(i).notifyContentChanged(this.contentUri);
 		}
 		
 		@Override
@@ -258,8 +261,9 @@ public class MediaManager
 		@Override
 		public void onChange(boolean selfChange, Uri uri)
 		{
-			for(int i = this.callbackHandles.size() - 1 ; i >= 0 ; --i)
-				this.callbackHandles.get(i).notifyContentChanged(uri);
+			this.lastChangedTime = SystemClock.elapsedRealtime();
+			if(isActive() && !m_ContentThreadHandler.hasMessages(MSG_CHECK_CONTENT_CHANGES))
+				m_ContentThreadHandler.sendEmptyMessageDelayed(MSG_CHECK_CONTENT_CHANGES, INTERVAL_CHECK_CONTENT_CHANGES);
 		}
 	}
 	
@@ -453,11 +457,8 @@ public class MediaManager
 			Log.w(TAG, "activate()");
 			for(int i = m_ActiveStateCallbacks.size() - 1 ; i >= 0 ; --i)
 				m_ActiveStateCallbacks.get(i).onActivated();
-			if(m_IsMediaSetListsRefreshNeeded)
-			{
-				m_IsMediaSetListsRefreshNeeded = false;
-				refreshMediaSetLists();
-			}
+			startContentThread();
+			m_ContentThreadHandler.sendEmptyMessage(MSG_CHECK_CONTENT_CHANGES);
 		}
 		
 		// complete
@@ -481,6 +482,22 @@ public class MediaManager
 	{
 		if(m_ContentThreadHandler != null)
 			m_ContentThreadHandler.removeMessages(MSG_ACCESS_CONTENT_PROVIDER, handle);
+	}
+	
+	
+	// Check all content changes (in content thread).
+	private static void checkContentChanges()
+	{
+		// check state
+		if(m_ContentObservers.isEmpty() || !isActive())
+			return;
+		
+		// check changes
+		for(ContentObserver observer : m_ContentObservers.values())
+		{
+			if(observer.lastChangedTime > 0)
+				observer.notifyChange(true);
+		}
 	}
 	
 	
@@ -537,13 +554,9 @@ public class MediaManager
 		for(int i = m_ActiveStateCallbacks.size() - 1 ; i >= 0 ; --i)
 			m_ActiveStateCallbacks.get(i).onDeactivated();
 		
-		// stop refresh media set lists
-		if(m_Handler.hasMessages(MSG_REFRESH_MEDIA_SET_LISTS))
-		{
-			Log.v(TAG, "deactivate() - Refresh media set lists when activating");
-			m_Handler.removeMessages(MSG_REFRESH_MEDIA_SET_LISTS);
-			m_IsMediaSetListsRefreshNeeded = true;
-		}
+		// stop checking content changes
+		if(m_ContentThreadHandler != null)
+			m_ContentThreadHandler.removeMessages(MSG_CHECK_CONTENT_CHANGES);
 	}
 	
 	
@@ -562,6 +575,10 @@ public class MediaManager
 		{
 			case MSG_ACCESS_CONTENT_PROVIDER:
 				accessContentProvider((ContentProviderAccessHandle)msg.obj);
+				break;
+				
+			case MSG_CHECK_CONTENT_CHANGES:
+				checkContentChanges();
 				break;
 				
 			case MSG_REGISTER_CONTENT_CHANGED_CB:
@@ -869,7 +886,7 @@ public class MediaManager
 			Log.v(TAG, "registerContentChangedCallback() - Register to ", handle.contentUri);
 			if(m_ContentResolver == null)
 				m_ContentResolver = GalleryApplication.current().getContentResolver();
-			observer = new ContentObserver(m_ContentThreadHandler);
+			observer = new ContentObserver(handle.contentUri, m_ContentThreadHandler);
 			m_ContentObservers.put(handle.contentUri, observer);
 			m_ContentResolver.registerContentObserver(handle.contentUri, true, observer);
 		}

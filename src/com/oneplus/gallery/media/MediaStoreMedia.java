@@ -169,9 +169,9 @@ public abstract class MediaStoreMedia implements Media
 		this.setupSize(cursor, m_Size);
 		
 		// get location
-		double lat = CursorUtils.getDouble(cursor, ImageColumns.LATITUDE, Double.NaN);
-		double lng = CursorUtils.getDouble(cursor, ImageColumns.LONGITUDE, Double.NaN);
-		if(!Double.isNaN(lat) && !Double.isNaN(lng))
+		double lat = CursorUtils.getDouble(cursor, ImageColumns.LATITUDE, 0);
+		double lng = CursorUtils.getDouble(cursor, ImageColumns.LONGITUDE, 0);
+		if(lat != 0 && lng != 0)
 		{
 			m_Location = new Location("");
 			m_Location.setLatitude(lat);

@@ -6,6 +6,7 @@ import android.app.Fragment;
 import android.app.FragmentManager;
 import android.app.FragmentTransaction;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.os.Bundle;
 import android.support.v4.view.PagerAdapter;
 import android.view.View;
@@ -75,6 +76,8 @@ public class OPGalleryActivity extends GalleryActivity
 	private FilmstripFragment m_FilmstripFragment;
 	private View m_GridViewContainer;
 	private GridViewFragment m_GridViewFragment;
+	private boolean m_IsFilmstripFragmentAdded;
+	private boolean m_IsGridViewFragmentAdded;
 	private boolean m_IsInstanceStateSaved;
 	private MediaList m_MediaList;
 	private Handle m_MediaManagerActivateHandle;
@@ -90,6 +93,14 @@ public class OPGalleryActivity extends GalleryActivity
 		public void onEventReceived(EventSource source, EventKey<ListItemEventArgs<Media>> key, ListItemEventArgs<Media> e)
 		{
 			onMediaClickedInGridView(e, source == m_DefaultGridViewFragment);
+		}
+	};
+	private final EventHandler<ListChangeEventArgs> m_MediaRemovedFromMediaListHandler = new EventHandler<ListChangeEventArgs>()
+	{
+		@Override
+		public void onEventReceived(EventSource source, EventKey<ListChangeEventArgs> key, ListChangeEventArgs e)
+		{
+			onMediaRemovedFromMediaList((MediaList)source, e);
 		}
 	};
 	private final EventHandler<ListChangeEventArgs> m_MediaSetAddedHandler = new EventHandler<ListChangeEventArgs>()
@@ -141,6 +152,14 @@ public class OPGalleryActivity extends GalleryActivity
 	}
 	
 	
+	// Attach to media list.
+	private void attachToMediaList(MediaList mediaList)
+	{
+		if(mediaList != null)
+			mediaList.addHandler(MediaList.EVENT_MEDIA_REMOVED, m_MediaRemovedFromMediaListHandler);
+	}
+	
+	
 	// Change current mode.
 	private boolean changeMode(Mode mode)
 	{
@@ -167,6 +186,7 @@ public class OPGalleryActivity extends GalleryActivity
 			case FILMSTRIP:
 				if(!this.openFilmstrip(animate))
 					return false;
+				this.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR);
 				break;
 		}
 		
@@ -179,7 +199,10 @@ public class OPGalleryActivity extends GalleryActivity
 				break;
 				
 			case FILMSTRIP:
+				this.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
 				this.closeFilmstrip(animate);
+				if(mode == Mode.ENTRY)
+					this.closeGridView(animate);
 				break;
 		}
 		
@@ -239,6 +262,14 @@ public class OPGalleryActivity extends GalleryActivity
 		}
 		else
 			this.onGridViewClosed();
+	}
+	
+	
+	// Detach from media list.
+	private void detachFromMediaList(MediaList mediaList)
+	{
+		if(mediaList != null)
+			mediaList.removeHandler(MediaList.EVENT_MEDIA_REMOVED, m_MediaRemovedFromMediaListHandler);
 	}
 	
 	
@@ -334,6 +365,8 @@ public class OPGalleryActivity extends GalleryActivity
 			{
 				m_DefaultMediaList = savedDefaultMediaList;
 				m_MediaList = savedMediaList;
+				if(m_MediaList != m_DefaultMediaList)
+					this.attachToMediaList(m_MediaList);
 			}
 			else
 			{
@@ -349,7 +382,21 @@ public class OPGalleryActivity extends GalleryActivity
 		
 		// restore mode
 		if(isValidTempState)
-			this.changeMode(savedMode, false);
+		{
+			switch(savedMode)
+			{
+				case GRID_VIEW:
+					this.changeMode(Mode.GRID_VIEW, false);
+					break;
+				case FILMSTRIP:
+					if(m_MediaList != null && m_MediaList != m_DefaultMediaList)
+						this.changeMode(Mode.GRID_VIEW, false);
+					this.changeMode(Mode.FILMSTRIP, false);
+					break;
+				default:
+					break;
+			}
+		}
 	}
 	
 	
@@ -440,8 +487,13 @@ public class OPGalleryActivity extends GalleryActivity
 	{
 		m_FilmstripContainer.setVisibility(View.GONE);
 		m_FilmstripFragment.set(FilmstripFragment.PROP_MEDIA_LIST, null);
-		if(m_FilmstripFragment.isAdded())
-			this.getFragmentManager().beginTransaction().detach(m_FilmstripFragment).commit();
+		if(!m_FilmstripFragment.isDetached())
+		{
+			if(this.get(PROP_STATE) != State.DESTROYED)
+				this.getFragmentManager().beginTransaction().detach(m_FilmstripFragment).commitAllowingStateLoss();
+			else
+				Log.w(TAG, "onFilmstripClosed() - Activity has been destroyed, no need to detach fragment");
+		}
 	}
 	
 	
@@ -464,8 +516,19 @@ public class OPGalleryActivity extends GalleryActivity
 		m_GridViewContainer.setVisibility(View.GONE);
 		m_GridViewFragment.set(GridViewFragment.PROP_IS_SELECTION_MODE, false);
 		m_GridViewFragment.set(GridViewFragment.PROP_MEDIA_LIST, null);
-		if(m_GridViewFragment.isAdded())
-			this.getFragmentManager().beginTransaction().detach(m_GridViewFragment).commit();
+		if(!m_GridViewFragment.isDetached())
+		{
+			if(this.get(PROP_STATE) != State.DESTROYED)
+				this.getFragmentManager().beginTransaction().detach(m_GridViewFragment).commitAllowingStateLoss();
+			else
+				Log.w(TAG, "onGridViewClosed() - Activity has been destroyed, no need to detach fragment");
+		}
+		if(m_MediaList != null && m_MediaList != m_DefaultMediaList)
+		{
+			this.detachFromMediaList(m_MediaList);
+			m_MediaList.release();
+			m_MediaList = null;
+		}
 	}
 	
 	
@@ -515,6 +578,17 @@ public class OPGalleryActivity extends GalleryActivity
 	}
 	
 	
+	// Called when media removed from media list.
+	private void onMediaRemovedFromMediaList(MediaList mediaList, ListChangeEventArgs e)
+	{
+		if(m_MediaList == mediaList && m_MediaList.isEmpty() && m_Mode != Mode.ENTRY)
+		{
+			Log.w(TAG, "onMediaRemovedFromMediaList() - Media list is empty, change to ENTRY mode");
+			this.changeMode(Mode.ENTRY);
+		}
+	}
+	
+	
 	// Called when media set added.
 	private void onMediaSetAdded(ListChangeEventArgs e)
 	{
@@ -528,6 +602,7 @@ public class OPGalleryActivity extends GalleryActivity
 		// close current media list
 		if(m_MediaList != null && m_MediaList != m_DefaultMediaList)
 		{
+			this.detachFromMediaList(m_MediaList);
 			m_MediaList.release();
 			m_MediaList = null;
 		}
@@ -535,7 +610,10 @@ public class OPGalleryActivity extends GalleryActivity
 		// open media list
 		MediaSet set = e.getItem();
 		if(set != m_DefaultMediaSet)
+		{
 			m_MediaList = set.openMediaList(MediaComparator.TAKEN_TIME, -1, 0);
+			this.attachToMediaList(m_MediaList);
+		}
 		else
 			m_MediaList = m_DefaultMediaList;
 		
@@ -545,6 +623,12 @@ public class OPGalleryActivity extends GalleryActivity
 			if(m_GridViewFragment == null)
 			{
 				Log.e(TAG, "onMediaSetClicked() - No grid view fragment");
+				if(m_MediaList != null && m_MediaList != m_DefaultMediaList)
+				{
+					this.detachFromMediaList(m_MediaList);
+					m_MediaList.release();
+					m_MediaList = null;
+				}
 				return;
 			}
 			m_GridViewFragment.set(GridViewFragment.PROP_TITLE, set.get(MediaSet.PROP_NAME));
@@ -695,7 +779,12 @@ public class OPGalleryActivity extends GalleryActivity
 		}
 		
 		// attach fragment
-		if(!m_FilmstripFragment.isAdded())
+		if(!m_IsFilmstripFragmentAdded)
+		{
+			this.getFragmentManager().beginTransaction().add(R.id.filmstrip_fragment_container, m_FilmstripFragment, FRAGMENT_TAG_FILMSTRIP).commit();
+			m_IsFilmstripFragmentAdded = true;
+		}
+		else if(m_FilmstripFragment.isDetached())
 			this.getFragmentManager().beginTransaction().attach(m_FilmstripFragment).commit();
 		
 		// open
@@ -730,7 +819,12 @@ public class OPGalleryActivity extends GalleryActivity
 		}
 		
 		// attach fragment
-		if(!m_GridViewFragment.isAdded())
+		if(!m_IsGridViewFragmentAdded)
+		{
+			this.getFragmentManager().beginTransaction().add(R.id.grid_view_fragment_container, m_GridViewFragment, FRAGMENT_TAG_GRID_VIEW).commit();
+			m_IsGridViewFragmentAdded = true;
+		}
+		else if(m_GridViewFragment.isDetached())
 			this.getFragmentManager().beginTransaction().attach(m_GridViewFragment).commit();
 		
 		// open
@@ -761,6 +855,7 @@ public class OPGalleryActivity extends GalleryActivity
 			return;
 		
 		// remove event handlers
+		this.detachFromMediaList(m_MediaList);
 		m_MediaSetList.removeHandler(MediaSetList.EVENT_MEDIA_SET_ADDED, m_MediaSetAddedHandler);
 		m_MediaSetList.removeHandler(MediaSetList.EVENT_MEDIA_SET_REMOVED, m_MediaSetRemovedHandler);
 		
@@ -856,7 +951,6 @@ public class OPGalleryActivity extends GalleryActivity
 		
 		// create fragments
 		FragmentManager fragmentManager = this.getFragmentManager();
-		FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
 		m_DefaultGridViewFragment = (GridViewFragment)fragmentManager.findFragmentByTag(FRAGMENT_TAG_DEFAULT_GRID_VIEW);
 		m_MediaSetListFragment = (MediaSetListFragment)fragmentManager.findFragmentByTag(FRAGMENT_TAG_MEDIA_SET_LIST);
 		m_GridViewFragment = (GridViewFragment)fragmentManager.findFragmentByTag(FRAGMENT_TAG_GRID_VIEW);
@@ -866,18 +960,15 @@ public class OPGalleryActivity extends GalleryActivity
 		if(m_MediaSetListFragment != null)
 			this.onMediaSetListFragmentReady(m_MediaSetListFragment);
 		if(m_GridViewFragment == null)
-		{
 			m_GridViewFragment = new GridViewFragment();
-			fragmentTransaction.add(R.id.grid_view_fragment_container, m_GridViewFragment, FRAGMENT_TAG_GRID_VIEW);
-		}
+		else
+			m_IsGridViewFragmentAdded = true;
 		if(m_FilmstripFragment == null)
-		{
 			m_FilmstripFragment = new FilmstripFragment();
-			fragmentTransaction.add(R.id.filmstrip_fragment_container, m_FilmstripFragment, FRAGMENT_TAG_FILMSTRIP);
-		}
+		else
+			m_IsFilmstripFragmentAdded = true;
 		this.onGridViewFragmentReady(m_GridViewFragment);
 		this.onFilmstripFragmentReady(m_FilmstripFragment);
-		fragmentTransaction.commit();
 		
 		// prepare entry view pager
 		m_EntryViewPager = (ViewPager)this.findViewById(R.id.entry_view_pager);

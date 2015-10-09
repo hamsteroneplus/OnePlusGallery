@@ -41,6 +41,15 @@ public abstract class GalleryFragment extends BaseFragment
 	
 	
 	/**
+	 * Initialize new GalleryFragment instance.
+	 */
+	protected GalleryFragment()
+	{
+		this.setRetainInstance(true);
+	}
+	
+	
+	/**
 	 * Get {@link GalleryActivity} instance which this fragment attach to.
 	 * @return {@link GalleryActivity}, or Null if this fragment is not attached yet.
 	 */

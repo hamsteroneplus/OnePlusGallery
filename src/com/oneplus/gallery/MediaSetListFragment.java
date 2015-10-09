@@ -138,9 +138,7 @@ public class MediaSetListFragment extends GalleryFragment
 	 * Initialize new MediaSetListFragment instance.
 	 */
 	public MediaSetListFragment()
-	{
-		this.setRetainInstance(true);
-	}
+	{}
 	
 	
 	// Attach to media set.

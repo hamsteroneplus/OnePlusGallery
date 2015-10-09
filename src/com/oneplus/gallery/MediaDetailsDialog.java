@@ -14,10 +14,13 @@ import com.oneplus.gallery.media.VideoMedia;
 import com.oneplus.io.FileUtils;
 import com.oneplus.io.Path;
 
+import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.location.Location;
+import android.os.Bundle;
 import android.util.Rational;
 import android.view.View;
 import android.view.ViewGroup;
@@ -33,21 +36,29 @@ public class MediaDetailsDialog
 	private static final long MAX_MEDIA_DETAILS_WAITING_TIME = 500;
 	
 	
-	// Static fields.
-	private static final DialogInterface.OnClickListener m_DefaultClickListener = new DialogInterface.OnClickListener()
+	// Fields.
+	private Activity m_Activity;
+	private AlertDialog m_Dialog;
+	private final GalleryDialogFragment m_DialogFragment = new GalleryDialogFragment()
 	{
-		@Override
-		public void onClick(DialogInterface dialog, int which)
+		public Dialog onCreateDialog(Bundle savedInstanceState) 
 		{
-			dialog.dismiss();
+			m_Activity = this.getActivity();
+			MediaDetailsDialog.this.onPrepareDialog(m_Activity);
+			return m_Dialog;
+		}
+		
+		public void onDismiss(DialogInterface dialog) 
+		{
+			if(dialog == null)
+				return;
+			if(m_Dialog == dialog)
+			{
+				m_MediaDetailsRetrievingHandle = Handle.close(m_MediaDetailsRetrievingHandle);
+				m_Dialog = null;
+			}
 		}
 	};
-	
-	
-	// Fields.
-	private final Context m_Context;
-	private AlertDialog m_Dialog;
-	private AlertDialog.Builder m_DialogBuilder;
 	private final String m_ItemStringFormat;
 	private final Media m_Media;
 	private Handle m_MediaDetailsRetrievingHandle;
@@ -55,18 +66,18 @@ public class MediaDetailsDialog
 	
 	/**
 	 * Initialize new MediaDetailsDialog instance.
-	 * @param context Context.
+	 * @param activity Owner activity.
 	 * @param media Media to show details.
 	 */
-	public MediaDetailsDialog(Context context, Media media)
+	public MediaDetailsDialog(Activity activity, Media media)
 	{
-		if(context == null)
-			throw new IllegalArgumentException("No Context.");
+		if(activity == null)
+			throw new IllegalArgumentException("No activity.");
 		if(media == null)
 			throw new IllegalArgumentException("No media.");
-		m_Context = context;
+		m_Activity = activity;
 		m_Media = media;
-		m_ItemStringFormat = m_Context.getString(R.string.media_details_item_format);
+		m_ItemStringFormat = activity.getString(R.string.media_details_item_format);
 	}
 	
 	
@@ -98,7 +109,7 @@ public class MediaDetailsDialog
 	{
 		View.inflate(m_Dialog.getContext(), R.layout.layout_media_details_dialog_item, itemContainer);
 		TextView tv = (TextView)itemContainer.getChildAt(itemContainer.getChildCount() - 1);
-		tv.setText(String.format(m_ItemStringFormat, m_Context.getString(titleResId), value));
+		tv.setText(String.format(m_ItemStringFormat, m_Activity.getString(titleResId), value));
 	}
 	private void createStringItem(ViewGroup itemContainer, int titleResId, Object value)
 	{
@@ -162,15 +173,9 @@ public class MediaDetailsDialog
 	}
 	
 	
-	/**
-	 * Show dialog.
-	 */
-	public void show()
+	// Called when preparing dialog.
+	private void onPrepareDialog(Context context)
 	{
-		// check state
-		if(m_Dialog != null)
-			return;
-		
 		// start getting media details
 		final Object[] result = new Object[]{ false, null };
 		m_MediaDetailsRetrievingHandle = m_Media.getDetails(new Media.MediaDetailsCallback()
@@ -203,28 +208,23 @@ public class MediaDetailsDialog
 		}, null);
 		
 		// create dialog builder
-		if(m_DialogBuilder == null)
+		AlertDialog.Builder builder = new AlertDialog.Builder(context);
+		builder.setTitle(R.string.media_details);
+		builder.setView(R.layout.dialog_media_details);
+		builder.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener()
 		{
-			m_DialogBuilder = new AlertDialog.Builder(m_Context);
-			m_DialogBuilder.setTitle(R.string.media_details);
-			m_DialogBuilder.setView(R.layout.dialog_media_details);
-			m_DialogBuilder.setPositiveButton(android.R.string.ok, m_DefaultClickListener);
-			m_DialogBuilder.setOnDismissListener(new DialogInterface.OnDismissListener()
+			@Override
+			public void onClick(DialogInterface dialog, int which)
 			{
-				@Override
-				public void onDismiss(DialogInterface dialog)
-				{
-					m_MediaDetailsRetrievingHandle = Handle.close(m_MediaDetailsRetrievingHandle);
-					m_Dialog = null;
-				}
-			});
-		}
+				m_DialogFragment.dismissAllowingStateLoss();
+			}
+		});
 		
 		// create dialog
-		m_Dialog = m_DialogBuilder.create();
+		m_Dialog = builder.create();
 		
 		// waiting for media details
-		if(Handle.isValid(m_MediaDetailsRetrievingHandle))
+		if(m_MediaDetailsRetrievingHandle != null)
 		{
 			synchronized(result)
 			{
@@ -250,6 +250,17 @@ public class MediaDetailsDialog
 		}
 		else
 			this.onMediaDetailsRetrieved(null);
+	}
+	
+	
+	/**
+	 * Show dialog.
+	 */
+	public void show()
+	{
+		if(m_Dialog != null)
+			return;
+		m_DialogFragment.show(m_Activity.getFragmentManager(), "MediaDetailsDialog.DialogFragment");
 	}
 	
 	
@@ -302,7 +313,7 @@ public class MediaDetailsDialog
 		// flash
 		Boolean boolValue = (details != null ? details.get(PhotoMediaDetails.KEY_IS_FLASH_FIRED, null) : null);
 		if(boolValue != null)
-			this.createStringItem(itemContainer, R.string.media_details_flash, (boolValue ? m_Context.getString(R.string.media_details_flash_on) : m_Context.getString(R.string.media_details_flash_off)));
+			this.createStringItem(itemContainer, R.string.media_details_flash, (boolValue ? m_Activity.getString(R.string.media_details_flash_on) : m_Activity.getString(R.string.media_details_flash_off)));
 
 		// focal length
 		Double doubleValue = (details != null ? details.get(PhotoMediaDetails.KEY_FOCAL_LENGTH, null) : null);
@@ -312,7 +323,7 @@ public class MediaDetailsDialog
 		// WB
 		Integer intValue = (details != null ? details.get(PhotoMediaDetails.KEY_WHITE_BALANCE, null) : null);
 		if(intValue != null)
-			this.createStringItem(itemContainer, R.string.media_details_white_balance, (intValue == PhotoMediaDetails.WHITE_BALANCE_MANUAL ? m_Context.getString(R.string.media_details_manual) : m_Context.getString(R.string.media_details_auto)));
+			this.createStringItem(itemContainer, R.string.media_details_white_balance, (intValue == PhotoMediaDetails.WHITE_BALANCE_MANUAL ? m_Activity.getString(R.string.media_details_manual) : m_Activity.getString(R.string.media_details_auto)));
 		
 		// aperture
 		doubleValue = (details != null ? details.get(PhotoMediaDetails.KEY_APERTURE, null) : null);

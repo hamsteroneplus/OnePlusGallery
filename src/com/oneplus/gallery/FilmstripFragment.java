@@ -1339,7 +1339,7 @@ public class FilmstripFragment extends GalleryFragment
 		this.setFilmstripState(FilmstripState.BACKGROUND);
 		
 		// reset media index
-		this.setCurrentMediaIndexProp(-1, true);
+		//this.setCurrentMediaIndexProp(-1, true);
 	}
 
 	
@@ -1369,7 +1369,7 @@ public class FilmstripFragment extends GalleryFragment
 		m_CurrentMediaIndex = value;
 		
 		// set current item
-		if(updateFilmstrip)
+		if(updateFilmstrip && m_FilmstripView != null)
 			m_FilmstripView.setCurrentItem(m_CurrentMediaIndex, false);
 		
 		// check image decoding
