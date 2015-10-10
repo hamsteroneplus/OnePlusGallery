@@ -102,7 +102,7 @@ public class FilmstripFragment extends GalleryFragment
 	private Queue<FilmstripItem> m_FilmstripItemPool = new ArrayDeque<>();
 	private final SparseArray<FilmstripItem> m_FilmstripItems = new SparseArray<>();
 	private int m_FilmstripScrollMode;
-	private FilmstripState m_FilmstripState;
+	private FilmstripState m_FilmstripState = FilmstripState.BACKGROUND;
 	private FilmstripView m_FilmstripView;
 	private View m_FooterContainer;
 	private View m_HeaderContainer;
@@ -117,9 +117,10 @@ public class FilmstripFragment extends GalleryFragment
 	};
 	private Handle m_HighResBitmapDecodeHandle;
 	private boolean m_IsActionEditSupported;
+	private boolean m_IsInstanceStateSaved;
 	private boolean m_IsOverScaledDown;
 	private boolean m_IsScaled;
-	private boolean m_IsToolbarVisible;
+	private boolean m_IsToolbarVisible = true;
 	private final ThumbnailImageManager.DecodingCallback m_LowResBitmapDecodeCallback = new ThumbnailImageManager.DecodingCallback()
 	{
 		@Override
@@ -692,6 +693,21 @@ public class FilmstripFragment extends GalleryFragment
 	}
 	
 	
+	// Called when backing to initial UI state.
+	@Override
+	protected void onBackToInitialUIState()
+	{
+		// call super
+		super.onBackToInitialUIState();
+		
+		// set filmstrip state
+		this.setFilmstripState(FilmstripState.BROWSE_SINGLE_PAGE);
+		
+		// reset tool bar
+		this.setToolbarVisibility(true, false);
+	}
+	
+	
 	// Call when onCreate
 	@Override
 	public void onCreate(Bundle savedInstanceState)
@@ -810,6 +826,10 @@ public class FilmstripFragment extends GalleryFragment
 				FilmstripFragment.this.deletePage(m_FilmstripView.getCurrentItem());
 			}
 		});
+		
+		// setup toolbar
+		if(m_IsToolbarVisible)
+			this.setToolbarVisibility(true, false);
 		
 		return view;
 	}
@@ -1001,7 +1021,7 @@ public class FilmstripFragment extends GalleryFragment
 	public void onPause()
 	{
 		Log.v(TAG, "onPause()");
-		
+		/*
 		// cancel decoding
 		this.cancelDecodingImages();
 		
@@ -1009,11 +1029,16 @@ public class FilmstripFragment extends GalleryFragment
 		m_HighResBitmapActiveHandle = Handle.close(m_HighResBitmapActiveHandle);
 		m_MediumResBitmapActiveHandle = Handle.close(m_MediumResBitmapActiveHandle);
 		
-		// hide tool bar
-		this.setToolbarVisibility(false, false);
-		
-		// restore status bar
-		this.setStatusBarVisibility(true);
+		// reset tool bar and system UI
+		if(!m_IsInstanceStateSaved)
+		{
+			// hide tool bar
+			this.setToolbarVisibility(false, false);
+			
+			// restore status bar
+			this.setStatusBarVisibility(true);
+		}
+		*/
 		
 		// call super
 		super.onPause();
@@ -1091,11 +1116,17 @@ public class FilmstripFragment extends GalleryFragment
 		m_HighResBitmapActiveHandle = BITMAP_POOL_HIGH_RESOLUTION.activate();
 		m_MediumResBitmapActiveHandle = BITMAP_POOL_MEDIUM_RESOLUTION.activate();
 		
-		// set filmstrip state
-		this.setFilmstripState(FilmstripState.BROWSE_SINGLE_PAGE);
-
-		// set toolbars visible
-		this.setToolbarVisibility(true, true);
+		// update state
+		m_IsInstanceStateSaved = false;
+	}
+	
+	
+	// Called when saving instance state.
+	@Override
+	public void onSaveInstanceState(Bundle outState)
+	{
+		m_IsInstanceStateSaved = true;
+		super.onSaveInstanceState(outState);
 	}
 	
 	
@@ -1273,8 +1304,27 @@ public class FilmstripFragment extends GalleryFragment
 	{
 		Log.v(TAG, "onStop()");
 		
-		// reset
-		this.resetFilmstripState();
+		// cancel decoding
+		this.cancelDecodingImages();
+		
+		// deactivate bitmap pools
+		m_HighResBitmapActiveHandle = Handle.close(m_HighResBitmapActiveHandle);
+		m_MediumResBitmapActiveHandle = Handle.close(m_MediumResBitmapActiveHandle);
+		
+		// reset state
+		if(!m_IsInstanceStateSaved)
+		{
+			// hide tool bar
+			this.setToolbarVisibility(false, false);
+			
+			// restore status bar
+			this.setStatusBarVisibility(true);
+			
+			// reset state
+			this.resetFilmstripState();
+		}
+		else
+			Log.v(TAG, "onStop() - Instance state saved, prevent resetting state");
 		
 		// deactivate thumbnail image manager
 		m_ThumbManagerActivateHandle = Handle.close(m_ThumbManagerActivateHandle);
@@ -1515,7 +1565,7 @@ public class FilmstripFragment extends GalleryFragment
 	// Update edit button visibility
 	private void updateEditButtonVisibility() 
 	{
-		if(m_IsToolbarVisible) 
+		if(m_IsToolbarVisible && m_EditorButtonContainer != null) 
 		{
 			// check edit supported
 			if(!m_IsActionEditSupported)

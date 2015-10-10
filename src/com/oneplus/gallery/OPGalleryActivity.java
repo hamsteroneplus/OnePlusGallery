@@ -337,7 +337,7 @@ public class OPGalleryActivity extends GalleryActivity
 	{
 		// call super
 		super.onCreate(savedInstanceState, tempInstanceState);
-		
+
 		// setup media set list
 		this.setupMediaSetList();
 		
@@ -486,6 +486,7 @@ public class OPGalleryActivity extends GalleryActivity
 	private void onFilmstripClosed()
 	{
 		m_FilmstripContainer.setVisibility(View.GONE);
+		m_FilmstripFragment.backToInitialUIState();
 		m_FilmstripFragment.set(FilmstripFragment.PROP_MEDIA_LIST, null);
 		if(!m_FilmstripFragment.isDetached())
 		{
@@ -514,6 +515,7 @@ public class OPGalleryActivity extends GalleryActivity
 	private void onGridViewClosed()
 	{
 		m_GridViewContainer.setVisibility(View.GONE);
+		m_GridViewFragment.backToInitialUIState();
 		m_GridViewFragment.set(GridViewFragment.PROP_IS_SELECTION_MODE, false);
 		m_GridViewFragment.set(GridViewFragment.PROP_MEDIA_LIST, null);
 		if(!m_GridViewFragment.isDetached())
@@ -570,7 +572,9 @@ public class OPGalleryActivity extends GalleryActivity
 		// show media
 		m_FilmstripFragment.set(FilmstripFragment.PROP_MEDIA_LIST, mediaList);
 		m_FilmstripFragment.set(FilmstripFragment.PROP_CURRENT_MEDIA_INDEX, index);
-		if(!this.changeMode(Mode.FILMSTRIP))
+		if(this.changeMode(Mode.FILMSTRIP))
+			m_FilmstripFragment.backToInitialUIState();
+		else
 		{
 			Log.e(TAG, "onMediaClickedInGridView() - Fail to change mode");
 			m_FilmstripFragment.set(FilmstripFragment.PROP_MEDIA_LIST, null);
@@ -633,6 +637,7 @@ public class OPGalleryActivity extends GalleryActivity
 			}
 			m_GridViewFragment.set(GridViewFragment.PROP_TITLE, set.get(MediaSet.PROP_NAME));
 			m_GridViewFragment.set(GridViewFragment.PROP_MEDIA_LIST, m_MediaList);
+			m_GridViewFragment.backToInitialUIState();
 			this.changeMode(Mode.GRID_VIEW);
 		}
 		else if(m_DefaultGridViewFragment != null)
@@ -693,11 +698,11 @@ public class OPGalleryActivity extends GalleryActivity
 		// reset current mode
 		this.changeMode(Mode.ENTRY, false);
 		
-		// cancel selection mode
+		// reset UI state
 		if(m_DefaultGridViewFragment != null)
-			m_DefaultGridViewFragment.set(GridViewFragment.PROP_IS_SELECTION_MODE, false);
+			m_DefaultGridViewFragment.backToInitialUIState();
 		if(m_MediaSetListFragment != null)
-			m_MediaSetListFragment.set(MediaSetListFragment.PROP_IS_SELECTION_MODE, false);
+			m_MediaSetListFragment.backToInitialUIState();
 		
 		// show default media set
 		m_EntryViewPager.setCurrentItem(0, false);

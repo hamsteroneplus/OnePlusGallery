@@ -12,21 +12,17 @@ import com.oneplus.base.EventKey;
 import com.oneplus.base.EventSource;
 import com.oneplus.base.Handle;
 import com.oneplus.base.Log;
-import com.oneplus.base.PropertyChangeEventArgs;
-import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
-import com.oneplus.base.PropertySource;
 import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaList;
-import com.oneplus.gallery.media.MediaSet;
 import com.oneplus.gallery.media.ThumbnailImageManager;
 import com.oneplus.gallery.media.VideoMedia;
+import com.oneplus.gallery.widget.GridView;
 import com.oneplus.media.BitmapPool;
 import com.oneplus.media.CenterCroppedBitmapPool;
 
 import android.app.Activity;
 import android.content.Context;
-import android.content.Intent;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -40,7 +36,6 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.SystemClock;
-import android.provider.MediaStore;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.MotionEvent;
@@ -52,7 +47,6 @@ import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
 import android.widget.AdapterView.OnItemLongClickListener;
 import android.widget.BaseAdapter;
-import android.widget.GridView;
 import android.widget.ImageView;
 import android.widget.ImageView.ScaleType;
 import android.widget.TextView;
@@ -66,6 +60,7 @@ public class GridViewFragment extends GalleryFragment {
 	// constant
 	private static int PRE_DECODE_BITMAP_COUNTS = 27;
 	
+	
 	// Private fields
 	private int m_AnchorPosition; // Keep the very first selected item position
 	private View m_EmptyMediaView;
@@ -78,6 +73,7 @@ public class GridViewFragment extends GalleryFragment {
 	private boolean m_HasActionBar;
 	private boolean m_IsCameraRoll;
 	private boolean m_IsSelectionMode = false;
+	private int m_LastGridViewPosition = -1;
 	private MediaList m_MediaList = null;
 	private PreDecodeBitmapRunnable m_PreDecodeBitmapRunnable;
 	private List<Media> m_SelectionMeidaList = new ArrayList<>();
@@ -315,6 +311,27 @@ public class GridViewFragment extends GalleryFragment {
 	}
 	
 	
+	// Called when backing to initial UI state.
+	@Override
+	protected void onBackToInitialUIState()
+	{
+		// scroll to top
+		if(m_GridView != null && m_GridViewItemAdapter != null && m_GridViewItemAdapter.getCount() > 0)
+		{
+			Log.v(TAG, "onBackToInitialUIState() - Scroll grid view to top");
+			m_GridView.setSelection(0);
+		}
+		else
+		{
+			Log.v(TAG, "onBackToInitialUIState() - Scroll grid view to top later");
+			m_LastGridViewPosition = 0;
+		}
+		
+		// cancel selection mode
+		this.set(PROP_IS_SELECTION_MODE, false);
+	}
+	
+	
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		// TODO Auto-generated method stub
@@ -325,7 +342,6 @@ public class GridViewFragment extends GalleryFragment {
 
 		// Prepare greySquare
 		m_GreySquare = new SquareDrawable(m_GridviewItemWidth, m_GridviewItemHeight);
-		
 	}
 	
 	
@@ -398,7 +414,6 @@ public class GridViewFragment extends GalleryFragment {
 		// refresh items
 		if(m_GridViewItemAdapter != null)
 			m_GridViewItemAdapter.notifyDataSetChanged();
-		
 	}
 	
 	private void onMediaRemoved(ListChangeEventArgs e)
@@ -502,6 +517,7 @@ public class GridViewFragment extends GalleryFragment {
 		// deactivate thumbnail image manager
 		m_ThumbManagerActivateHandle = Handle.close(m_ThumbManagerActivateHandle);
 	}
+	
 	
 	@SuppressWarnings("unchecked")
 	@Override
@@ -613,6 +629,13 @@ public class GridViewFragment extends GalleryFragment {
 		if(m_GridViewItemAdapter == null)
 			m_GridViewItemAdapter = new GridViewItemAdapter(this.getActivity());
 		m_GridView.setAdapter(m_GridViewItemAdapter);
+		m_GridView.setSaveInstanceStateEnabled(false);
+		if(m_LastGridViewPosition >= 0)
+		{
+			Log.v(TAG, "onCreateView() - Restore grid view position to ", m_LastGridViewPosition);
+			m_GridView.setSelection(m_LastGridViewPosition);
+			m_LastGridViewPosition = -1;
+		}
 		m_GridView.setOnItemClickListener(new OnItemClickListener() {
 			@Override
 			public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
@@ -845,6 +868,7 @@ public class GridViewFragment extends GalleryFragment {
 		// clear references
 		if(m_GridView != null)
 		{
+			m_LastGridViewPosition = m_GridView.getFirstVisiblePosition();
 			m_GridView.setAdapter(null);
 			m_GridView.setOnItemClickListener(null);
 			m_GridView.setOnItemLongClickListener(null);

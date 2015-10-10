@@ -1,7 +1,9 @@
 <resources>
 
 	<!-- Application -->
-	<style name="AppBaseTheme" parent="@android:style/Theme.Material">
+	<style name="AppBaseTheme" parent="android:Theme.Material">
+		<item name="android:alertDialogTheme">@android:style/Theme.Material.Light.Dialog.Alert</item>
+		<item name="android:dialogTheme">@android:style/Theme.Material.Light.Dialog</item>
 		<item name="android:windowActionBar">false</item>
 	</style>
 

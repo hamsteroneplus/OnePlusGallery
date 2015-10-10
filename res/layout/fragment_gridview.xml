@@ -13,7 +13,7 @@
         />
     
     <!-- Device has Photos -->
-    <GridView
+    <com.oneplus.gallery.widget.GridView
         android:id="@+id/gridview"
         android:layout_below="@id/toolbar"
         android:layout_width="match_parent"

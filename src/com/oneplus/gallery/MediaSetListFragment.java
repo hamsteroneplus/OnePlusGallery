@@ -176,6 +176,19 @@ public class MediaSetListFragment extends GalleryFragment
 	}
 	
 	
+	// Called when backing to initial UI state.
+	@Override
+	protected void onBackToInitialUIState()
+	{
+		// scroll to top
+		if(m_MediaSetListView != null && m_MediaSetListAdapter != null && m_MediaSetListAdapter.getCount() > 0)
+			m_MediaSetListView.setSelection(0);
+		
+		// cancel selection mode
+		this.set(PROP_IS_SELECTION_MODE, false);
+	}
+	
+	
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);

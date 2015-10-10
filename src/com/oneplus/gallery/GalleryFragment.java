@@ -1,6 +1,12 @@
 package com.oneplus.gallery;
 
 import android.app.Activity;
+import android.os.Bundle;
+import android.os.Message;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+
 import com.oneplus.base.BaseFragment;
 import com.oneplus.base.EventKey;
 import com.oneplus.base.PropertyKey;
@@ -36,8 +42,13 @@ public abstract class GalleryFragment extends BaseFragment
 	public static final EventKey<ActionItemEventArgs> EVENT_ACTION_ITEM_CLICKED = new EventKey<>("ActionItemClicked", ActionItemEventArgs.class, GalleryFragment.class);
 	
 	
+	// Constants.
+	private static final int MSG_BACK_TO_INITIAL_UI_STATE = -10000;
+	
+	
 	// Fields.
 	private GalleryActivity m_GalleryActivity;
+	private boolean m_IsInitialUIStateNeeded;
 	
 	
 	/**
@@ -46,6 +57,23 @@ public abstract class GalleryFragment extends BaseFragment
 	protected GalleryFragment()
 	{
 		this.setRetainInstance(true);
+	}
+	
+	
+	/**
+	 * Go back to initial UI state.
+	 */
+	public void backToInitialUIState()
+	{
+		this.verifyAccess();
+		if(m_GalleryActivity != null && this.get(PROP_STATE) != State.NEW)
+		{
+			m_IsInitialUIStateNeeded = false;
+			this.getHandler().removeMessages(MSG_BACK_TO_INITIAL_UI_STATE);
+			this.onBackToInitialUIState();
+		}
+		else
+			m_IsInitialUIStateNeeded = true;
 	}
 	
 	
@@ -59,6 +87,24 @@ public abstract class GalleryFragment extends BaseFragment
 	}
 	
 	
+	// Handle message.
+	@Override
+	protected void handleMessage(Message msg)
+	{
+		switch(msg.what)
+		{
+			case MSG_BACK_TO_INITIAL_UI_STATE:
+				m_IsInitialUIStateNeeded = false;
+				this.onBackToInitialUIState();
+				break;
+				
+			default:
+				super.handleMessage(msg);
+				break;
+		}	
+	}
+	
+	
 	// Called after attaching to activity.
 	@Override
 	public void onAttach(Activity activity)
@@ -68,6 +114,36 @@ public abstract class GalleryFragment extends BaseFragment
 		
 		// attach to gallery activity
 		m_GalleryActivity = (GalleryActivity)activity;
+		
+		// back to initial UI state
+		if(m_IsInitialUIStateNeeded && this.get(PROP_STATE) != State.NEW)
+		{
+			m_IsInitialUIStateNeeded = false;
+			this.getHandler().sendMessageAtFrontOfQueue(Message.obtain(this.getHandler(), MSG_BACK_TO_INITIAL_UI_STATE));
+		}
+	}
+	
+	
+	/**
+	 * Called when backing to initial UI state.
+	 */
+	protected void onBackToInitialUIState()
+	{}
+	
+	
+	// Called when creating.
+	@Override
+	public void onCreate(Bundle savedInstanceState)
+	{
+		// call super
+		super.onCreate(savedInstanceState);
+		
+		// back to initial UI state
+		if(m_IsInitialUIStateNeeded && m_GalleryActivity != null)
+		{
+			m_IsInitialUIStateNeeded = false;
+			this.getHandler().sendMessageAtFrontOfQueue(Message.obtain(this.getHandler(), MSG_BACK_TO_INITIAL_UI_STATE));
+		}
 	}
 	
 	
@@ -77,6 +153,9 @@ public abstract class GalleryFragment extends BaseFragment
 	{
 		// detach from gallery activity
 		m_GalleryActivity = null;
+		
+		// cancel backing to initial UI state
+		this.getHandler().removeMessages(MSG_BACK_TO_INITIAL_UI_STATE);
 		
 		// call super
 		super.onDetach();
