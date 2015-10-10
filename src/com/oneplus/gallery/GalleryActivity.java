@@ -21,8 +21,6 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.provider.MediaStore;
-import android.view.View;
-import android.view.Window;
 import android.widget.ProgressBar;
 
 import com.oneplus.base.BaseActivity;
@@ -32,7 +30,6 @@ import com.oneplus.base.PropertyKey;
 import com.oneplus.base.ScreenSize;
 import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaSet;
-import com.oneplus.util.ListUtils;
 
 /**
  * Base class for activity in Gallery.
@@ -73,10 +70,11 @@ public abstract class GalleryActivity extends BaseActivity
 	
 	
 	// Fields.
+	private Gallery m_Gallery;
+	private Handle m_GalleryAttachHandle;
+	private boolean m_IsInstanceStateSaved;
 	private boolean m_IsSharingMedia;
 	private ScreenSize m_ScreenSize;
-	private List<StatusBarVisibilityHandle> m_StatusBarVisibilityHandles;
-	private SystemUIManager m_SystemUIManager;
 	
 	
 	/**
@@ -147,34 +145,6 @@ public abstract class GalleryActivity extends BaseActivity
 	}
 	
 	
-	// Handle for status bar visibility.
-	private static final class StatusBarVisibilityHandle extends Handle
-	{
-		public final int flags;
-		public final boolean isVisible;
-		public final SystemUIManager systemUIManager;
-		
-		public StatusBarVisibilityHandle(SystemUIManager systemUIManager, boolean isVisible, int flags)
-		{
-			super("StatusBarVisibility");
-			this.systemUIManager = systemUIManager;
-			this.isVisible = isVisible;
-			this.flags = flags;
-		}
-		
-		public void drop()
-		{
-			this.closeDirectly();
-		}
-
-		@Override
-		protected void onClose(int flags)
-		{
-			this.systemUIManager.restoreStatusBarVisibility(this);
-		}
-	}
-	
-	
 	// Fragment for sharing instance state.
 	private static final class InstanceStateFragment extends Fragment
 	{
@@ -183,44 +153,15 @@ public abstract class GalleryActivity extends BaseActivity
 		
 		// Fields.
 		public final Map<String, Object> extras = new HashMap<>();
+		public Gallery gallery;
 		public boolean isDeletingMedia;
 		public boolean isSharingMedia;
 		public boolean isStatusBarVisible;
-		public List<StatusBarVisibilityHandle> statusBarVisibilityHandles;
-		public SystemUIManager systemUIManager;
 		
 		// Constructor.
 		public InstanceStateFragment()
 		{
 			this.setRetainInstance(true);
-		}
-	}
-	
-	
-	// System UI manager.
-	private static final class SystemUIManager
-	{
-		// Fields.
-		private GalleryActivity m_Activity;
-		
-		// Attach.
-		public void attach(GalleryActivity activity)
-		{
-			m_Activity = activity;
-		}
-		
-		// Detach.
-		public void detach(GalleryActivity activity)
-		{
-			if(m_Activity == activity)
-				m_Activity = null;
-		}
-		
-		// Restore status bar state.
-		public void restoreStatusBarVisibility(StatusBarVisibilityHandle handle)
-		{
-			if(m_Activity != null)
-				m_Activity.restoreStatusBarVisibility(handle);
 		}
 	}
 	
@@ -661,6 +602,16 @@ public abstract class GalleryActivity extends BaseActivity
 	
 	
 	/**
+	 * Get related {@link Gallery}.
+	 * @return {@link Gallery}.
+	 */
+	public final Gallery getGallery()
+	{
+		return m_Gallery;
+	}
+	
+	
+	/**
 	 * Go back to previous state.
 	 */
 	public boolean goBack()
@@ -720,33 +671,29 @@ public abstract class GalleryActivity extends BaseActivity
 		InstanceStateFragment stateFragment = (InstanceStateFragment)this.getFragmentManager().findFragmentByTag(InstanceStateFragment.TAG);
 		if(stateFragment != null)
 		{
+			Log.w(TAG, "onCreate() - Use existent Gallery");
+			m_Gallery = stateFragment.gallery;
 			this.setReadOnly(PROP_IS_DELETING_MEDIA, stateFragment.isDeletingMedia);
 			this.setReadOnly(PROP_IS_SHARING_MEDIA, stateFragment.isSharingMedia);
 			this.setReadOnly(PROP_IS_STATUS_BAR_VISIBLE, stateFragment.isStatusBarVisible);
-			m_SystemUIManager = stateFragment.systemUIManager;
-			m_StatusBarVisibilityHandles = stateFragment.statusBarVisibilityHandles;
 		}
 		else
 		{
-			m_SystemUIManager = new SystemUIManager();
-			m_StatusBarVisibilityHandles = new ArrayList<>();
+			Log.w(TAG, "onCreate() - Create new Gallery");
+			m_Gallery = new Gallery();
 		}
-		m_SystemUIManager.attach(this);
+		
+		// attach to gallery
+		m_GalleryAttachHandle = m_Gallery.attachActivity(this);
+		if(!Handle.isValid(m_GalleryAttachHandle))
+		{
+			Log.e(TAG, "onCreate() - Fail to attach to Gallery");
+			this.finish();
+			return;
+		}
 		
 		// initialize screen size
 		this.updateScreenSize();
-		
-		// initialize system UI state
-		View decorView = this.getWindow().getDecorView();
-		decorView.setOnSystemUiVisibilityChangeListener(new View.OnSystemUiVisibilityChangeListener()
-		{
-			@Override
-			public void onSystemUiVisibilityChange(int visibility)
-			{
-				onSystemUIVisibilityChanged(visibility);
-			}
-		});
-		this.setSystemUIVisibility(this.get(PROP_IS_STATUS_BAR_VISIBLE), this.get(PROP_IS_NAVIGATION_BAR_VISIBLE));
 		
 		// create
 		this.onCreate(savedInstanceState, stateFragment != null ? stateFragment.extras : null);
@@ -766,8 +713,15 @@ public abstract class GalleryActivity extends BaseActivity
 	@Override
 	protected void onDestroy()
 	{
-		// detach system UI manager
-		m_SystemUIManager.detach(this);
+		// detach from gallery
+		m_GalleryAttachHandle = Handle.close(m_GalleryAttachHandle);
+		
+		// release gallery
+		if(!m_IsInstanceStateSaved)
+		{
+			Log.w(TAG, "onDestroy() - Release Gallery");
+			m_Gallery.release();
+		}
 		
 		// call super
 		super.onDestroy();
@@ -801,6 +755,15 @@ public abstract class GalleryActivity extends BaseActivity
 	{}
 	
 	
+	// Called when resuming
+	@Override
+	protected void onResume()
+	{
+		super.onResume();
+		m_IsInstanceStateSaved = false;
+	}
+	
+	
 	// Save instance state.
 	@Override
 	protected final void onSaveInstanceState(Bundle outState)
@@ -814,15 +777,18 @@ public abstract class GalleryActivity extends BaseActivity
 		}
 		
 		// save instance state
+		Log.w(TAG, "onSaveInstanceState() - Keep Gallery instance");
+		stateFragment.gallery = m_Gallery;
 		stateFragment.isDeletingMedia = this.get(PROP_IS_DELETING_MEDIA);
 		stateFragment.isSharingMedia = this.get(PROP_IS_SHARING_MEDIA);
 		stateFragment.isStatusBarVisible = this.get(PROP_IS_STATUS_BAR_VISIBLE);
-		stateFragment.systemUIManager = m_SystemUIManager;
-		stateFragment.statusBarVisibilityHandles = m_StatusBarVisibilityHandles;
 		this.onSaveInstanceState(outState, stateFragment.extras);
 		
 		// call super
 		super.onSaveInstanceState(outState);
+		
+		// update state
+		m_IsInstanceStateSaved = true;
 	}
 	
 	
@@ -841,53 +807,6 @@ public abstract class GalleryActivity extends BaseActivity
 	 */
 	protected void onStatusBarVisibilityChanged(boolean isVisible)
 	{}
-	
-	
-	// Called when system UI visibility changed.
-	private void onSystemUIVisibilityChanged(int visibility)
-	{
-		// check visibilities
-		boolean isStatusBarVisible = ((visibility & View.SYSTEM_UI_FLAG_FULLSCREEN) != 0);
-		boolean isNavBarVisible = ((visibility & View.SYSTEM_UI_FLAG_HIDE_NAVIGATION) != 0);
-		
-		// check status bar visibility
-		Boolean showStatusBar = null;
-		for(int i = m_StatusBarVisibilityHandles.size() - 1 ; i >= 0 ; --i)
-		{
-			StatusBarVisibilityHandle handle = m_StatusBarVisibilityHandles.get(i);
-			if(handle.isVisible != isStatusBarVisible)
-			{
-				if((handle.flags & FLAG_CANCELABLE) == 0)
-					showStatusBar = handle.isVisible;
-				else
-				{
-					handle.drop();
-					m_StatusBarVisibilityHandles.remove(i);
-				}
-			}
-		}
-		
-		// check navigation bar
-		Boolean showNavBar = null;
-		
-		// update system UI visibility
-		if(showStatusBar != null || showNavBar != null)
-			this.setSystemUIVisibility(showStatusBar, showNavBar);
-	}
-	
-	
-	// Restore status bar visibility.
-	private void restoreStatusBarVisibility(StatusBarVisibilityHandle handle)
-	{
-		boolean isLast = ListUtils.isLastObject(m_StatusBarVisibilityHandles, handle);
-		if(m_StatusBarVisibilityHandles.remove(handle) && isLast)
-		{
-			if(m_StatusBarVisibilityHandles.isEmpty())
-				this.setSystemUIVisibility(true, null);
-			else
-				this.setSystemUIVisibility(m_StatusBarVisibilityHandles.get(m_StatusBarVisibilityHandles.size() - 1).isVisible, null);
-		}
-	}
 	
 	
 	// Prepare sharing single media.
@@ -970,88 +889,6 @@ public abstract class GalleryActivity extends BaseActivity
 		intent.setType(mimeType);
 		intent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uriList);
 		intent.setAction(Intent.ACTION_SEND_MULTIPLE);
-		return true;
-	}
-	
-	
-	/**
-	 * Set status bar visibility.
-	 * @param isVisible True to show status bar.
-	 * @return Handle to this operation.
-	 */
-	public Handle setStatusBarVisibility(boolean isVisible)
-	{
-		return this.setStatusBarVisibility(isVisible, FLAG_CANCELABLE);
-	}
-	
-	
-	/**
-	 * Set status bar visibility.
-	 * @param isVisible True to show status bar.
-	 * @param flags Flags:
-	 * <ul>
-	 *   <li>{@link #FLAG_CANCELABLE}</li>
-	 * </ul>
-	 * @return Handle to this operation.
-	 */
-	public Handle setStatusBarVisibility(boolean isVisible, int flags)
-	{
-		this.verifyAccess();
-		for(int i = m_StatusBarVisibilityHandles.size() - 1 ; i >= 0 ; --i)
-		{
-			StatusBarVisibilityHandle handle = m_StatusBarVisibilityHandles.get(i);
-			if(handle.isVisible != isVisible && (handle.flags & FLAG_CANCELABLE) != 0)
-			{
-				handle.drop();
-				m_StatusBarVisibilityHandles.remove(i);
-			}
-		}
-		StatusBarVisibilityHandle handle = new StatusBarVisibilityHandle(m_SystemUIManager, isVisible, flags);
-		m_StatusBarVisibilityHandles.add(handle);
-		this.setSystemUIVisibility(isVisible, null);
-		return handle;
-	}
-	
-	
-	// Set system UI visibility.
-	private boolean setSystemUIVisibility(Boolean isStatusBarVisible, Boolean isNavBarVisible)
-	{
-		// check state
-		Window window = this.getWindow();
-		if(window == null)
-		{
-			Log.e(TAG, "setSystemUIVisibility() - No window");
-			return false;
-		}
-		
-		// prepare
-		int visibility = window.getDecorView().getSystemUiVisibility();
-		if(isStatusBarVisible != null)
-		{
-			if(isStatusBarVisible)
-				visibility &= ~View.SYSTEM_UI_FLAG_FULLSCREEN;
-			else
-				visibility |= View.SYSTEM_UI_FLAG_FULLSCREEN;
-		}
-		if(isNavBarVisible != null)
-		{
-			if(isNavBarVisible)
-				visibility &= ~View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
-			else
-				visibility |= View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
-		}
-		visibility |= (View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
-		
-		// update
-		window.getDecorView().setSystemUiVisibility(visibility);
-		
-		// update property
-		if(isStatusBarVisible != null && this.setReadOnly(PROP_IS_STATUS_BAR_VISIBLE, isStatusBarVisible))
-			this.onStatusBarVisibilityChanged(isStatusBarVisible);
-		if(isNavBarVisible != null && this.setReadOnly(PROP_IS_NAVIGATION_BAR_VISIBLE, isNavBarVisible))
-			this.onNavigationBarVisibilityChanged(isNavBarVisible);
-		
-		// complete
 		return true;
 	}
 	

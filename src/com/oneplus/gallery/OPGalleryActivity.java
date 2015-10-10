@@ -221,7 +221,13 @@ public class OPGalleryActivity extends GalleryActivity
 		
 		// show status bar
 		if(!this.get(PROP_IS_STATUS_BAR_VISIBLE))
-			this.setStatusBarVisibility(true, FLAG_CANCELABLE);
+		{
+			Gallery gallery = this.getGallery();
+			if(gallery != null)
+				gallery.setStatusBarVisibility(true, FLAG_CANCELABLE);
+			else
+				Log.w(TAG, "closeFilmstrip() - No gallery");
+		}
 		
 		// close
 		if(animate)

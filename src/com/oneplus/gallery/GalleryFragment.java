@@ -3,12 +3,10 @@ package com.oneplus.gallery;
 import android.app.Activity;
 import android.os.Bundle;
 import android.os.Message;
-import android.view.LayoutInflater;
-import android.view.View;
-import android.view.ViewGroup;
 
 import com.oneplus.base.BaseFragment;
 import com.oneplus.base.EventKey;
+import com.oneplus.base.Log;
 import com.oneplus.base.PropertyKey;
 
 /**
@@ -47,6 +45,7 @@ public abstract class GalleryFragment extends BaseFragment
 	
 	
 	// Fields.
+	private Gallery m_Gallery;
 	private GalleryActivity m_GalleryActivity;
 	private boolean m_IsInitialUIStateNeeded;
 	
@@ -74,6 +73,16 @@ public abstract class GalleryFragment extends BaseFragment
 		}
 		else
 			m_IsInitialUIStateNeeded = true;
+	}
+	
+	
+	/**
+	 * Get related {@link Gallery}.
+	 * @return {@link Gallery}.
+	 */
+	public final Gallery getGallery()
+	{
+		return m_Gallery;
 	}
 	
 	
@@ -114,6 +123,11 @@ public abstract class GalleryFragment extends BaseFragment
 		
 		// attach to gallery activity
 		m_GalleryActivity = (GalleryActivity)activity;
+		if(m_Gallery == null)
+		{
+			Log.v(TAG, "onAttach() - Attach to Gallery");
+			m_Gallery = m_GalleryActivity.getGallery();
+		}
 		
 		// back to initial UI state
 		if(m_IsInitialUIStateNeeded && this.get(PROP_STATE) != State.NEW)

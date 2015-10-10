@@ -152,6 +152,7 @@ public class FilmstripFragment extends GalleryFragment
 	private Queue<BitmapDecodeInfo> m_ReusedBitmapDecodeInfos = new ArrayDeque<>();
 	private float m_ScaleFactor;
 	private View m_ShareButton;
+	private Handle m_StatusBarVisibilityHandle;
 	private Handle m_ThumbManagerActivateHandle;
 	private ViewVisibilityState m_ToolbarVisibilityState = ViewVisibilityState.INVISIBLE;
 	
@@ -1514,8 +1515,16 @@ public class FilmstripFragment extends GalleryFragment
 	// Set status bar visibility
 	private void setStatusBarVisibility(boolean visible)
 	{
-		GalleryActivity galleryActivity = this.getGalleryActivity();
-		galleryActivity.setStatusBarVisibility(visible);
+		if(visible)
+			m_StatusBarVisibilityHandle = Handle.close(m_StatusBarVisibilityHandle);
+		else if(!Handle.isValid(m_StatusBarVisibilityHandle))
+		{
+			Gallery gallery = this.getGallery();
+			if(gallery != null)
+				m_StatusBarVisibilityHandle = gallery.setStatusBarVisibility(false);
+			else
+				Log.e(TAG, "setStatusBarVisibility() - No gallery");
+		}
 	}
 	
 	
