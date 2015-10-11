@@ -97,7 +97,7 @@ public class MediaSetListFragment extends GalleryFragment
 			onMediaSetRemoving(e);
 		}
 	};
-	private GalleryActivity.MediaSetDeletionCallback m_MediaSetDeleteCallback = new GalleryActivity.MediaSetDeletionCallback() {
+	private Gallery.MediaSetDeletionCallback m_MediaSetDeleteCallback = new Gallery.MediaSetDeletionCallback() {
 
 		@Override
 		public void onDeletionProcessCompleted() {
@@ -316,7 +316,7 @@ public class MediaSetListFragment extends GalleryFragment
 				switch (item.getItemId()) {
 				
 					case R.id.toolbar_delete:
-						getGalleryActivity().deleteMediaSet(m_SelectedMediaSet, m_MediaSetDeleteCallback);
+						getGallery().deleteMediaSet(m_SelectedMediaSet, m_MediaSetDeleteCallback);
 						break;
 				}
 				return false;

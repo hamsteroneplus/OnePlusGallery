@@ -642,12 +642,12 @@ public class FilmstripFragment extends GalleryFragment
 	private void deletePage(int position)
 	{
 		// check position
-		if(!validatePosition(position))
+		if(!validatePosition(position) || !this.isAttachedToGallery())
 			return;
 
-		// TODO: delete page from activity
+		// delete page
 		Media media = m_MediaList.get(position);
-		this.getGalleryActivity().deleteMedia(media);
+		this.getGallery().deleteMedia(media);
 	}
 	
 	

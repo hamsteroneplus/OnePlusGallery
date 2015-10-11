@@ -85,7 +85,7 @@ public class GridViewFragment extends GalleryFragment {
 //	private boolean m_SetEmptyMediaView = false;
 	
 	private static BitmapPool m_SmallBitmapPool = new CenterCroppedBitmapPool("GridViewFragmentSmallBitmapPool", 32 << 20, Bitmap.Config.RGB_565, 4, BitmapPool.FLAG_USE_EMBEDDED_THUMB_ONLY);
-	private GalleryActivity.MediaDeletionCallback m_DeleteCallback = new GalleryActivity.MediaDeletionCallback() {
+	private Gallery.MediaDeletionCallback m_DeleteCallback = new Gallery.MediaDeletionCallback() {
 		@Override
 		public void onDeletionProcessCompleted() {
 			super.onDeletionProcessCompleted();
@@ -763,7 +763,7 @@ public class GridViewFragment extends GalleryFragment {
 					break;
 				}
 				case R.id.toolbar_delete:
-					getGalleryActivity().deleteMedia(getSelectedMedia(), m_DeleteCallback);
+					getGallery().deleteMedia(getSelectedMedia(), m_DeleteCallback);
 					break;
 				}
 				return false;

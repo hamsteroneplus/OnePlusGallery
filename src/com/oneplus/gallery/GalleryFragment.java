@@ -114,6 +114,16 @@ public abstract class GalleryFragment extends BaseFragment
 	}
 	
 	
+	/**
+	 * Check whether fragment is attached to {@link Gallery} or not.
+	 * @return True if fragment is attached to {@link Gallery}.
+	 */
+	public final boolean isAttachedToGallery()
+	{
+		return (m_Gallery != null);
+	}
+	
+	
 	// Called after attaching to activity.
 	@Override
 	public void onAttach(Activity activity)
@@ -127,6 +137,7 @@ public abstract class GalleryFragment extends BaseFragment
 		{
 			Log.v(TAG, "onAttach() - Attach to Gallery");
 			m_Gallery = m_GalleryActivity.getGallery();
+			this.onAttachToGallery(m_Gallery);
 		}
 		
 		// back to initial UI state
@@ -136,6 +147,14 @@ public abstract class GalleryFragment extends BaseFragment
 			this.getHandler().sendMessageAtFrontOfQueue(Message.obtain(this.getHandler(), MSG_BACK_TO_INITIAL_UI_STATE));
 		}
 	}
+	
+	
+	/**
+	 * Called when attaching to {@link Gallery}.
+	 * @param gallery {@link Gallery} attached.
+	 */
+	protected void onAttachToGallery(Gallery gallery)
+	{}
 	
 	
 	/**

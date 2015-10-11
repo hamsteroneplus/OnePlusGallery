@@ -224,7 +224,7 @@ public class OPGalleryActivity extends GalleryActivity
 		{
 			Gallery gallery = this.getGallery();
 			if(gallery != null)
-				gallery.setStatusBarVisibility(true, FLAG_CANCELABLE);
+				gallery.setStatusBarVisibility(true, Gallery.FLAG_CANCELABLE);
 			else
 				Log.w(TAG, "closeFilmstrip() - No gallery");
 		}
