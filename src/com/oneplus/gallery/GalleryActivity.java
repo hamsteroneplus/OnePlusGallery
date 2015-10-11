@@ -26,6 +26,12 @@ public abstract class GalleryActivity extends BaseActivity
 	public static final PropertyKey<ScreenSize> PROP_SCREEN_SIZE = new PropertyKey<>("ScreenSize", ScreenSize.class, GalleryActivity.class, PropertyKey.FLAG_READONLY, null);
 	
 	
+	/**
+	 * Key of extra data in {@link Intent} for ID of shared {@link Gallery} instance. 
+	 */
+	public static final String EXTRA_SHARED_GALLERY_ID = "com.oneplus.gallery.GalleryActivity.extra.SHARED_GALLERY_ID";
+	
+	
 	// Fields.
 	private SparseArray<ActivityResultHandle> m_ActivityResultHandles;
 	private Gallery m_Gallery;
@@ -163,17 +169,30 @@ public abstract class GalleryActivity extends BaseActivity
 		super.onCreate(savedInstanceState);
 		
 		// setup instance state
-		InstanceStateFragment stateFragment = (InstanceStateFragment)this.getFragmentManager().findFragmentByTag(InstanceStateFragment.TAG);
-		if(stateFragment != null)
+		Intent intent = this.getIntent();
+		String sharedGalleryId = (intent != null ? intent.getStringExtra(EXTRA_SHARED_GALLERY_ID) : null);
+		InstanceStateFragment stateFragment;
+		m_Gallery = Gallery.fromId(sharedGalleryId);
+		if(m_Gallery == null)
 		{
-			Log.w(TAG, "onCreate() - Use existent Gallery");
-			m_Gallery = stateFragment.gallery;
-			m_ActivityResultHandles = stateFragment.activityResultHandles;
+			stateFragment = (InstanceStateFragment)this.getFragmentManager().findFragmentByTag(InstanceStateFragment.TAG);
+			if(stateFragment != null)
+			{
+				Log.w(TAG, "onCreate() - Use existent Gallery : " + stateFragment.gallery.getId());
+				m_Gallery = stateFragment.gallery;
+				m_ActivityResultHandles = stateFragment.activityResultHandles;
+			}
+			else
+			{
+				Log.w(TAG, "onCreate() - Create new Gallery");
+				m_Gallery = new Gallery();
+				m_ActivityResultHandles = new SparseArray<>();
+			}
 		}
 		else
 		{
-			Log.w(TAG, "onCreate() - Create new Gallery");
-			m_Gallery = new Gallery();
+			Log.w(TAG, "onCreate() - Use shared Gallery : " + m_Gallery.getId());
+			stateFragment = null;
 			m_ActivityResultHandles = new SparseArray<>();
 		}
 		
@@ -274,7 +293,7 @@ public abstract class GalleryActivity extends BaseActivity
 		}
 		
 		// save instance state
-		Log.w(TAG, "onSaveInstanceState() - Keep Gallery instance");
+		Log.w(TAG, "onSaveInstanceState() - Keep Gallery instance : " + m_Gallery.getId());
 		stateFragment.gallery = m_Gallery;
 		stateFragment.activityResultHandles = m_ActivityResultHandles;
 		this.onSaveInstanceState(outState, stateFragment.extras);

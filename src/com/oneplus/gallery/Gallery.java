@@ -4,8 +4,10 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -131,9 +133,16 @@ public class Gallery extends HandlerBaseObject
 	}
 	
 	
+	// Static fields.
+	private static final Map<String, Gallery> m_Galleries = new HashMap<>();
+	
+	
 	// Fields.
+	private final String TAG;
 	private GalleryActivity m_Activity;
 	private View m_ActivityDecorView;
+	private final List<ActivityHandle> m_AttachedActivityHandles = new ArrayList<>();
+	private final String m_Id;
 	private final List<NavBarVisibilityHandle> m_NavBarVisibilityHandles = new ArrayList<>();
 	private final List<StatusBarVisibilityHandle> m_StatusBarVisibilityHandles = new ArrayList<>();
 	
@@ -213,12 +222,64 @@ public class Gallery extends HandlerBaseObject
 	}
 	
 	
+	// Class for attached activity handle.
+	private final class ActivityHandle extends Handle
+	{
+		// Fields.
+		public final GalleryActivity activity;
+		
+		// Constructor.
+		public ActivityHandle(GalleryActivity activity)
+		{
+			super("AttachedActivity");
+			this.activity = activity;
+		}
+		
+		// Close handle.
+		@Override
+		protected void onClose(int flags)
+		{
+			detachActivity(this);
+		}
+	}
+	
+	
 	/**
 	 * Initialize new Gallery instance.
 	 */
 	Gallery()
 	{
+		// call super
 		super(true);
+		
+		// check thread
+		if(!GalleryApplication.current().isDependencyThread())
+			throw new RuntimeException("Can only create in main thread");
+		
+		// generate ID
+		char[] idBuffer = new char[4];
+		while(true)
+		{
+			for(int i = idBuffer.length - 1 ; i >= 0 ; --i)
+			{
+				int n = (int)(Math.random() * 36);
+				if(n < 10)
+					idBuffer[i] = (char)('0' + n);
+				else
+					idBuffer[i] = (char)('a' + (n - 10));
+			}
+			String id = new String(idBuffer);
+			if(!m_Galleries.containsKey(id))
+			{
+				m_Id = id;
+				TAG = ("Gallery(" + id + ")");
+				m_Galleries.put(id, this);
+				break;
+			}
+		}
+		Log.w(TAG, "Create, total instance count : " + m_Galleries.size());
+		
+		// enable logs
 		this.enablePropertyLogs(PROP_ACTIVITY, LOG_PROPERTY_CHANGE);
 	}
 	
@@ -242,38 +303,38 @@ public class Gallery extends HandlerBaseObject
 			Log.e(TAG, "attachActivity() - No activity");
 			return null;
 		}
-		if(m_Activity != null)
-		{
-			Log.e(TAG, "attachActivity() - Already attached");
-			return null;
-		}
 		
-		// attach to decor view
+		// check window
 		Window window = activity.getWindow();
 		if(window == null)
 		{
 			Log.e(TAG, "attachActivity() - No window");
 			return null;
 		}
+		
+		// attach to decor view
+		if(m_ActivityDecorView != null)
+		{
+			m_ActivityDecorView.setOnSystemUiVisibilityChangeListener(null);
+			m_ActivityDecorView = null;
+		}
 		m_ActivityDecorView = window.getDecorView();
 		m_ActivityDecorView.setOnSystemUiVisibilityChangeListener(m_SystemUiVisibilityListener);
 		
+		// create handle
+		ActivityHandle handle = new ActivityHandle(activity);
+		m_AttachedActivityHandles.add(handle);
+		
 		// attach to activity
+		GalleryActivity prevActivity = m_Activity;
 		m_Activity = activity;
-		this.notifyPropertyChanged(PROP_ACTIVITY, null, activity);
+		this.notifyPropertyChanged(PROP_ACTIVITY, prevActivity, activity);
 		
 		// setup system UI visibility
 		this.setSystemUiVisibility(this.get(PROP_IS_STATUS_BAR_VISIBLE), this.get(PROP_IS_NAVIGATION_BAR_VISIBLE));
 		
 		// complete
-		return new Handle("AttachGalleryActivity")
-		{
-			@Override
-			protected void onClose(int flags)
-			{
-				detachActivity();
-			}
-		};
+		return handle;
 	}
 	
 	
@@ -788,11 +849,12 @@ public class Gallery extends HandlerBaseObject
 	
 	
 	// Detach activity.
-	private void detachActivity()
+	private void detachActivity(ActivityHandle handle)
 	{
 		// check state
 		this.verifyAccess();
-		if(m_Activity == null)
+		boolean isLast = ListUtils.isLastObject(m_AttachedActivityHandles, handle);
+		if(!m_AttachedActivityHandles.remove(handle) || !isLast)
 			return;
 		
 		// detach from decor view
@@ -802,10 +864,36 @@ public class Gallery extends HandlerBaseObject
 			m_ActivityDecorView = null;
 		}
 		
+		// attach to previous decor view
+		GalleryActivity prevActivity = m_Activity;
+		m_Activity = (m_AttachedActivityHandles.isEmpty() ? null : m_AttachedActivityHandles.get(m_AttachedActivityHandles.size() - 1).activity);
+		if(m_Activity != null)
+		{
+			Window window = m_Activity.getWindow();
+			if(window != null)
+			{
+				m_ActivityDecorView = window.getDecorView();
+				m_ActivityDecorView.setOnSystemUiVisibilityChangeListener(m_SystemUiVisibilityListener);
+			}
+			else
+				Log.e(TAG, "detachActivity() - No window");
+		}
+		
 		// detach from activity
-		GalleryActivity activity = m_Activity;
-		m_Activity = null;
-		this.notifyPropertyChanged(PROP_ACTIVITY, activity, null);
+		this.notifyPropertyChanged(PROP_ACTIVITY, prevActivity, m_Activity);
+	}
+	
+	
+	/**
+	 * Get instance from ID.
+	 * @param id ID of {@link Gallery}.
+	 * @return {@link Gallery} instance, or Null if ID is not found.
+	 */
+	public static Gallery fromId(String id)
+	{
+		if(id != null)
+			return m_Galleries.get(id);
+		return null;
 	}
 	
 	
@@ -820,6 +908,16 @@ public class Gallery extends HandlerBaseObject
 	}
 	
 	
+	/**
+	 * Get unique ID.
+	 * @return Unique ID of this instance.
+	 */
+	public final String getId()
+	{
+		return m_Id;
+	}
+	
+	
 	// Release.
 	@Override
 	protected void onRelease()
@@ -828,7 +926,18 @@ public class Gallery extends HandlerBaseObject
 		super.onRelease();
 		
 		// detach from activity
-		this.detachActivity();
+		if(m_ActivityDecorView != null)
+		{
+			m_ActivityDecorView.setOnSystemUiVisibilityChangeListener(null);
+			m_ActivityDecorView = null;
+		}
+		m_Activity = null;
+		m_AttachedActivityHandles.clear();
+		
+		// remove from table
+		m_Galleries.remove(m_Id);
+		
+		Log.w(TAG, "Release, total instance count : " + m_Galleries.size());
 	}
 	
 	
@@ -1221,5 +1330,13 @@ public class Gallery extends HandlerBaseObject
 			Log.w(TAG, "startCamera() - Fail to start camera", ex);
 			return false;
 		}
+	}
+	
+	
+	// Get readable string.
+	@Override
+	public String toString()
+	{
+		return ("Gallery(" + m_Id + ")");
 	}
 }
