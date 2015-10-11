@@ -758,7 +758,7 @@ public class GridViewFragment extends GalleryFragment {
 					break;
 				case R.id.toolbar_share:
 				{
-					getGalleryActivity().shareMedia(getSelectedMedia());
+					getGallery().shareMedia(getSelectedMedia());
 					m_ToolbarActionShared = true;
 					break;
 				}

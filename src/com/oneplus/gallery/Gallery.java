@@ -1,14 +1,18 @@
 package com.oneplus.gallery;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.DialogInterface;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.view.View;
@@ -138,6 +142,17 @@ public class Gallery extends HandlerBaseObject
 		public void onSystemUiVisibilityChange(int visibility)
 		{
 			onSystemUiVisibilityChanged(visibility);
+		}
+	};
+	
+	
+	// Call-backs.
+	private final GalleryActivity.ActivityResultCallback m_MediaShareResultCallback = new GalleryActivity.ActivityResultCallback()
+	{
+		@Override
+		public void onActivityResult(Handle handle, int result, Intent data)
+		{
+			setReadOnly(PROP_IS_SHARING_MEDIA, false);
 		}
 	};
 	
@@ -861,6 +876,90 @@ public class Gallery extends HandlerBaseObject
 	}
 	
 	
+	// Prepare sharing single media.
+	private boolean prepareSharingMedia(Intent intent, Media media)
+	{
+		if(media == null)
+		{
+			Log.w(TAG, "prepareSharingMedia() - No media to share");
+			return false;
+		}
+		Uri contentUri = media.getContentUri();
+		if(contentUri != null)
+			intent.putExtra(Intent.EXTRA_STREAM, contentUri);
+		else
+		{
+			String filePath = media.getFilePath();
+			if(filePath == null)
+			{
+				Log.w(TAG, "prepareSharingMedia() - No file path");
+				return false;
+			}
+			intent.putExtra(Intent.EXTRA_STREAM, Uri.fromFile(new File(filePath)));
+		}
+		intent.setAction(Intent.ACTION_SEND);
+		intent.setType(media.getMimeType());
+		return true;
+	}
+	
+	
+	// Prepare sharing multiple media.
+	private boolean prepareSharingMedia(Intent intent, Collection<Media> mediaCollection)
+	{
+		String mimeType = null;
+		String mimeTypePrefix = null;
+		ArrayList<Uri> uriList = new ArrayList<>();
+		for(Media media : mediaCollection)
+		{
+			if(media == null)
+				continue;
+			Uri contentUri = media.getContentUri();
+			if(contentUri != null)
+				uriList.add(contentUri);
+			else
+			{
+				String filePath = media.getFilePath();
+				if(filePath == null)
+					continue;
+				uriList.add(Uri.fromFile(new File(filePath)));
+			}
+			String currentType = media.getMimeType();
+			if(mimeType != null)
+			{
+				if(mimeTypePrefix.equals("*/"))
+					continue;
+				if(!mimeType.equals(currentType))
+				{
+					if(!currentType.startsWith(mimeTypePrefix))
+					{
+						mimeType = "*/*";
+						mimeTypePrefix = "*/";
+					}
+					else if(mimeType.charAt(mimeType.length() - 1) != '*')
+					{
+						mimeType = (mimeTypePrefix + "*");
+					}
+				}
+			}
+			else
+			{
+				mimeType = currentType;
+				int charIndex = currentType.indexOf('/');
+				mimeTypePrefix = (charIndex >= 0 ? currentType.substring(0, charIndex + 1) : "*");
+			}
+		}
+		if(uriList.isEmpty())
+		{
+			Log.w(TAG, "prepareSharingMedia() - No media to share");
+			return false;
+		}
+		intent.setType(mimeType);
+		intent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uriList);
+		intent.setAction(Intent.ACTION_SEND_MULTIPLE);
+		return true;
+	}
+	
+	
 	// Restore status bar visibility.
 	private void restoreStatusBarVisibility(StatusBarVisibilityHandle handle)
 	{
@@ -952,6 +1051,81 @@ public class Gallery extends HandlerBaseObject
 			this.setReadOnly(PROP_IS_NAVIGATION_BAR_VISIBLE, isNavBarVisible);
 		
 		// complete
+		return true;
+	}
+	
+	
+	/**
+	 * Share media.
+	 * @param mediaToShare Media to share.
+	 * @return True if media shared successfully.
+	 */
+	public boolean shareMedia(Media mediaToShare)
+	{
+		if(mediaToShare == null)
+		{
+			Log.e(TAG, "shareMedia() - No media to share");
+			return false;
+		}
+		return this.shareMedia(Arrays.asList(mediaToShare));
+	}
+	
+	
+	/**
+	 * Share media.
+	 * @param mediaToShare Media to share.
+	 * @return True if media shared successfully.
+	 */
+	public boolean shareMedia(Collection<Media> mediaToShare)
+	{
+		// check state
+		this.verifyAccess();
+		if(this.get(PROP_IS_SHARING_MEDIA))
+		{
+			Log.e(TAG, "shareMedia() - Waiting for previous sharing result");
+			return false;
+		}
+		if(mediaToShare == null || mediaToShare.isEmpty())
+		{
+			Log.w(TAG, "shareMedia() - No media to share");
+			return false;
+		}
+		if(m_Activity == null)
+		{
+			Log.e(TAG, "shareMedia() - No activity");
+			return false;
+		}
+		
+		// prepare intent
+		Intent intent = new Intent();
+		if(mediaToShare.size() == 1)
+		{
+			Iterator<Media> iterator = mediaToShare.iterator();
+			Media media = null;
+			if(iterator.hasNext())
+				media = iterator.next();
+			if(!this.prepareSharingMedia(intent, media))
+				return false;
+		}
+		else
+		{
+			if(!this.prepareSharingMedia(intent, mediaToShare))
+				return false;
+		}
+		
+		// start activity
+		try
+		{
+			m_Activity.startActivityForResult(Intent.createChooser(intent, m_Activity.getString(R.string.gallery_share_media)), m_MediaShareResultCallback);
+		}
+		catch(Throwable ex)
+		{
+			Log.e(TAG, "shareMedia() - Fail to start activity", ex);
+			return false;
+		}
+		
+		// complete
+		this.setReadOnly(PROP_IS_SHARING_MEDIA, true);
 		return true;
 	}
 }

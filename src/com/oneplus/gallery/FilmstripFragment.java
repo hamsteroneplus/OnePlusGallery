@@ -1549,12 +1549,12 @@ public class FilmstripFragment extends GalleryFragment
 	private void sharePage(int position)
 	{
 		// check position
-		if(!validatePosition(position))
+		if(!validatePosition(position) || !this.isAttachedToGallery())
 			return;
 
-		// TODO: share page from activity
+		// share page
 		Media media = m_MediaList.get(position);
-		this.getGalleryActivity().shareMedia(media);
+		this.getGallery().shareMedia(media);
 	}
 	
 	
