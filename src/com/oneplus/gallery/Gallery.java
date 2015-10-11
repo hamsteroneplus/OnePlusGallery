@@ -10,11 +10,14 @@ import java.util.List;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
+import android.content.ActivityNotFoundException;
+import android.content.ComponentName;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
+import android.provider.MediaStore;
 import android.view.View;
 import android.view.Window;
 import android.widget.ProgressBar;
@@ -1127,5 +1130,96 @@ public class Gallery extends HandlerBaseObject
 		// complete
 		this.setReadOnly(PROP_IS_SHARING_MEDIA, true);
 		return true;
+	}
+	
+	
+	/**
+	 * Show detailed media information.
+	 * @param media Media to show information.
+	 */
+	public void showMediaDetails(Media media)
+	{
+		this.verifyAccess();
+		if(media == null)
+		{
+			Log.e(TAG, "showMediaDetails() - No media");
+			return;
+		}
+		if(m_Activity == null)
+		{
+			Log.e(TAG, "showMediaDetails() - No activity");
+			return;
+		}
+		MediaDetailsDialog dialog = new MediaDetailsDialog(m_Activity, media);
+		dialog.show();
+	}
+	
+	
+	/**
+	 * Launch camera.
+	 * @param mediaType Target media type to capture, or Null to launch in default mode.
+	 * @return True if camera starts successfully.
+	 */
+	public boolean startCamera()
+	{
+		return this.startCamera(null);
+	}
+	
+	
+	/**
+	 * Launch camera.
+	 * @param mediaType Target media type to capture, or Null to launch in default mode.
+	 * @return True if camera starts successfully.
+	 */
+	public boolean startCamera(MediaType mediaType)
+	{
+		Log.v(TAG, "startCamera() - Media type : ", mediaType);
+		
+		// prepare intent
+		Intent intent = new Intent();
+		if(mediaType != null)
+		{
+			switch(mediaType)
+			{
+				case PHOTO:
+					intent.setAction(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA);
+					break;
+				case VIDEO:
+					intent.setAction(MediaStore.INTENT_ACTION_VIDEO_CAMERA);
+					break;
+				default:
+					Log.e(TAG, "startCamera() - Unknown media type : " + mediaType);
+					return false;
+			}
+		}
+		else
+			intent.setAction(Intent.ACTION_MAIN);
+		
+		// start OnePlus Camera
+		intent.setComponent(new ComponentName("com.oneplus.camera", "com.oneplus.camera.OPCameraActivity"));
+		try
+		{
+			GalleryApplication.current().startActivity(intent);
+			return true;
+		}
+		catch(ActivityNotFoundException ex)
+		{
+			Log.w(TAG, "startCamera() - No OnePlus Camera on this device", ex);
+		}
+		
+		// start normal camera
+		if(Intent.ACTION_MAIN.equals(intent.getAction()))
+			intent.setAction(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA);
+		intent.setComponent(null);
+		try
+		{
+			GalleryApplication.current().startActivity(intent);
+			return true;
+		}
+		catch(ActivityNotFoundException ex)
+		{
+			Log.w(TAG, "startCamera() - Fail to start camera", ex);
+			return false;
+		}
 	}
 }

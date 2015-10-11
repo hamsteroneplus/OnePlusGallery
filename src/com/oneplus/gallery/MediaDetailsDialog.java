@@ -61,6 +61,7 @@ public class MediaDetailsDialog
 	};
 	private final String m_ItemStringFormat;
 	private final Media m_Media;
+	private MediaDetails m_MediaDetails;
 	private Handle m_MediaDetailsRetrievingHandle;
 	
 	
@@ -128,6 +129,9 @@ public class MediaDetailsDialog
 		// show dialog
 		m_Dialog.show();
 		
+		// keep details
+		m_MediaDetails = details;
+		
 		// hide "processing"
 		View view = m_Dialog.findViewById(R.id.media_details_processing_container);
 		if(view != null)
@@ -178,34 +182,37 @@ public class MediaDetailsDialog
 	{
 		// start getting media details
 		final Object[] result = new Object[]{ false, null };
-		m_MediaDetailsRetrievingHandle = m_Media.getDetails(new Media.MediaDetailsCallback()
+		if(m_MediaDetails == null && !Handle.isValid(m_MediaDetailsRetrievingHandle))
 		{
-			@Override
-			public void onMediaDetailsRetrieved(Media media, final Handle handle, final MediaDetails details)
+			m_MediaDetailsRetrievingHandle = m_Media.getDetails(new Media.MediaDetailsCallback()
 			{
-				synchronized(result)
+				@Override
+				public void onMediaDetailsRetrieved(Media media, final Handle handle, final MediaDetails details)
 				{
-					if(!(Boolean)result[0])
+					synchronized(result)
 					{
-						result[0] = true;
-						result[1] = details;
-						result.notifyAll();
-					}
-					else
-					{
-						GalleryApplication.current().getHandler().post(new Runnable()
+						if(!(Boolean)result[0])
 						{
-							@Override
-							public void run()
+							result[0] = true;
+							result[1] = details;
+							result.notifyAll();
+						}
+						else
+						{
+							GalleryApplication.current().getHandler().post(new Runnable()
 							{
-								if(m_MediaDetailsRetrievingHandle == handle)
-									MediaDetailsDialog.this.onMediaDetailsRetrieved(details);
-							}
-						});
+								@Override
+								public void run()
+								{
+									if(m_MediaDetailsRetrievingHandle == handle)
+										MediaDetailsDialog.this.onMediaDetailsRetrieved(details);
+								}
+							});
+						}
 					}
 				}
-			}
-		}, null);
+			}, null);
+		}
 		
 		// create dialog builder
 		AlertDialog.Builder builder = new AlertDialog.Builder(context);
@@ -224,7 +231,9 @@ public class MediaDetailsDialog
 		m_Dialog = builder.create();
 		
 		// waiting for media details
-		if(m_MediaDetailsRetrievingHandle != null)
+		if(m_MediaDetails != null)
+			this.onMediaDetailsRetrieved(m_MediaDetails);
+		else if(m_MediaDetailsRetrievingHandle != null)
 		{
 			synchronized(result)
 			{

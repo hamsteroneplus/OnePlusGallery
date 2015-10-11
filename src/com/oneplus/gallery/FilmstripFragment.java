@@ -1562,12 +1562,12 @@ public class FilmstripFragment extends GalleryFragment
 	private void showPageDetails(int position)
 	{
 		// check position
-		if(!validatePosition(position))
+		if(!validatePosition(position) || !this.isAttachedToGallery())
 			return;
 
 		// show media details
 		Media media = m_MediaList.get(position);
-		this.getGalleryActivity().showMediaDetails(media);
+		this.getGallery().showMediaDetails(media);
 	}
 	
 	

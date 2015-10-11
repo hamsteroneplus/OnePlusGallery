@@ -34,7 +34,8 @@
 	<string name="entry_page_tab_default_grid_view">Photos</string>
 	<string name="entry_page_tab_media_set_list">Albums</string>
 	
-	<!-- Gallery activity -->
+	<!-- Gallery -->
+	<string name="gallery_share_media">Share</string>
 	
 	<!-- Media details -->
 	<string name="media_details">Information</string>

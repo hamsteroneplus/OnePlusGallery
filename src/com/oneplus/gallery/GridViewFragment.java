@@ -355,7 +355,7 @@ public class GridViewFragment extends GalleryFragment {
 		{
 			if(index == 0)
 			{
-				this.getGalleryActivity().startCamera();
+				this.getGallery().startCamera();
 				return;
 			}
 			--index;
@@ -797,7 +797,7 @@ public class GridViewFragment extends GalleryFragment {
 		m_EmptyMediaView.setOnClickListener(new OnClickListener() {
 			@Override
 			public void onClick(View v) {
-				getGalleryActivity().startCamera();
+				getGallery().startCamera();
 			}
 		});
 		
