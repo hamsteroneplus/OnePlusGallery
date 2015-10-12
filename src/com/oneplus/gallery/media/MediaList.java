@@ -13,6 +13,12 @@ import com.oneplus.gallery.ListChangeEventArgs;
 public interface MediaList extends List<Media>, BaseObject, HandlerObject
 {
 	/**
+	 * Empty media list.
+	 */
+	MediaList EMPTY = new BasicMediaList(MediaComparator.TAKEN_TIME, 0)
+	{};
+	
+	/**
 	 * Raised when media added.
 	 */
 	EventKey<ListChangeEventArgs> EVENT_MEDIA_ADDED = new EventKey<>("MediaAdded", ListChangeEventArgs.class, MediaList.class);

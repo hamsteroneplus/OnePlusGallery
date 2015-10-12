@@ -14,6 +14,7 @@ import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Point;
@@ -1400,7 +1401,15 @@ public class Gallery extends HandlerBaseObject
 	 */
 	public boolean startCamera(MediaType mediaType)
 	{
+		// check state
+		this.verifyAccess();
+		
 		Log.v(TAG, "startCamera() - Media type : ", mediaType);
+		
+		// get context
+		Context context = m_Activity;
+		if(context == null)
+			context = GalleryApplication.current();
 		
 		// prepare intent
 		Intent intent = new Intent();
@@ -1421,12 +1430,14 @@ public class Gallery extends HandlerBaseObject
 		}
 		else
 			intent.setAction(Intent.ACTION_MAIN);
+		if(!(context instanceof Activity))
+			intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 		
 		// start OnePlus Camera
 		intent.setComponent(new ComponentName("com.oneplus.camera", "com.oneplus.camera.OPCameraActivity"));
 		try
 		{
-			GalleryApplication.current().startActivity(intent);
+			context.startActivity(intent);
 			return true;
 		}
 		catch(ActivityNotFoundException ex)
@@ -1440,7 +1451,7 @@ public class Gallery extends HandlerBaseObject
 		intent.setComponent(null);
 		try
 		{
-			GalleryApplication.current().startActivity(intent);
+			context.startActivity(intent);
 			return true;
 		}
 		catch(ActivityNotFoundException ex)

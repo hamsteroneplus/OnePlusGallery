@@ -11,6 +11,7 @@ import java.util.List;
 
 import com.oneplus.base.Handle;
 import com.oneplus.base.HandleSet;
+import com.oneplus.base.HandlerBaseObject;
 import com.oneplus.base.ListHandlerBaseObject;
 import com.oneplus.base.Log;
 import com.oneplus.gallery.GalleryApplication;
@@ -31,6 +32,7 @@ import android.os.RemoteException;
 import android.os.SystemClock;
 import android.provider.MediaStore.Files;
 import android.provider.MediaStore.Images;
+import android.provider.MediaStore.MediaColumns;
 import android.provider.MediaStore.Video;
 import android.provider.MediaStore.Files.FileColumns;
 
@@ -78,6 +80,7 @@ public class MediaManager
 	private static volatile Handler m_Handler;
 	private static final Object m_Lock = new Object();
 	private static Handle m_MediaSetListContentChangeCBHandle;
+	private static TempMediaSet m_TempMediaSet;
 	
 	
 	// Call-backs.
@@ -132,6 +135,21 @@ public class MediaManager
 		 * @param contentUri Changed content URI.
 		 */
 		void onContentChanged(Uri contentUri);
+	}
+	
+	
+	/**
+	 * Call-back interface for media creation.
+	 */
+	public interface MediaCreationCallback
+	{
+		/**
+		 * Called when creation completed.
+		 * @param handle Handle returned from {@link MediaManager#createTemporaryMedia(Uri)}.
+		 * @param contentUri Content URI of media.
+		 * @param media Created media, or Null if creation failed.
+		 */
+		void onCreationCompleted(Handle handle, Uri contentUri, Media media);
 	}
 	
 	
@@ -370,6 +388,46 @@ public class MediaManager
 	}
 	
 	
+	// Temporary media set.
+	private static final class TempMediaSet extends HandlerBaseObject implements MediaSet
+	{
+		// Constructor.
+		public TempMediaSet()
+		{
+			super(true);
+		}
+
+		// Delete media set.
+		@Override
+		public Handle delete(DeletionCallback callback, Handler handler, int flags)
+		{
+			Log.e(TAG, "openMediaList() - Cannot delete temporary media set");
+			return null;
+		}
+
+		// Delete media.
+		@Override
+		public Handle deleteMedia(Media media, MediaDeletionCallback callback, Handler handler, int flags)
+		{
+			return null;
+		}
+
+		// Get media set type.
+		@Override
+		public Type getType()
+		{
+			return Type.OTHER;
+		}
+
+		@Override
+		public MediaList openMediaList(MediaComparator comparator, int maxMediaCount, int flags)
+		{
+			Log.e(TAG, "openMediaList() - Cannot open media list");
+			return MediaList.EMPTY;
+		}
+	}
+	
+	
 	// Constructor.
 	private MediaManager()
 	{}
@@ -535,6 +593,119 @@ public class MediaManager
 		
 		// complete
 		return list;
+	}
+	
+	
+	/**
+	 * Create temporary {@link Media} instance for specific content URI.
+	 * @param contentUri Content URI of media.
+	 * @param callback Call-back to received created media.
+	 * @return Handle to media creation.
+	 */
+	public static Handle createTemporaryMedia(final Uri contentUri, final MediaCreationCallback callback)
+	{
+		// check parameter
+		verifyAccess();
+		if(contentUri == null)
+		{
+			Log.e(TAG, "createTemporaryMedia() - No content URI");
+			return null;
+		}
+		if(callback == null)
+		{
+			Log.e(TAG, "createTemporaryMedia() - No call-back to receive result");
+			return null;
+		}
+		
+		// create temporary media set
+		if(m_TempMediaSet == null)
+		{
+			Log.v(TAG, "createTemporaryMedia() - Create temporary media set");
+			m_TempMediaSet = new TempMediaSet();
+		}
+		
+		// create handle
+		final Handle handle = new Handle("CreateTempMedia")
+		{
+			@Override
+			protected void onClose(int flags)
+			{}
+		};
+		
+		// create media
+		Log.v(TAG, "createTemporaryMedia() - Content URI : ", contentUri);
+		final boolean isFileUri = contentUri.getScheme().equals("file");
+		Handle accessHandle = accessContentProvider(CONTENT_URI_FILE, new ContentProviderAccessCallback()
+		{
+			@Override
+			public void onAccessContentProvider(ContentResolver contentResolver, Uri uri, ContentProviderClient client) throws RemoteException
+			{
+				// check state
+				if(!Handle.isValid(handle))
+					return;
+				
+				// check file path
+				String selection;
+				String[] selectionArgs;
+				
+				if(isFileUri)
+				{
+					selection = (MediaColumns.DATA + "=?");
+					selectionArgs = new String[]{ contentUri.getPath() };
+				}
+				else
+				{
+					uri = Uri.parse(CONTENT_URI_FILE + "/" + Path.getFileName(contentUri.getPath()));
+					selection = null;
+					selectionArgs = null;
+				}
+				
+				// query
+				Media media = null;
+				try
+				{
+					Cursor cursor = client.query(uri, MediaStoreMedia.MEDIA_COLUMNS, selection, selectionArgs, null);
+					if(cursor != null)
+					{
+						try
+						{
+							if(cursor.moveToNext())
+								media = MediaStoreMedia.create(m_TempMediaSet, cursor, true, m_Handler);
+							else
+								Log.e(TAG, "createTemporaryMedia() - Content not found");
+						}
+						finally
+						{
+							cursor.close();
+						}
+					}
+					else
+						Log.e(TAG, "createTemporaryMedia() - Content not found");
+				}
+				catch(Throwable ex)
+				{
+					Log.e(TAG, "createTemporaryMedia() - Fail to create", ex);
+				}
+				final Media result = media;
+				m_Handler.post(new Runnable()
+				{
+					@Override
+					public void run()
+					{
+						if(Handle.isValid(handle))
+							callback.onCreationCompleted(handle, (result != null ? result.getContentUri() : contentUri), result);
+					}
+				});
+			}
+		});
+		if(!Handle.isValid(accessHandle))
+		{
+			Log.e(TAG, "createTemporaryMedia() - Fail to access content provider");
+			return null;
+		}
+		
+		// complete
+		return handle;
 	}
 	
 	
