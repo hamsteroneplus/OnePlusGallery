@@ -149,6 +149,7 @@ public class FilmstripFragment extends GalleryFragment
 		}
 	};
 	private List<BitmapDecodeInfo> m_MediumResBitmapDecodeInfos = new ArrayList<>();
+	private Handle m_NavBarVisibilityHandle;
 	private Queue<BitmapDecodeInfo> m_ReusedBitmapDecodeInfos = new ArrayDeque<>();
 	private float m_ScaleFactor;
 	private View m_ShareButton;
@@ -1319,7 +1320,7 @@ public class FilmstripFragment extends GalleryFragment
 			this.setToolbarVisibility(false, false);
 			
 			// restore status bar
-			this.setStatusBarVisibility(true);
+			this.setSystemUiVisibility(true);
 			
 			// reset state
 			this.resetFilmstripState();
@@ -1512,18 +1513,26 @@ public class FilmstripFragment extends GalleryFragment
 	}
 	
 	
-	// Set status bar visibility
-	private void setStatusBarVisibility(boolean visible)
+	// Set system UI visibility
+	private void setSystemUiVisibility(boolean visible)
 	{
 		if(visible)
+		{
+			m_NavBarVisibilityHandle = Handle.close(m_NavBarVisibilityHandle);
 			m_StatusBarVisibilityHandle = Handle.close(m_StatusBarVisibilityHandle);
-		else if(!Handle.isValid(m_StatusBarVisibilityHandle))
+		}
+		else
 		{
 			Gallery gallery = this.getGallery();
 			if(gallery != null)
-				m_StatusBarVisibilityHandle = gallery.setStatusBarVisibility(false);
+			{
+				if(!Handle.isValid(m_NavBarVisibilityHandle))
+					m_NavBarVisibilityHandle = gallery.setNavigationBarVisibility(false);
+				if(!Handle.isValid(m_StatusBarVisibilityHandle))
+					m_StatusBarVisibilityHandle = gallery.setStatusBarVisibility(false);
+			}
 			else
-				Log.e(TAG, "setStatusBarVisibility() - No gallery");
+				Log.e(TAG, "setSystemUiVisibility() - No gallery");
 		}
 	}
 	
@@ -1538,7 +1547,7 @@ public class FilmstripFragment extends GalleryFragment
 		this.updateEditButtonVisibility();
 		
 		// set status bar visibility
-		this.setStatusBarVisibility(visible);
+		this.setSystemUiVisibility(visible);
 		
 		// update
 		this.updateToolbarVisibility(animation);

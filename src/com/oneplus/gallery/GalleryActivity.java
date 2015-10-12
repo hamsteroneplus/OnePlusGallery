@@ -12,7 +12,10 @@ import android.util.SparseArray;
 import com.oneplus.base.BaseActivity;
 import com.oneplus.base.Handle;
 import com.oneplus.base.Log;
+import com.oneplus.base.PropertyChangeEventArgs;
+import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
+import com.oneplus.base.PropertySource;
 import com.oneplus.base.ScreenSize;
 
 /**
@@ -38,6 +41,25 @@ public abstract class GalleryActivity extends BaseActivity
 	private Handle m_GalleryAttachHandle;
 	private boolean m_IsInstanceStateSaved;
 	private ScreenSize m_ScreenSize;
+	
+	
+	// Call-backs.
+	private final PropertyChangedCallback<Boolean> m_NavBarVisibilityCallback = new PropertyChangedCallback<Boolean>()
+	{
+		@Override
+		public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+		{
+			onNavigationBarVisibilityChanged(e.getNewValue());
+		}
+	};
+	private final PropertyChangedCallback<Boolean> m_StatusBarVisibilityCallback = new PropertyChangedCallback<Boolean>()
+	{
+		@Override
+		public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+		{
+			onStatusBarVisibilityChanged(e.getNewValue());
+		}
+	};
 	
 	
 	/**
@@ -204,6 +226,8 @@ public abstract class GalleryActivity extends BaseActivity
 			this.finish();
 			return;
 		}
+		m_Gallery.addCallback(Gallery.PROP_IS_NAVIGATION_BAR_VISIBLE, m_NavBarVisibilityCallback);
+		m_Gallery.addCallback(Gallery.PROP_IS_STATUS_BAR_VISIBLE, m_StatusBarVisibilityCallback);
 		
 		// initialize screen size
 		this.updateScreenSize();
@@ -227,6 +251,8 @@ public abstract class GalleryActivity extends BaseActivity
 	protected void onDestroy()
 	{
 		// detach from gallery
+		m_Gallery.removeCallback(Gallery.PROP_IS_NAVIGATION_BAR_VISIBLE, m_NavBarVisibilityCallback);
+		m_Gallery.removeCallback(Gallery.PROP_IS_STATUS_BAR_VISIBLE, m_StatusBarVisibilityCallback);
 		m_GalleryAttachHandle = Handle.close(m_GalleryAttachHandle);
 		
 		// release gallery

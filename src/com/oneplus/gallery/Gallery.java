@@ -16,10 +16,12 @@ import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.graphics.Point;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.provider.MediaStore;
+import android.view.Display;
 import android.view.View;
 import android.view.Window;
 import android.widget.ProgressBar;
@@ -27,7 +29,11 @@ import android.widget.ProgressBar;
 import com.oneplus.base.Handle;
 import com.oneplus.base.HandlerBaseObject;
 import com.oneplus.base.Log;
+import com.oneplus.base.PropertyChangeEventArgs;
+import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
+import com.oneplus.base.PropertySource;
+import com.oneplus.base.ScreenSize;
 import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaSet;
 import com.oneplus.util.ListUtils;
@@ -142,6 +148,7 @@ public class Gallery extends HandlerBaseObject
 	private GalleryActivity m_Activity;
 	private View m_ActivityDecorView;
 	private final List<ActivityHandle> m_AttachedActivityHandles = new ArrayList<>();
+	private boolean m_HasNavigationBar;
 	private final String m_Id;
 	private final List<NavBarVisibilityHandle> m_NavBarVisibilityHandles = new ArrayList<>();
 	private final List<StatusBarVisibilityHandle> m_StatusBarVisibilityHandles = new ArrayList<>();
@@ -159,6 +166,15 @@ public class Gallery extends HandlerBaseObject
 	
 	
 	// Call-backs.
+	private final PropertyChangedCallback<Boolean> m_ActivityRunningStateCallback = new PropertyChangedCallback<Boolean>()
+	{
+		@Override
+		public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+		{
+			if(e.getNewValue())
+				checkSystemNavigationBarState(m_Activity);
+		}
+	};
 	private final GalleryActivity.ActivityResultCallback m_MediaShareResultCallback = new GalleryActivity.ActivityResultCallback()
 	{
 		@Override
@@ -198,7 +214,7 @@ public class Gallery extends HandlerBaseObject
 			super("StatusBarVisibility", isVisible, flags);
 		}
 
-		// CLose handle
+		// Cose handle
 		@Override
 		protected void onClose(int flags)
 		{
@@ -213,11 +229,11 @@ public class Gallery extends HandlerBaseObject
 			super("NavBarVisibility", isVisible, flags);
 		}
 
-		// CLose handle
+		// Close handle
 		@Override
 		protected void onClose(int flags)
 		{
-			// TODO Auto-generated method stub
+			restoreNavigationBarVisibility(this);
 		}
 	}
 	
@@ -328,13 +344,44 @@ public class Gallery extends HandlerBaseObject
 		// attach to activity
 		GalleryActivity prevActivity = m_Activity;
 		m_Activity = activity;
+		m_Activity.addCallback(GalleryActivity.PROP_IS_RUNNING, m_ActivityRunningStateCallback);
 		this.notifyPropertyChanged(PROP_ACTIVITY, prevActivity, activity);
+		
+		// check navigation bar
+		this.checkSystemNavigationBarState(activity);
 		
 		// setup system UI visibility
 		this.setSystemUiVisibility(this.get(PROP_IS_STATUS_BAR_VISIBLE), this.get(PROP_IS_NAVIGATION_BAR_VISIBLE));
 		
 		// complete
 		return handle;
+	}
+	
+	
+	// Check navigation bar state
+	private void checkSystemNavigationBarState(Activity activity)
+	{
+		// check state
+		if(activity == null)
+		{
+			Log.w(TAG, "checkSystemNavigationBarState() - No activity to check");
+			return;
+		}
+		
+		// get window size
+		Display display = activity.getWindowManager().getDefaultDisplay();
+		Point size = new Point();
+		Point realSize = new Point();
+		display.getSize(size);
+		display.getRealSize(realSize);
+		
+		// check navigation bar
+		ScreenSize screenSize = new ScreenSize(activity, true);
+		if(screenSize.getWidth() <= screenSize.getHeight())
+			m_HasNavigationBar = ((realSize.y - size.y) > screenSize.getStatusBarSize());
+		else
+			m_HasNavigationBar = (realSize.x > size.x);
+		Log.v(TAG, "checkSystemNavigationBarState() - Has navigation bar : ", m_HasNavigationBar);
 	}
 	
 	
@@ -864,7 +911,11 @@ public class Gallery extends HandlerBaseObject
 			m_ActivityDecorView = null;
 		}
 		
-		// attach to previous decor view
+		// detach from activity
+		if(m_Activity != null)
+			m_Activity.removeCallback(GalleryActivity.PROP_IS_RUNNING, m_ActivityRunningStateCallback);
+		
+		// attach to previous activity and decor view
 		GalleryActivity prevActivity = m_Activity;
 		m_Activity = (m_AttachedActivityHandles.isEmpty() ? null : m_AttachedActivityHandles.get(m_AttachedActivityHandles.size() - 1).activity);
 		if(m_Activity != null)
@@ -877,10 +928,18 @@ public class Gallery extends HandlerBaseObject
 			}
 			else
 				Log.e(TAG, "detachActivity() - No window");
+			m_Activity.addCallback(GalleryActivity.PROP_IS_RUNNING, m_ActivityRunningStateCallback);
 		}
 		
 		// detach from activity
 		this.notifyPropertyChanged(PROP_ACTIVITY, prevActivity, m_Activity);
+		
+		// check navigation bar
+		if(m_Activity != null)
+			this.checkSystemNavigationBarState(m_Activity);
+		
+		// setup system UI visibility
+		this.setSystemUiVisibility(this.get(PROP_IS_STATUS_BAR_VISIBLE), this.get(PROP_IS_NAVIGATION_BAR_VISIBLE));
 	}
 	
 	
@@ -983,6 +1042,10 @@ public class Gallery extends HandlerBaseObject
 		}
 		
 		// update system UI visibility
+		if(showNavBar == null || (showNavBar != null && showNavBar == isNavBarVisible))
+			this.setReadOnly(PROP_IS_NAVIGATION_BAR_VISIBLE, isNavBarVisible);
+		if(showStatusBar == null || (showStatusBar != null && showStatusBar == isStatusBarVisible))
+			this.setReadOnly(PROP_IS_STATUS_BAR_VISIBLE, isStatusBarVisible);
 		if(showStatusBar != null || showNavBar != null)
 			this.setSystemUiVisibility(showStatusBar, showNavBar);
 	}
@@ -1072,6 +1135,20 @@ public class Gallery extends HandlerBaseObject
 	}
 	
 	
+	// Restore navigation bar visibility.
+	private void restoreNavigationBarVisibility(NavBarVisibilityHandle handle)
+	{
+		boolean isLast = ListUtils.isLastObject(m_NavBarVisibilityHandles, handle);
+		if(m_NavBarVisibilityHandles.remove(handle) && isLast)
+		{
+			if(m_NavBarVisibilityHandles.isEmpty())
+				this.setSystemUiVisibility(null, m_HasNavigationBar);
+			else
+				this.setSystemUiVisibility(null, m_NavBarVisibilityHandles.get(m_NavBarVisibilityHandles.size() - 1).isVisible);
+		}
+	}
+	
+	
 	// Restore status bar visibility.
 	private void restoreStatusBarVisibility(StatusBarVisibilityHandle handle)
 	{
@@ -1083,6 +1160,45 @@ public class Gallery extends HandlerBaseObject
 			else
 				this.setSystemUiVisibility(m_StatusBarVisibilityHandles.get(m_StatusBarVisibilityHandles.size() - 1).isVisible, null);
 		}
+	}
+	
+	
+	/**
+	 * Set navigation bar visibility.
+	 * @param isVisible True to show navigation bar.
+	 * @return Handle to this operation.
+	 */
+	public Handle setNavigationBarVisibility(boolean isVisible)
+	{
+		return this.setNavigationBarVisibility(isVisible, FLAG_CANCELABLE);
+	}
+	
+	
+	/**
+	 * Set navigation bar visibility.
+	 * @param isVisible True to show navigation bar.
+	 * @param flags Flags:
+	 * <ul>
+	 *   <li>{@link #FLAG_CANCELABLE}</li>
+	 * </ul>
+	 * @return Handle to this operation.
+	 */
+	public Handle setNavigationBarVisibility(boolean isVisible, int flags)
+	{
+		this.verifyAccess();
+		for(int i = m_NavBarVisibilityHandles.size() - 1 ; i >= 0 ; --i)
+		{
+			NavBarVisibilityHandle handle = m_NavBarVisibilityHandles.get(i);
+			if(handle.isVisible != isVisible && (handle.flags & FLAG_CANCELABLE) != 0)
+			{
+				handle.drop();
+				m_NavBarVisibilityHandles.remove(i);
+			}
+		}
+		NavBarVisibilityHandle handle = new NavBarVisibilityHandle(isVisible, flags);
+		m_NavBarVisibilityHandles.add(handle);
+		this.setSystemUiVisibility(null, isVisible);
+		return handle;
 	}
 	
 	
@@ -1134,6 +1250,8 @@ public class Gallery extends HandlerBaseObject
 			Log.e(TAG, "setSystemUiVisibility() - No window");
 			return false;
 		}
+		if(!m_HasNavigationBar)
+			isNavBarVisible = false;
 		
 		// prepare
 		int visibility = m_ActivityDecorView.getSystemUiVisibility();
@@ -1151,7 +1269,7 @@ public class Gallery extends HandlerBaseObject
 			else
 				visibility |= View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
 		}
-		visibility |= (View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+		visibility |= (View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE);
 		
 		// update
 		m_ActivityDecorView.setSystemUiVisibility(visibility);

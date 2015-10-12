@@ -257,10 +257,15 @@ public class OPGalleryActivity extends GalleryActivity
 		if(m_FilmstripContainer == null || m_FilmstripContainer.getVisibility() != View.VISIBLE)
 			return;
 		
-		// show status bar
+		// show system UI
 		Gallery gallery = this.getGallery();
-		if(gallery != null && !gallery.get(Gallery.PROP_IS_STATUS_BAR_VISIBLE))
-			gallery.setStatusBarVisibility(true, Gallery.FLAG_CANCELABLE);
+		if(gallery != null)
+		{
+			if(!gallery.get(Gallery.PROP_IS_STATUS_BAR_VISIBLE))
+				gallery.setStatusBarVisibility(true, Gallery.FLAG_CANCELABLE);
+			if(!gallery.get(Gallery.PROP_IS_NAVIGATION_BAR_VISIBLE))
+				gallery.setNavigationBarVisibility(true, Gallery.FLAG_CANCELABLE);
+		}
 		
 		// close
 		if(animate)
@@ -758,6 +763,15 @@ public class OPGalleryActivity extends GalleryActivity
 	}
 	
 	
+	// Called when navigation bar visibility changed.
+	@Override
+	protected void onNavigationBarVisibilityChanged(boolean isVisible)
+	{
+		super.onNavigationBarVisibilityChanged(isVisible);
+		this.updateUIMargins(this.getGallery().get(Gallery.PROP_IS_STATUS_BAR_VISIBLE), isVisible);
+	}
+	
+	
 	// Called when re-launch.
 	@Override
 	protected void onNewIntent(Intent intent)
@@ -834,7 +848,7 @@ public class OPGalleryActivity extends GalleryActivity
 	protected void onStatusBarVisibilityChanged(boolean isVisible)
 	{
 		super.onStatusBarVisibilityChanged(isVisible);
-		this.updateUIMargins(isVisible);
+		this.updateUIMargins(isVisible, this.getGallery().get(Gallery.PROP_IS_NAVIGATION_BAR_VISIBLE));
 	}
 	
 	
@@ -1012,7 +1026,7 @@ public class OPGalleryActivity extends GalleryActivity
 		m_GridViewContainer = this.findViewById(R.id.grid_view_container);
 		
 		// setup margins
-		this.updateUIMargins(this.getGallery().get(Gallery.PROP_IS_STATUS_BAR_VISIBLE));
+		this.updateUIMargins(this.getGallery().get(Gallery.PROP_IS_STATUS_BAR_VISIBLE), this.getGallery().get(Gallery.PROP_IS_NAVIGATION_BAR_VISIBLE));
 		
 		// create fragments
 		FragmentManager fragmentManager = this.getFragmentManager();
@@ -1152,7 +1166,7 @@ public class OPGalleryActivity extends GalleryActivity
 	
 	
 	// Update UI margins according to current state.
-	private void updateUIMargins(boolean isStatusBarVisible)
+	private void updateUIMargins(boolean isStatusBarVisible, boolean isNavBarVisible)
 	{
 		// check state
 		if(m_EntryPageContainer == null)
@@ -1160,8 +1174,27 @@ public class OPGalleryActivity extends GalleryActivity
 		
 		// update margins
 		ScreenSize screenSize = this.get(PROP_SCREEN_SIZE);
-		int topMargin = (isStatusBarVisible ? screenSize.getStatusBarSize() : 0);
-		ViewUtils.setMargins(m_EntryPageContainer, 0, topMargin, 0, 0);
-		ViewUtils.setMargins(m_GridViewContainer, 0, topMargin, 0, 0);
+		int top = (isStatusBarVisible ? screenSize.getStatusBarSize() : 0);
+		int right, bottom;
+		if(isNavBarVisible)
+		{
+			if(screenSize.getWidth() <= screenSize.getHeight())
+			{
+				right = 0;
+				bottom = screenSize.getNavigationBarSize();
+			}
+			else
+			{
+				right = screenSize.getNavigationBarSize();
+				bottom = 0;
+			}
+		}
+		else
+		{
+			right = 0;
+			bottom = 0;
+		}
+		ViewUtils.setMargins(m_EntryPageContainer, 0, top, right, bottom);
+		ViewUtils.setMargins(m_GridViewContainer, 0, top, right, bottom);
 	}
 }
