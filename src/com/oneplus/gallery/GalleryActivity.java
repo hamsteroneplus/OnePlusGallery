@@ -1,12 +1,16 @@
 package com.oneplus.gallery;
 
+import java.lang.ref.WeakReference;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import android.app.Fragment;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.SparseArray;
 
 import com.oneplus.base.BaseActivity;
@@ -35,6 +39,14 @@ public abstract class GalleryActivity extends BaseActivity
 	public static final String EXTRA_SHARED_GALLERY_ID = "com.oneplus.gallery.GalleryActivity.extra.SHARED_GALLERY_ID";
 	
 	
+	// Constants.
+	private static final long DURATION_CHECK_INSTANCES_DELAY = 3000;
+	
+	
+	// Static fields.
+	private static final List<WeakReference<GalleryActivity>> m_TrackingInstances = new ArrayList<>();
+	
+	
 	// Fields.
 	private SparseArray<ActivityResultHandle> m_ActivityResultHandles;
 	private Gallery m_Gallery;
@@ -58,6 +70,17 @@ public abstract class GalleryActivity extends BaseActivity
 		public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
 		{
 			onStatusBarVisibilityChanged(e.getNewValue());
+		}
+	};
+	
+	
+	// Runnables.
+	private static final Runnable m_CheckInstancesRunnable = new Runnable()
+	{
+		@Override
+		public void run()
+		{
+			checkInstances(0);
 		}
 	};
 	
@@ -113,6 +136,29 @@ public abstract class GalleryActivity extends BaseActivity
 		@Override
 		protected void onClose(int flags)
 		{}
+	}
+	
+	
+	// Check alive instances.
+	private static void checkInstances(long delayMillis)
+	{
+		// check immediately
+		Handler handler = GalleryApplication.current().getHandler();
+		handler.removeCallbacks(m_CheckInstancesRunnable);
+		if(delayMillis <= 0)
+		{
+			for(int i = m_TrackingInstances.size() - 1 ; i >= 0 ; --i)
+			{
+				Object instance = m_TrackingInstances.get(i).get();
+				if(instance == null)
+					m_TrackingInstances.remove(i);
+			}
+			Log.w("GalleryActivity", "checkInstances() - Alive instances : " + m_TrackingInstances.size());
+			return;
+		}
+		
+		// check later
+		handler.postDelayed(m_CheckInstancesRunnable, delayMillis);
 	}
 	
 	
@@ -187,6 +233,9 @@ public abstract class GalleryActivity extends BaseActivity
 	@Override
 	protected final void onCreate(Bundle savedInstanceState)
 	{
+		// start tracking
+		trackInstance(this);
+		
 		// call super
 		super.onCreate(savedInstanceState);
 		
@@ -267,6 +316,9 @@ public abstract class GalleryActivity extends BaseActivity
 		
 		// call super
 		super.onDestroy();
+		
+		// check instances
+		checkInstances(DURATION_CHECK_INSTANCES_DELAY);
 	}
 	
 	
@@ -396,6 +448,14 @@ public abstract class GalleryActivity extends BaseActivity
 			m_ActivityResultHandles.delete(requestCode);
 			return null;
 		}
+	}
+	
+	
+	// Start tracking instance.
+	private static void trackInstance(GalleryActivity instance)
+	{
+		m_TrackingInstances.add(new WeakReference<>(instance));
+		checkInstances(0);
 	}
 	
 	

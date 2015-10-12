@@ -1,6 +1,7 @@
 package com.oneplus.gallery;
 
 import java.io.File;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -140,8 +141,13 @@ public class Gallery extends HandlerBaseObject
 	}
 	
 	
+	// Constants.
+	private static final long DURATION_CHECK_INSTANCES_DELAY = 3000;
+	
+	
 	// Static fields.
 	private static final Map<String, Gallery> m_Galleries = new HashMap<>();
+	private static final List<WeakReference<Gallery>> m_TrackingInstances = new ArrayList<>();
 	
 	
 	// Fields.
@@ -182,6 +188,17 @@ public class Gallery extends HandlerBaseObject
 		public void onActivityResult(Handle handle, int result, Intent data)
 		{
 			setReadOnly(PROP_IS_SHARING_MEDIA, false);
+		}
+	};
+	
+	
+	// Runnables.
+	private static final Runnable m_CheckInstancesRunnable = new Runnable()
+	{
+		@Override
+		public void run()
+		{
+			checkInstances(0);
 		}
 	};
 	
@@ -268,6 +285,9 @@ public class Gallery extends HandlerBaseObject
 	{
 		// call super
 		super(true);
+		
+		// start tracking
+		trackInstance(this);
 		
 		// check thread
 		if(!GalleryApplication.current().isDependencyThread())
@@ -356,6 +376,29 @@ public class Gallery extends HandlerBaseObject
 		
 		// complete
 		return handle;
+	}
+	
+	
+	// Check alive instances.
+	private static void checkInstances(long delayMillis)
+	{
+		// check immediately
+		Handler handler = GalleryApplication.current().getHandler();
+		handler.removeCallbacks(m_CheckInstancesRunnable);
+		if(delayMillis <= 0)
+		{
+			for(int i = m_TrackingInstances.size() - 1 ; i >= 0 ; --i)
+			{
+				Object instance = m_TrackingInstances.get(i).get();
+				if(instance == null)
+					m_TrackingInstances.remove(i);
+			}
+			Log.w("Gallery", "checkInstances() - Alive instances : " + m_TrackingInstances.size());
+			return;
+		}
+		
+		// check later
+		handler.postDelayed(m_CheckInstancesRunnable, delayMillis);
 	}
 	
 	
@@ -998,6 +1041,9 @@ public class Gallery extends HandlerBaseObject
 		m_Galleries.remove(m_Id);
 		
 		Log.w(TAG, "Release, total instance count : " + m_Galleries.size());
+		
+		// check instances later
+		checkInstances(DURATION_CHECK_INSTANCES_DELAY);
 	}
 	
 	
@@ -1467,5 +1513,13 @@ public class Gallery extends HandlerBaseObject
 	public String toString()
 	{
 		return ("Gallery(" + m_Id + ")");
+	}
+	
+	
+	// Start tracking instance.
+	private static void trackInstance(Gallery instance)
+	{
+		m_TrackingInstances.add(new WeakReference<>(instance));
+		checkInstances(0);
 	}
 }

@@ -1343,7 +1343,9 @@ public class FilmstripFragment extends GalleryFragment
 	{
 		Log.v(TAG, "onDestroyView()");
 		
-		// destroy view
+		// release filmstrip resources
+		if(m_FilmstripView != null)
+			m_FilmstripView.setAdapter(null);
 		
 		// call super
 		super.onDestroyView();
