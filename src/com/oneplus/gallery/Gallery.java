@@ -351,7 +351,7 @@ public class Gallery extends HandlerBaseObject
 		this.checkSystemNavigationBarState(activity);
 		
 		// setup system UI visibility
-		this.setSystemUiVisibility(this.get(PROP_IS_STATUS_BAR_VISIBLE), this.get(PROP_IS_NAVIGATION_BAR_VISIBLE));
+		this.setSystemUiVisibility(this.get(PROP_IS_STATUS_BAR_VISIBLE), this.get(PROP_IS_NAVIGATION_BAR_VISIBLE) && m_HasNavigationBar);
 		
 		// complete
 		return handle;
@@ -934,12 +934,12 @@ public class Gallery extends HandlerBaseObject
 		// detach from activity
 		this.notifyPropertyChanged(PROP_ACTIVITY, prevActivity, m_Activity);
 		
-		// check navigation bar
+		// update system UI visibility
 		if(m_Activity != null)
+		{
 			this.checkSystemNavigationBarState(m_Activity);
-		
-		// setup system UI visibility
-		this.setSystemUiVisibility(this.get(PROP_IS_STATUS_BAR_VISIBLE), this.get(PROP_IS_NAVIGATION_BAR_VISIBLE));
+			this.setSystemUiVisibility(this.get(PROP_IS_STATUS_BAR_VISIBLE), this.get(PROP_IS_NAVIGATION_BAR_VISIBLE) && m_HasNavigationBar);
+		}
 	}
 	
 	
