@@ -9,6 +9,10 @@
 	<!-- Gallery activity -->
 	<color name="gallery_activity_background">#FF16181B</color>
 	
+	<!-- Gallery seekbar -->
+	<color name="gallery_seek_bar_primary">#FF23A3F5</color>
+	<color name="gallery_seek_bar_background">#FFDFDFDF</color>
+	
 	<!-- Media set list item -->
 	<color name="media_set_list_item_background">#FF16181B</color>
 	<color name="media_set_list_item_title">#FFFFFFFF</color>
@@ -16,5 +20,8 @@
 	
 	<color name="add_album_button_background">#FF7870CC</color>
 	<color name="add_album_button_ripple_color">#FFFFFFFF</color>
+	
+	<!-- Video player -->
+	<color name="video_player_text_color">#FFFFFF</color>
 	
 </resources>

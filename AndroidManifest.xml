@@ -35,6 +35,21 @@
 			</intent-filter>
 
 		</activity>
+		
+		<!-- Video player -->
+		<activity
+			android:name=".VideoPlayerActivity"
+			android:configChanges="orientation"
+			android:theme="@style/GalleryWindow"
+			android:exported="false">
+			
+		    <intent-filter>
+				<category android:name="android.intent.category.DEFAULT"/>
+				<action android:name="android.intent.action.MAIN"/>
+				<data android:mimeType="video/*"/>
+			</intent-filter>
+		    
+		</activity>
 
 	</application>
 

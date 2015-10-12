@@ -1,4 +1,4 @@
-<resources>
+<resources xmlns:android="http://schemas.android.com/apk/res/android">
 
 	<!-- Application -->
 	<style name="AppBaseTheme" parent="android:Theme.Material">
@@ -31,6 +31,8 @@
 	<style name="GalleryWindow" parent="@android:style/Theme.Material.NoActionBar">
 		<item name="android:alertDialogTheme">@android:style/Theme.Material.Light.Dialog.Alert</item>
 		<item name="android:dialogTheme">@android:style/Theme.Material.Light.Dialog</item>
+		<item name="android:colorControlNormal">@color/gallery_seek_bar_background</item>
+		<item name="android:colorControlActivated">@color/gallery_seek_bar_primary</item>
 	</style>
 	
 	<!--media set list item title -->
@@ -48,6 +50,12 @@
 	<!-- Widget -->
 	<style name="Widget" parent="@android:style/Widget.Material"/>
 	<style name="Widget.ProgressBar" parent="@android:style/Widget.Material.ProgressBar"/>
-	<style name="Widget.ProgressBar.Horizontal" parent="@android:style/Widget.Material.ProgressBar.Horizontal"/>
+	<style name="Widget.ProgressBar.Horizontal" parent="@android:style/Widget.Material.ProgressBar.Horizontal"/>	
+	
+	<!-- Video player -->
+	<style name="VideoPlayerDurationText" parent="BaseText">
+		<item name="android:textColor">@color/video_player_text_color</item>
+		<item name="android:textSize">@dimen/video_player_media_control_text_size</item>
+	</style>
 
 </resources>

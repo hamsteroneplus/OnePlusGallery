@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent" >
+	
+    <!-- Video view -->
+    <VideoView
+        android:id="@+id/video_player_video_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_centerInParent="true" />
+    
+    <!-- Image play button -->
+    <ImageButton
+        android:id="@+id/video_player_play_button"
+        android:layout_width="@dimen/video_player_play_button_width_height"
+        android:layout_height="@dimen/video_player_play_button_width_height"
+        android:layout_centerInParent="true"
+        android:background="@null"
+        android:src="@drawable/review_video_play"
+        android:visibility="gone" />
+
+    <!-- Media control container -->
+    <LinearLayout 
+        android:id="@+id/video_player_media_control_container"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/video_player_media_control_container_height"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="@dimen/video_player_media_control_container_margin_bottom"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:visibility="gone" >
+
+        <!-- Elapsed time -->
+        <TextView
+            android:id="@+id/video_player_media_control_elapsed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="@dimen/video_player_media_control_item_width_min"
+            android:layout_marginStart="@dimen/video_player_media_control_item_margin"
+            style="@style/VideoPlayerDurationText" />
+        
+        <!-- Video play seek bar -->
+        <SeekBar 
+            android:id="@+id/video_player_media_control_seekbar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="1" />
+        
+        <!-- Video duration time -->
+        <TextView
+            android:id="@+id/video_player_media_control_duration"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="@dimen/video_player_media_control_item_width_min"
+            android:layout_marginEnd="@dimen/video_player_media_control_item_margin"
+            style="@style/VideoPlayerDurationText" />
+        
+    </LinearLayout>
+    
+    <!-- Header -->
+    <RelativeLayout
+        android:id="@+id/video_player_header_container"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/video_player_header_container_height"
+        android:gravity="center_vertical"
+        android:visibility="gone" >
+        
+        <ImageButton
+            android:id="@+id/video_player_header_button_back"
+            android:layout_width="@dimen/video_player_header_container_height"
+            android:layout_height="@dimen/video_player_header_container_height"
+            android:layout_marginStart="@dimen/video_player_header_item_margin"
+            android:layout_alignParentStart="true"
+            android:padding="@dimen/video_player_header_item_padding"
+            android:background="@drawable/ripple"
+            android:src="@drawable/button_previous" />
+        
+        <ImageButton
+            android:id="@+id/video_player_header_button_details"
+            android:layout_width="@dimen/video_player_header_container_height"
+            android:layout_height="@dimen/video_player_header_container_height"
+            android:layout_marginEnd="@dimen/video_player_header_item_margin"
+            android:layout_alignParentEnd="true"
+            android:padding="@dimen/video_player_header_item_padding"
+            android:background="@drawable/ripple"
+            android:src="@drawable/button_about" />
+        
+    </RelativeLayout>
+    
+    <!-- Footer -->
+    <LinearLayout
+        android:id="@+id/video_player_footer_container"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/video_player_footer_container_height"
+        android:layout_alignParentBottom="true"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:visibility="gone" >
+        
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center" >
+            
+            <ImageButton
+	            android:id="@+id/video_player_footer_button_share"
+	            android:layout_width="@dimen/video_player_footer_container_height"
+	            android:layout_height="@dimen/video_player_footer_container_height"
+	            android:padding="@dimen/video_player_footer_item_padding"
+	            android:background="@drawable/ripple"
+	            android:src="@drawable/state_button_share" />
+            
+        </RelativeLayout>
+        
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center" >
+            
+            <ImageButton
+	            android:id="@+id/video_player_footer_button_collect"
+	            android:layout_width="@dimen/video_player_footer_container_height"
+	            android:layout_height="@dimen/video_player_footer_container_height"
+	            android:padding="@dimen/video_player_footer_item_padding"
+	            android:background="@drawable/ripple"
+	            android:src="@drawable/state_button_collect" />
+            
+        </RelativeLayout>
+        
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center" >
+            
+            <ImageButton
+	            android:id="@+id/video_player_footer_button_delete"
+	            android:layout_width="@dimen/video_player_footer_container_height"
+	            android:layout_height="@dimen/video_player_footer_container_height"
+	            android:padding="@dimen/video_player_footer_item_padding"
+	            android:background="@drawable/ripple"
+	            android:src="@drawable/state_button_delete" />
+            
+        </RelativeLayout>
+        
+    </LinearLayout>
+    
+</RelativeLayout>

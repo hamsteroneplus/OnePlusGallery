@@ -42,13 +42,35 @@
 	
 	<!-- Filmstrip Fragment -->
 	<dimen name="filmstrip_item_play_button_width_height">63dp</dimen>
-	<dimen name="filmstrip_header_container_height">50dp</dimen>
+	<dimen name="filmstrip_header_container_height">@dimen/action_bar_height</dimen>
 	<dimen name="filmstrip_header_item_padding">9dp</dimen>
 	<dimen name="filmstrip_header_item_margin">7dp</dimen> <!-- 16dp - padding(9dp) -->
-	<dimen name="filmstrip_footer_container_height">50dp</dimen>
+	<dimen name="filmstrip_footer_container_height">@dimen/action_bar_height</dimen>
 	<dimen name="filmstrip_footer_item_padding">9dp</dimen>
+	
+	<!-- Seek Bar -->
+	<dimen name="seek_bar_thumb_height">36dp</dimen>
+	<dimen name="seek_bar_thumb_margin">13dp</dimen>
+	<dimen name="seek_bar_thumb_disabled_margin">@dimen/seek_bar_thumb_margin</dimen>
+	<dimen name="seek_bar_thumb_pressed_margin">12dp</dimen>
+	<dimen name="seek_bar_thumb_selected_margin">0dp</dimen>
+	<dimen name="seek_bar_progress_width_height">6dp</dimen>
+	<dimen name="seek_bar_progress_stroke_height">3dp</dimen>
 	
 	<!-- Thumbnail image -->
 	<dimen name="thumbnail_image_manager_thumb_size_small">90dp</dimen>
+	
+	<!-- Video player activity -->
+	<dimen name="video_player_play_button_width_height">63dp</dimen>
+	<dimen name="video_player_media_control_container_height">@dimen/action_bar_height</dimen>
+	<dimen name="video_player_media_control_container_margin_bottom">@dimen/action_bar_height</dimen>
+	<dimen name="video_player_media_control_item_margin">16dp</dimen>
+	<dimen name="video_player_media_control_item_width_min">29dp</dimen>
+	<dimen name="video_player_media_control_text_size">11dp</dimen>
+	<dimen name="video_player_header_container_height">@dimen/action_bar_height</dimen>
+	<dimen name="video_player_header_item_padding">9dp</dimen>
+	<dimen name="video_player_header_item_margin">7dp</dimen> <!-- 16dp - padding(9dp) -->
+	<dimen name="video_player_footer_container_height">@dimen/action_bar_height</dimen>
+	<dimen name="video_player_footer_item_padding">9dp</dimen>
 	
 </resources>

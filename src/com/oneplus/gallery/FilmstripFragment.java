@@ -62,7 +62,7 @@ public class FilmstripFragment extends GalleryFragment
 	
 	// Constants
 	private final static BitmapPool BITMAP_POOL_HIGH_RESOLUTION = new BitmapPool("FilmstripHighResBitmapPool", 64 << 20, 16 << 20, Bitmap.Config.ARGB_8888, 2, 0);
-	private final static BitmapPool BITMAP_POOL_MEDIUM_RESOLUTION = new BitmapPool("FilmstripMediumResBitmapPool", 32 << 20, 16 << 20, Bitmap.Config.ARGB_8888, 3, 0);
+	private final static BitmapPool BITMAP_POOL_MEDIUM_RESOLUTION = new BitmapPool("FilmstripMediumResBitmapPool", 64 << 20, 16 << 20, Bitmap.Config.ARGB_8888, 3, 0);
 	private static final long DURATION_ANIMATION = 150;
 	private static final int PRE_DECODE_THUMB_WINDOW_SIZE = 2;
 	private static final int PRE_DECODE_THUMB_WINDOW_SIZE_SMALL = 3;
@@ -186,7 +186,6 @@ public class FilmstripFragment extends GalleryFragment
 	{
 		// Public fields
 		private final View m_Container;
-		private final View m_ControlsContainer;
 		private ImageDecodeState m_ImageDecodeState;
 		private Media m_Media; 
 		private final ImageView m_PlayButton;
@@ -197,7 +196,6 @@ public class FilmstripFragment extends GalleryFragment
 		{
 			// find containers & controls
 			m_Container = View.inflate(FilmstripFragment.this.getActivity(), R.layout.layout_filmstrip_item, null);
-			m_ControlsContainer = m_Container.findViewById(R.id.filmstrip_item_controls_container);
 			
 			// setup scale image view
 			m_ScaleImageView = (ScaleImageView)m_Container.findViewById(R.id.filmstrip_item_scale_image_view);
@@ -247,7 +245,7 @@ public class FilmstripFragment extends GalleryFragment
 			});
 			
 			// setup play button
-			m_PlayButton = (ImageView)m_ControlsContainer.findViewById(R.id.filmstrip_item_play_button);
+			m_PlayButton = (ImageView)m_Container.findViewById(R.id.filmstrip_item_play_button);
 			m_PlayButton.setOnClickListener(new View.OnClickListener()
 			{	
 				@Override
@@ -293,7 +291,8 @@ public class FilmstripFragment extends GalleryFragment
 		// Call when play button click
 		private void onPlayButtonClick()
 		{
-			FilmstripFragment.this.playVideo(m_Media);
+			// start video player
+			FilmstripFragment.this.playVideo(getMedia());
 		}
 		
 		// Set image bounds
@@ -350,19 +349,21 @@ public class FilmstripFragment extends GalleryFragment
 					height = m_FakePhotoSize.getHeight();
 				}
 			}
-			m_ScaleImageView.setImageSize(width, height);
-			m_ScaleImageView.setImageBounds(BoundsType.FIT_SHORT_SIDE);
 
 			// set video controls visible if media info is video
 			if(isVideo)
 			{
-				m_ControlsContainer.setVisibility(View.VISIBLE);
+				m_PlayButton.setVisibility(View.VISIBLE);
+				m_ScaleImageView.setImageSize(width, height);
+				m_ScaleImageView.setImageBounds(BoundsType.FIT_SHORT_SIDE);
 				m_ScaleImageView.setImageBoundsChangeEnabled(false);
 				m_ScaleImageView.setImageScaleRatio(-1, 1);
 			}
 			else
 			{
-				m_ControlsContainer.setVisibility(View.INVISIBLE);
+				m_PlayButton.setVisibility(View.INVISIBLE);
+				m_ScaleImageView.setImageSize(width, height);
+				m_ScaleImageView.setImageBounds(BoundsType.FIT_SHORT_SIDE);
 				m_ScaleImageView.setImageBoundsChangeEnabled(true);
 				m_ScaleImageView.setImageScaleRatio(-1, -1);
 			}
@@ -1374,11 +1375,11 @@ public class FilmstripFragment extends GalleryFragment
 	private void playVideoDirectly(Media media)
 	{
 		// prepare intent
-		Intent playIntent = new Intent(Intent.ACTION_VIEW);
-		playIntent.setDataAndType(media.getContentUri(),"video/*");
+		Intent videoPlayerIntent = new Intent(this.getActivity(), VideoPlayerActivity.class);
+		videoPlayerIntent.setDataAndType(media.getContentUri(),"video/*");
 
 		// start activity
-		this.startActivity(playIntent);
+		this.startActivity(videoPlayerIntent);
 	}
 	
 	
@@ -1389,9 +1390,6 @@ public class FilmstripFragment extends GalleryFragment
 
 		// reset gallery state
 		this.setFilmstripState(FilmstripState.BACKGROUND);
-		
-		// reset media index
-		//this.setCurrentMediaIndexProp(-1, true);
 	}
 
 	
