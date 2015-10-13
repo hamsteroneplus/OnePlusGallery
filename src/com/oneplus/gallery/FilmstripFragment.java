@@ -157,11 +157,9 @@ public class FilmstripFragment extends GalleryFragment
 		}
 	};
 	private List<BitmapDecodeInfo> m_MediumResBitmapDecodeInfos = new ArrayList<>();
-	private Handle m_NavBarVisibilityHandle;
 	private Queue<BitmapDecodeInfo> m_ReusedBitmapDecodeInfos = new ArrayDeque<>();
 	private float m_ScaleFactor;
 	private View m_ShareButton;
-	private Handle m_StatusBarVisibilityHandle;
 	private Handle m_ThumbManagerActivateHandle;
 	private ViewVisibilityState m_ToolbarVisibilityState = ViewVisibilityState.INVISIBLE;
 	
@@ -749,7 +747,7 @@ public class FilmstripFragment extends GalleryFragment
 		if(m_IsToolbarVisible && !gallery.get(Gallery.PROP_HAS_DIALOG) && !gallery.get(Gallery.PROP_IS_SHARING_MEDIA))
 		{
 			Log.v(TAG, "hideToolbarDelay()");
-			HandlerUtils.sendMessage(FilmstripFragment.this, MSG_HIDE_TOOL_BAR, true, DELAY_HIDE_TOOL_BAR_TIME_MILLIS);
+			HandlerUtils.sendMessage(this, MSG_HIDE_TOOL_BAR, true, DELAY_HIDE_TOOL_BAR_TIME_MILLIS);
 		}
 	}
 	
@@ -812,6 +810,16 @@ public class FilmstripFragment extends GalleryFragment
 					FilmstripFragment.this.cancelHideToolbar();
 				else
 					FilmstripFragment.this.hideToolbarDelay();
+			}
+		});
+		
+		// add navi bar visibility callback
+		gallery.addCallback(Gallery.PROP_IS_NAVIGATION_BAR_VISIBLE, new PropertyChangedCallback<Boolean>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+			{
+				FilmstripFragment.this.onNavigationBarVisibilityChanged(e.getNewValue());
 			}
 		});
 		
@@ -939,6 +947,9 @@ public class FilmstripFragment extends GalleryFragment
 		// setup toolbar
 		if(m_IsToolbarVisible)
 			this.setToolbarVisibility(true, false);
+		
+		// update tool bar margin
+		this.updateToolbarMargins(m_IsToolbarVisible);
 		
 		// update collect button
 		this.updateCollectButtonSelection();
@@ -1129,6 +1140,14 @@ public class FilmstripFragment extends GalleryFragment
 			m_FilmstripAdapter.notifyDataSetChanged();
 			this.setCurrentMediaIndexProp(newPosition, true);
 		}
+	}
+	
+	
+	// Call when navigation bar visibility changed
+	protected void onNavigationBarVisibilityChanged(boolean visible)
+	{
+		// update too bar margin
+		this.updateToolbarMargins(visible);
 	}
 	
 	
@@ -1622,32 +1641,6 @@ public class FilmstripFragment extends GalleryFragment
 	}
 	
 	
-	// Set system UI visibility
-	private void setSystemUiVisibility(boolean visible)
-	{
-		Log.v(TAG, "setSystemUiVisibility() - Visible: ", visible);
-		
-		if(visible)
-		{
-			m_NavBarVisibilityHandle = Handle.close(m_NavBarVisibilityHandle);
-			m_StatusBarVisibilityHandle = Handle.close(m_StatusBarVisibilityHandle);
-		}
-		else
-		{
-			Gallery gallery = this.getGallery();
-			if(gallery != null)
-			{
-				if(!Handle.isValid(m_NavBarVisibilityHandle))
-					m_NavBarVisibilityHandle = gallery.setNavigationBarVisibility(false);
-				if(!Handle.isValid(m_StatusBarVisibilityHandle))
-					m_StatusBarVisibilityHandle = gallery.setStatusBarVisibility(false);
-			}
-			else
-				Log.e(TAG, "setSystemUiVisibility() - No gallery");
-		}
-	}
-	
-	
 	// Set toolbar visibility
 	private void setToolbarVisibility(boolean visible, boolean animation)
 	{		
@@ -1656,9 +1649,6 @@ public class FilmstripFragment extends GalleryFragment
 		
 		// check edit button
 		this.updateEditButtonVisibility();
-		
-		// set status bar visibility
-		this.setSystemUiVisibility(visible);
 		
 		// update
 		this.updateToolbarVisibility(animation);
@@ -1742,24 +1732,52 @@ public class FilmstripFragment extends GalleryFragment
 	}
 	
 	
+	// Update tool bar margin
+	private void updateToolbarMargins(boolean isNavbarVisible)
+	{
+		// check state
+		if(m_HeaderContainer == null || m_FooterContainer == null)
+			return;
+		
+		Log.v(TAG, "updateToolbarMargins() - Navigation bar visible: ", isNavbarVisible);
+		
+		// set margin
+		ScreenSize screenSize = this.getGalleryActivity().get(GalleryActivity.PROP_SCREEN_SIZE);
+		RelativeLayout.LayoutParams headerParams = (RelativeLayout.LayoutParams)m_HeaderContainer.getLayoutParams();
+		RelativeLayout.LayoutParams footerParams = (RelativeLayout.LayoutParams)m_FooterContainer.getLayoutParams();
+		if(isNavbarVisible)
+		{
+			int naviHeight = screenSize.getNavigationBarSize();
+			if(screenSize.getWidth() > screenSize.getHeight())
+			{
+				headerParams.setMargins(headerParams.leftMargin, headerParams.topMargin, naviHeight, headerParams.bottomMargin);
+				footerParams.setMargins(footerParams.leftMargin, footerParams.topMargin, naviHeight, 0);
+			}
+			else
+			{
+				headerParams.setMargins(headerParams.leftMargin, headerParams.topMargin, 0, headerParams.bottomMargin);
+				footerParams.setMargins(footerParams.leftMargin, footerParams.topMargin, 0, naviHeight);
+			}
+		}
+		else
+		{
+			headerParams.setMargins(headerParams.leftMargin, headerParams.topMargin, 0, headerParams.bottomMargin);
+			footerParams.setMargins(footerParams.leftMargin, footerParams.topMargin, 0, 0);
+		}
+	}
+	
+	
 	// Update toolbar visibility
 	private void updateToolbarVisibility(boolean animation)
 	{
 		// check state
 		if(m_HeaderContainer == null || m_FooterContainer == null)
 			return;
-		switch(m_FilmstripState)
-		{
-			case BROWSE_SINGLE_PAGE:
-			case VIEW_DETAILS:
-				break;
-			default:
-				// only single page can show tool bar
-				m_IsToolbarVisible = false;
-				break;
-		}
 
 		Log.v(TAG, "updateToolbarVisibility() - Visible: ", m_IsToolbarVisible);
+		
+		// set status bar visibility
+		this.setSystemUiVisibility(m_IsToolbarVisible);
 
 		// show/hide toolbar
 		if(m_IsToolbarVisible)

@@ -52,6 +52,7 @@ public abstract class GalleryActivity extends BaseActivity
 	private Gallery m_Gallery;
 	private Handle m_GalleryAttachHandle;
 	private boolean m_IsInstanceStateSaved;
+	private boolean m_IsSharedGallery;
 	private ScreenSize m_ScreenSize;
 	
 	
@@ -263,6 +264,7 @@ public abstract class GalleryActivity extends BaseActivity
 		{
 			Log.w(TAG, "onCreate() - Use shared Gallery : " + m_Gallery.getId());
 			m_ActivityResultHandles = new SparseArray<>();
+			m_IsSharedGallery = true;
 		}
 		
 		// attach to gallery
@@ -303,7 +305,7 @@ public abstract class GalleryActivity extends BaseActivity
 		m_GalleryAttachHandle = Handle.close(m_GalleryAttachHandle);
 		
 		// release gallery
-		if(!m_IsInstanceStateSaved)
+		if(!m_IsInstanceStateSaved && !m_IsSharedGallery)
 		{
 			Log.w(TAG, "onDestroy() - Release Gallery");
 			m_Gallery.release();
@@ -396,7 +398,34 @@ public abstract class GalleryActivity extends BaseActivity
 	 * @param isVisible True if status bar is visible.
 	 */
 	protected void onStatusBarVisibilityChanged(boolean isVisible)
-	{}
+	{}	
+	
+	
+	// Set system UI visibility
+	protected void setSystemUiVisibility(boolean visible)
+	{
+		// check state
+		Gallery gallery = this.getGallery();
+		if(gallery == null)
+		{
+			Log.e(TAG, "setSystemUiVisibility() - No gallery");
+			return;
+		}
+		
+		Log.v(TAG, "setSystemUiVisibility() - Visible: ", visible);
+		
+		// set visibility
+		if(visible)
+		{
+			gallery.setNavigationBarVisibility(true);
+			gallery.setStatusBarVisibility(true);
+		}
+		else
+		{
+			gallery.setNavigationBarVisibility(false);
+			gallery.setStatusBarVisibility(false);
+		}
+	}
 	
 	
 	/**

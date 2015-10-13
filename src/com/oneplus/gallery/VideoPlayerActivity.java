@@ -6,6 +6,10 @@ import java.util.Map;
 import com.oneplus.base.Handle;
 import com.oneplus.base.HandlerUtils;
 import com.oneplus.base.Log;
+import com.oneplus.base.PropertyChangeEventArgs;
+import com.oneplus.base.PropertyChangedCallback;
+import com.oneplus.base.PropertyKey;
+import com.oneplus.base.PropertySource;
 import com.oneplus.base.ScreenSize;
 import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaManager;
@@ -28,8 +32,10 @@ public class VideoPlayerActivity extends GalleryActivity
 {
 	// Constants
 	private static final long DURATION_ANIMATION = 150;
+	private static final long DELAY_HIDE_CONTROLS_UI_TIME_MILLIS = 3000;
 	private static final int INTERVAL_UPDATE_ELAPSED_TIME_MILLIS = 1000;
 	private static final int MSG_UPDATE_ELAPSED_TIME = 10001;
+	private static final int MSG_HIDE_CONTROLS_UI = 10002;
 	private static final String STATE_IS_CONTROLS_VISIBLE = "isControlsVisible";
 	private static final String STATE_IS_VIDEO_PLAYING = "isVideoPlaying";
 	private static final String STATE_VIDEO_ELAPSED_TIME_MILLIS = "videoElapsedTimeMillis";
@@ -55,9 +61,9 @@ public class VideoPlayerActivity extends GalleryActivity
 	private TextView m_MediaControlDurationTextView;
 	private TextView m_MediaControlElapsedTextView;
 	private SeekBar m_MediaControlSeekBar;
+	private int m_MediaDefaultMarginBottom;
 	private ImageButton m_PlayButton;
 	private ImageButton m_ShareButton;
-	private Handle m_StatusBarVisibilityHandle;
 	private View m_TouchReceiver;
 	private int m_VideoDurationTimeMillis;
 	private int m_VideoElapsedTimeMillis;
@@ -75,9 +81,20 @@ public class VideoPlayerActivity extends GalleryActivity
 	}
 	
 	
+	// Cancel hide controls UI
+	private void cancelHideControlsUI()
+	{
+		Log.v(TAG, "cancelHideControlsUI()");
+		HandlerUtils.removeMessages(this, MSG_HIDE_CONTROLS_UI);
+	}
+	
+	
 	// Collect media
 	private void collectMedia()
 	{
+		// reset delay hide tool bar
+		this.hideControlsUIDelay();
+		
 		// check media
 		if(m_Media == null)
 			return;
@@ -90,6 +107,9 @@ public class VideoPlayerActivity extends GalleryActivity
 	// Delete media
 	private void deleteMedia()
 	{
+		// reset delay hide tool bar
+		this.hideControlsUIDelay();
+		
 		// check media
 		if(m_Media == null)
 			return;
@@ -125,10 +145,26 @@ public class VideoPlayerActivity extends GalleryActivity
 			case MSG_UPDATE_ELAPSED_TIME:
 				this.updateElapsedTime((Boolean)msg.obj);
 				break;
+				
+			case MSG_HIDE_CONTROLS_UI:
+				this.setControlsVisibility(false, true);
+				break;
 		
 			default:
 				super.handleMessage(msg);
 				break;
+		}
+	}
+	
+	
+	// Hide controls UI delay
+	private void hideControlsUIDelay()
+	{
+		Gallery gallery = this.getGallery();
+		if(m_IsControlsVisible && !gallery.get(Gallery.PROP_HAS_DIALOG) && !gallery.get(Gallery.PROP_IS_SHARING_MEDIA))
+		{
+			Log.v(TAG, "hideControlsUIDelay()");
+			HandlerUtils.sendMessage(this, MSG_HIDE_CONTROLS_UI, true, DELAY_HIDE_CONTROLS_UI_TIME_MILLIS);
 		}
 	}
 
@@ -139,6 +175,10 @@ public class VideoPlayerActivity extends GalleryActivity
 	{
 		// call super
 		super.onCreate(savedInstanceState, extras);
+		
+		// set content view
+		View mainContainer = View.inflate(this, R.layout.activity_video_player, null);
+		this.setContentView(mainContainer);
 		
 		// get data and type
 		Intent intent = this.getIntent();
@@ -163,14 +203,35 @@ public class VideoPlayerActivity extends GalleryActivity
 			public void onCreationCompleted(Handle handle, Uri contentUri, Media media)
 			{
 				VideoPlayerActivity.this.onMediaCreated(media);
-				Log.v(TAG, "onCreate() - Media created: ", contentUri);
-				m_Media = media;
 			}
 		});
 		
-		// set content view
-		View mainContainer = View.inflate(this, R.layout.activity_video_player, null);
-		this.setContentView(mainContainer);
+		// add has dialog callback
+		Gallery gallery = this.getGallery();
+		gallery.addCallback(Gallery.PROP_HAS_DIALOG, new PropertyChangedCallback<Boolean>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+			{
+				if(e.getNewValue())
+					VideoPlayerActivity.this.cancelHideControlsUI();
+				else
+					VideoPlayerActivity.this.hideControlsUIDelay();
+			}
+		});
+
+		// add sharing callback
+		gallery.addCallback(Gallery.PROP_IS_SHARING_MEDIA, new PropertyChangedCallback<Boolean>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e) 
+			{
+				if(e.getNewValue())
+					VideoPlayerActivity.this.cancelHideControlsUI();
+				else
+					VideoPlayerActivity.this.hideControlsUIDelay();
+			}
+		});
 		
 		// setup gesture
 		m_GestureDetector = new GestureDetector(this, new GestureDetector.OnGestureListener()
@@ -227,6 +288,18 @@ public class VideoPlayerActivity extends GalleryActivity
 			@Override
 			public boolean onTouch(View v, MotionEvent event) 
 			{
+				// delay to hide tool bar if no interaction
+				switch(event.getAction())
+				{
+					case MotionEvent.ACTION_DOWN:
+						VideoPlayerActivity.this.cancelHideControlsUI();
+						break;
+					
+					case MotionEvent.ACTION_CANCEL:
+					case MotionEvent.ACTION_UP:
+						VideoPlayerActivity.this.hideControlsUIDelay();
+						break;
+				}
 				return m_GestureDetector.onTouchEvent(event);
 			}
 		});
@@ -267,6 +340,7 @@ public class VideoPlayerActivity extends GalleryActivity
 				VideoPlayerActivity.this.onSeekBarStopTracking(seekBar);
 			}
 		});
+		m_MediaDefaultMarginBottom = this.getResources().getDimensionPixelSize(R.dimen.video_player_media_control_container_margin_bottom);
 		
 		// setup header
 		m_HeaderContainer = mainContainer.findViewById(R.id.video_player_header_container);
@@ -327,8 +401,9 @@ public class VideoPlayerActivity extends GalleryActivity
 		});
 		
 		// hide status bar by default
-		this.setStatusBarVisibility(m_DefaultControlsVisible);
-		this.setControlsVisibility(m_DefaultControlsVisible, true);		
+		this.setSystemUiVisibility(m_DefaultControlsVisible);
+		this.setControlsVisibility(m_DefaultControlsVisible, true);
+		this.updateControlsMargins(m_DefaultControlsVisible);
 	}
 	
 	
@@ -356,6 +431,15 @@ public class VideoPlayerActivity extends GalleryActivity
 	}
 	
 	
+	// Call when navigation bar visibility changed
+	@Override
+	protected void onNavigationBarVisibilityChanged(boolean visible)
+	{
+		// update controls margin
+		this.updateControlsMargins(visible);
+	}
+	
+	
 	// Call when onPause
 	@Override
 	protected void onPause()
@@ -366,9 +450,6 @@ public class VideoPlayerActivity extends GalleryActivity
 		m_DefaultControlsVisible = m_IsControlsVisible;
 		m_DefaultVideoElapsedTimeMillis = m_VideoView.getCurrentPosition();
 		m_DefaultVideoPlaying = m_IsVideoPlaying;
-		
-		// show status bar
-		this.setStatusBarVisibility(true);
 		
 		// pause
 		this.pause();
@@ -462,6 +543,9 @@ public class VideoPlayerActivity extends GalleryActivity
 		// reset flags
 		m_IsControlsVisible = false;
 		m_ControlsVisibilityState = ViewVisibilityState.INVISIBLE;
+		
+		// cancel hide
+		this.cancelHideControlsUI();
 		
 		// call super
 		super.onStop();
@@ -570,24 +654,6 @@ public class VideoPlayerActivity extends GalleryActivity
 	}
 	
 	
-	// Set status bar visibility
-	private void setStatusBarVisibility(boolean visible)
-	{
-		Log.v(TAG, "setStatusBarVisibility() - Visible: ", visible);
-		
-		if(visible)
-			m_StatusBarVisibilityHandle = Handle.close(m_StatusBarVisibilityHandle);
-		else if(!Handle.isValid(m_StatusBarVisibilityHandle))
-		{
-			Gallery gallery = this.getGallery();
-			if(gallery != null)
-				m_StatusBarVisibilityHandle = gallery.setStatusBarVisibility(false);
-			else
-				Log.e(TAG, "setStatusBarVisibility() - No gallery");
-		}
-	}
-	
-	
 	// Set video duration
 	private void setVideoDurationTimeMillis(int timeMillis)
 	{
@@ -626,6 +692,9 @@ public class VideoPlayerActivity extends GalleryActivity
 	// Share media
 	private void shareMedia()
 	{
+		// reset delay hide tool bar
+		this.hideControlsUIDelay();
+		
 		// check media
 		if(m_Media == null)
 			return;
@@ -641,6 +710,9 @@ public class VideoPlayerActivity extends GalleryActivity
 	// Show details
 	private void showDetails()
 	{
+		// reset delay hide tool bar
+		this.hideControlsUIDelay();
+		
 		// check media
 		if(m_Media == null)
 			return;
@@ -695,13 +767,50 @@ public class VideoPlayerActivity extends GalleryActivity
 	}
 	
 	
+	// Update controls margin
+	private void updateControlsMargins(boolean visible)
+	{
+		// check state
+		if(m_HeaderContainer == null || m_FooterContainer == null || m_MediaControlContainer == null)
+			return;
+		
+		// set margin
+		ScreenSize screenSize = this.get(GalleryActivity.PROP_SCREEN_SIZE);
+		RelativeLayout.LayoutParams headerParams = (RelativeLayout.LayoutParams)m_HeaderContainer.getLayoutParams();
+		RelativeLayout.LayoutParams footerParams = (RelativeLayout.LayoutParams)m_FooterContainer.getLayoutParams();
+		RelativeLayout.LayoutParams mediaParams = (RelativeLayout.LayoutParams)m_MediaControlContainer.getLayoutParams();
+		if(visible)
+		{
+			int naviHeight = screenSize.getNavigationBarSize();
+			if(screenSize.getWidth() > screenSize.getHeight())
+			{
+				headerParams.setMargins(headerParams.leftMargin, headerParams.topMargin, naviHeight, 0);
+				footerParams.setMargins(footerParams.leftMargin, footerParams.topMargin, naviHeight, 0);
+				mediaParams.setMargins(mediaParams.leftMargin, mediaParams.topMargin, naviHeight, m_MediaDefaultMarginBottom);
+			}
+			else
+			{
+				headerParams.setMargins(headerParams.leftMargin, headerParams.topMargin, 0, 0);
+				footerParams.setMargins(footerParams.leftMargin, footerParams.topMargin, 0, naviHeight);
+				mediaParams.setMargins(mediaParams.leftMargin, mediaParams.topMargin, 0, m_MediaDefaultMarginBottom + naviHeight);
+			}
+		}
+		else
+		{
+			headerParams.setMargins(headerParams.leftMargin, headerParams.topMargin, 0, headerParams.bottomMargin);
+			footerParams.setMargins(footerParams.leftMargin, footerParams.topMargin, 0, 0);
+			mediaParams.setMargins(mediaParams.leftMargin, mediaParams.topMargin, 0, m_MediaDefaultMarginBottom);
+		}
+	}
+	
+	
 	// Update controls visibility
 	private void updateControlsVisibility(boolean animation)
 	{
 		Log.v(TAG, "updateControlsVisibility() - Visible: ", m_IsControlsVisible);
 
 		// set status bar visibility
-		this.setStatusBarVisibility(m_IsControlsVisible);
+		this.setSystemUiVisibility(m_IsControlsVisible);
 		
 		// show/hide controls
 		if(m_IsControlsVisible)
@@ -748,6 +857,7 @@ public class VideoPlayerActivity extends GalleryActivity
 					public void run()
 					{
 						m_ControlsVisibilityState = ViewVisibilityState.VISIBLE;
+						VideoPlayerActivity.this.hideControlsUIDelay();
 					}
 				}).start();
 				
@@ -758,6 +868,7 @@ public class VideoPlayerActivity extends GalleryActivity
 					public void run()
 					{
 						m_ControlsVisibilityState = ViewVisibilityState.VISIBLE;
+						VideoPlayerActivity.this.hideControlsUIDelay();
 					}
 				}).start();
 				
@@ -768,6 +879,7 @@ public class VideoPlayerActivity extends GalleryActivity
 					public void run()
 					{
 						m_ControlsVisibilityState = ViewVisibilityState.VISIBLE;
+						VideoPlayerActivity.this.hideControlsUIDelay();
 					}
 				}).start();
 
@@ -778,6 +890,7 @@ public class VideoPlayerActivity extends GalleryActivity
 					public void run()
 					{
 						m_ControlsVisibilityState = ViewVisibilityState.VISIBLE;
+						VideoPlayerActivity.this.hideControlsUIDelay();
 					}
 				}).start();
 
@@ -804,10 +917,15 @@ public class VideoPlayerActivity extends GalleryActivity
 
 				// change visibility state
 				m_ControlsVisibilityState = ViewVisibilityState.VISIBLE;
+				this.hideControlsUIDelay();
 			}
 		}
 		else
 		{
+			// remove hide controls
+			this.cancelHideControlsUI();
+			
+			// animation
 			if(animation)
 			{
 				switch(m_ControlsVisibilityState)

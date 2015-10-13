@@ -192,5 +192,32 @@ public abstract class GalleryFragment extends BaseFragment
 		
 		// call super
 		super.onDetach();
+	}	
+	
+	
+	// Set system UI visibility
+	protected void setSystemUiVisibility(boolean visible)
+	{
+		// check state
+		Gallery gallery = this.getGallery();
+		if(gallery == null)
+		{
+			Log.e(TAG, "setSystemUiVisibility() - No gallery");
+			return;
+		}
+		
+		Log.v(TAG, "setSystemUiVisibility() - Visible: ", visible);
+		
+		// set visibility
+		if(visible)
+		{
+			gallery.setNavigationBarVisibility(true);
+			gallery.setStatusBarVisibility(true);
+		}
+		else
+		{
+			gallery.setNavigationBarVisibility(false);
+			gallery.setStatusBarVisibility(false);
+		}
 	}
 }
