@@ -54,7 +54,7 @@ public class DirectoryMediaSet extends MediaStoreMediaSet
 		
 		// get directory path
 		String directoryPath = "";
-		Cursor cursor = client.query(contentUri, MediaStoreMedia.MEDIA_COLUMNS, FileColumns._ID+"= ?", new String[] {Integer.toString(m_Id)}, null);
+		Cursor cursor = client.query(contentUri, MediaStoreMedia.getMediaColumns(), FileColumns._ID+"= ?", new String[] {Integer.toString(m_Id)}, null);
 		
 		try{
 			

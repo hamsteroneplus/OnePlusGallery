@@ -15,6 +15,7 @@ import android.provider.MediaStore.MediaColumns;
 import android.provider.MediaStore.Files.FileColumns;
 import android.provider.MediaStore.Images.ImageColumns;
 import android.provider.MediaStore.Video.VideoColumns;
+import android.text.TextUtils;
 
 /**
  * {@link Media} implementation based-on media store.
@@ -24,12 +25,31 @@ public abstract class MediaStoreMedia implements Media
 	/**
 	 * Columns to be queried from media store.
 	 */
-	public static final String[] MEDIA_COLUMNS = new String[]{
+	private static final String[] MEDIA_COLUMNS = new String[]{
 		MediaColumns._ID,
 		FileColumns.MEDIA_TYPE,
 		FileColumns.DATA,
 		FileColumns.SIZE,
 		MediaColumns.MIME_TYPE,
+		MediaColumns.DATE_MODIFIED,
+		ImageColumns.DATE_TAKEN,
+		MediaColumns.WIDTH,
+		MediaColumns.HEIGHT,
+		ImageColumns.LATITUDE,
+		ImageColumns.LONGITUDE,
+		ImageColumns.ORIENTATION,
+		VideoColumns.DURATION,
+	};
+	/**
+	 * Columns to be queried from media store on OnePlus device.
+	 */
+	private static final String[] MEDIA_COLUMNS_ONEPLUS = new String[]{
+		MediaColumns._ID,
+		FileColumns.MEDIA_TYPE,
+		FileColumns.DATA,
+		FileColumns.SIZE,
+		MediaColumns.MIME_TYPE,
+		MediaManager.COLUMN_ONEPLUS_FLAGS,
 		MediaColumns.DATE_MODIFIED,
 		ImageColumns.DATE_TAKEN,
 		MediaColumns.WIDTH,
@@ -47,9 +67,10 @@ public abstract class MediaStoreMedia implements Media
 	
 	// Fields.
 	private final Uri m_ContentUri;
-	private final String m_FilePath;
+	private volatile String m_FilePath;
 	private volatile long m_FileSize;
 	private final Handler m_Handler;
+	private volatile boolean m_IsFavorite;
 	private final boolean m_IsOriginal;
 	private volatile long m_LastModifiedTime;
 	private volatile Location m_Location;
@@ -134,54 +155,10 @@ public abstract class MediaStoreMedia implements Media
 		m_MediaSet = mediaSet;
 		m_ContentUri = contentUri;
 		m_IsOriginal = isOriginal;
-		m_FilePath = CursorUtils.getString(cursor, MediaColumns.DATA);
 		m_MimeType = CursorUtils.getString(cursor, FileColumns.MIME_TYPE);
 		
-		// get file size
-		File file = null;
-		m_FileSize = CursorUtils.getLong(cursor, FileColumns.SIZE, 0L);
-		if(m_FileSize <= 0 && m_FilePath != null)
-		{
-			try
-			{
-				file = new File(m_FilePath);
-				m_FileSize = file.length();
-			}
-			catch(Throwable ex)
-			{}
-		}
-		
-		// get modified time
-		m_LastModifiedTime = CursorUtils.getLong(cursor, MediaColumns.DATE_MODIFIED, 0L);
-		if(m_LastModifiedTime > 0)
-			m_LastModifiedTime *= 1000;
-		else if(m_FilePath != null)
-		{
-			try
-			{
-				if(file == null)
-					file = new File(m_FilePath);
-				m_LastModifiedTime = file.lastModified();
-			}
-			catch(Throwable ex)
-			{}
-		}
-		
-		// get size
-		this.setupSize(cursor, m_Size);
-		
-		// get location
-		double lat = CursorUtils.getDouble(cursor, ImageColumns.LATITUDE, 0);
-		double lng = CursorUtils.getDouble(cursor, ImageColumns.LONGITUDE, 0);
-		if(lat != 0 && lng != 0)
-		{
-			m_Location = new Location("");
-			m_Location.setLatitude(lat);
-			m_Location.setLongitude(lng);
-		}
-		
-		// get taken time
-		m_TakenTime = this.setupTakenTime(cursor);
+		// update
+		this.onUpdate(cursor, true);
 	}
 	
 	
@@ -362,6 +339,18 @@ public abstract class MediaStoreMedia implements Media
 	}
 	
 	
+	/**
+	 * Get media store columns for media.
+	 * @return Media store columns.
+	 */
+	public static String[] getMediaColumns()
+	{
+		if(MediaManager.isOnePlusMediaProvider())
+			return MEDIA_COLUMNS_ONEPLUS;
+		return MEDIA_COLUMNS;
+	}
+	
+	
 	// Get media set.
 	@Override
 	public MediaSet getMediaSet()
@@ -412,11 +401,107 @@ public abstract class MediaStoreMedia implements Media
 	}
 	
 	
+	// Check favorite state.
+	@Override
+	public boolean isFavorite()
+	{
+		return m_IsFavorite;
+	}
+	
+	
 	// Check whether this is original file or not.
 	@Override
 	public boolean isOriginal()
 	{
 		return m_IsOriginal;
+	}
+	
+	
+	/**
+	 * Update media information.
+	 * @param cursor Cursor to read media information.
+	 * @param fromConstructor True if method is called from constructor.
+	 * @return True if one or more media information has been changed.
+	 */
+	protected boolean onUpdate(Cursor cursor, boolean fromConstructor)
+	{
+		// get path and type
+		boolean changed = false;
+		String prevFilePath = m_FilePath;
+		m_FilePath = CursorUtils.getString(cursor, MediaColumns.DATA);
+		changed = (!fromConstructor && !TextUtils.equals(prevFilePath, m_FilePath));
+		
+		// get file size
+		File file = null;
+		long prevFileSize = m_FileSize;
+		m_FileSize = CursorUtils.getLong(cursor, FileColumns.SIZE, 0L);
+		if(m_FileSize <= 0 && m_FilePath != null)
+		{
+			try
+			{
+				file = new File(m_FilePath);
+				m_FileSize = file.length();
+			}
+			catch(Throwable ex)
+			{}
+		}
+		if(!changed && !fromConstructor)
+			changed = (prevFileSize != m_FileSize);
+		
+		// get modified time
+		long prevTime = m_LastModifiedTime;
+		m_LastModifiedTime = CursorUtils.getLong(cursor, MediaColumns.DATE_MODIFIED, 0L);
+		if(m_LastModifiedTime > 0)
+			m_LastModifiedTime *= 1000;
+		else if(m_FilePath != null)
+		{
+			try
+			{
+				if(file == null)
+					file = new File(m_FilePath);
+				m_LastModifiedTime = file.lastModified();
+			}
+			catch(Throwable ex)
+			{}
+		}
+		if(!changed && !fromConstructor)
+			changed = (prevTime != m_LastModifiedTime);
+		
+		// get size
+		int prevWidth = m_Size[0];
+		int prevHeight = m_Size[1];
+		this.setupSize(cursor, m_Size);
+		if(!changed && !fromConstructor)
+			changed = (prevWidth != m_Size[0] || prevHeight != m_Size[1]);
+		
+		// get location
+		Location prevLocation = m_Location;
+		double lat = CursorUtils.getDouble(cursor, ImageColumns.LATITUDE, 0);
+		double lng = CursorUtils.getDouble(cursor, ImageColumns.LONGITUDE, 0);
+		if(lat != 0 && lng != 0)
+		{
+			m_Location = new Location("");
+			m_Location.setLatitude(lat);
+			m_Location.setLongitude(lng);
+		}
+		if(!changed && !fromConstructor)
+			changed = ((prevLocation != null && !prevLocation.equals(m_Location)) || (prevLocation == null && m_Location != null));
+		
+		// get taken time
+		prevTime = m_TakenTime;
+		m_TakenTime = this.setupTakenTime(cursor);
+		if(!changed && !fromConstructor)
+			changed = (prevTime != m_TakenTime);
+		
+		// get favorite
+		int oneplusFlags = CursorUtils.getInt(cursor, MediaManager.COLUMN_ONEPLUS_FLAGS, 0);
+		boolean prevFavorite = m_IsFavorite;
+		m_IsFavorite = ((oneplusFlags & MediaManager.ONEPLUS_FLAG_FAVORITE) != 0);
+		if(!changed && !fromConstructor)
+			changed = (prevFavorite != m_IsFavorite);
+		
+		// complete
+		return changed;
 	}
 	
 	
@@ -450,5 +535,16 @@ public abstract class MediaStoreMedia implements Media
 		if(m_FilePath != null)
 			return ("[" + m_ContentUri + ", File = " + m_FilePath + "]");
 		return ("[" + m_ContentUri + "]");
+	}
+	
+	
+	/**
+	 * Update media information by cursor.
+	 * @param cursor Cursor to read media information.
+	 * @return True if one or more media information has been changed.
+	 */
+	public boolean update(Cursor cursor)
+	{
+		return this.onUpdate(cursor, false);
 	}
 }

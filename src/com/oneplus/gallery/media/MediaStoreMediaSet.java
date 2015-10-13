@@ -638,7 +638,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 				String sortOrder = comparator.getContentProviderSortOrder();
 				if(maxMediaCount >= 0)
 					sortOrder += (" LIMIT " + maxMediaCount);
-				Cursor cursor = client.query(contentUri, MediaStoreMedia.MEDIA_COLUMNS, m_QueryCondition, m_QueryConditionArgs, sortOrder);
+				Cursor cursor = client.query(contentUri, MediaStoreMedia.getMediaColumns(), m_QueryCondition, m_QueryConditionArgs, sortOrder);
 				int mediaReportThreshold = 4;
 				List<Media> tempMediaList = null;
 				Handler handler = getHandler();
@@ -756,7 +756,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 				if(maxMediaCount >= 0)
 					sortOrder += (" LIMIT " + maxMediaCount);
 				Handler handler = getHandler();
-				Cursor cursor = client.query(contentUri, MediaStoreMedia.MEDIA_COLUMNS, m_QueryCondition, m_QueryConditionArgs, sortOrder);
+				Cursor cursor = client.query(contentUri, MediaStoreMedia.getMediaColumns(), m_QueryCondition, m_QueryConditionArgs, sortOrder);
 				if(cursor != null)
 				{
 					try

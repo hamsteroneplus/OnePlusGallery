@@ -41,6 +41,42 @@ import android.provider.MediaStore.Files.FileColumns;
  */
 public class MediaManager
 {
+	/**
+	 * Media store column name of OnePlus flags.
+	 */
+	public static final String COLUMN_ONEPLUS_FLAGS = "oneplus_flags";
+	
+	
+	/**
+	 * Flag for {@link #COLUMN_ONEPLUS_FLAGS} : Selfie media.
+	 */
+	public static final int ONEPLUS_FLAG_SELFIE = 0x1;
+	/**
+	 * Flag for {@link #COLUMN_ONEPLUS_FLAGS} : Panorama photo.
+	 */
+	public static final int ONEPLUS_FLAG_PANORAMA = 0x2;
+	/**
+	 * Flag for {@link #COLUMN_ONEPLUS_FLAGS} : Slow-motion video.
+	 */
+	public static final int ONEPLUS_FLAG_SLOW_MOTION = 0x4;
+	/**
+	 * Flag for {@link #COLUMN_ONEPLUS_FLAGS} : Time-lapse video.
+	 */
+	public static final int ONEPLUS_FLAG_TIME_LAPSE = 0x8;
+	/**
+	 * Flag for {@link #COLUMN_ONEPLUS_FLAGS} : Favorite.
+	 */
+	public static final int ONEPLUS_FLAG_FAVORITE = 0x10;
+	/**
+	 * Flag for {@link #COLUMN_ONEPLUS_FLAGS} : Cover photo.
+	 */
+	public static final int ONEPLUSP_FLAG_COVER = 0x10000;
+	/**
+	 * Flag for {@link #COLUMN_ONEPLUS_FLAGS} : Burst photo set.
+	 */
+	public static final int ONEPLUS_FLAG_BURST = 0x20000;
+	
+	
 	// Constants.
 	private static final String TAG = "MediaManager";
 	private static final Uri CONTENT_URI_FILE = Files.getContentUri("external");
@@ -78,6 +114,7 @@ public class MediaManager
 	private static volatile Handler m_ContentThreadHandler;
 	private static final HashMap<Integer, DirectoryMediaSet> m_DirectoryMediaSets = new HashMap<>();
 	private static volatile Handler m_Handler;
+	private static volatile boolean m_IsOnePlusMediaProvider;
 	private static final Object m_Lock = new Object();
 	private static Handle m_MediaSetListContentChangeCBHandle;
 	private static TempMediaSet m_TempMediaSet;
@@ -90,6 +127,17 @@ public class MediaManager
 		public void onContentChanged(Uri contentUri)
 		{
 			m_Handler.sendEmptyMessage(MSG_REFRESH_MEDIA_SET_LISTS);
+		}
+	};
+	
+	
+	// Runnables.
+	private static final Runnable m_CheckOPMediaProviderRunnable = new Runnable()
+	{
+		@Override
+		public void run()
+		{
+			checkOnePlusMediaProvider();
 		}
 	};
 	
@@ -516,6 +564,7 @@ public class MediaManager
 			for(int i = m_ActiveStateCallbacks.size() - 1 ; i >= 0 ; --i)
 				m_ActiveStateCallbacks.get(i).onActivated();
 			startContentThread();
+			m_ContentThreadHandler.post(m_CheckOPMediaProviderRunnable);
 			m_ContentThreadHandler.sendEmptyMessage(MSG_CHECK_CONTENT_CHANGES);
 		}
 		
@@ -555,6 +604,50 @@ public class MediaManager
 		{
 			if(observer.lastChangedTime > 0)
 				observer.notifyChange(true);
+		}
+	}
+	
+	
+	// Check whether default media provider is OnePlus media provider or not.
+	private static void checkOnePlusMediaProvider()
+	{
+		if(m_IsOnePlusMediaProvider)
+		{
+			Log.w(TAG, "checkOnePlusMediaProvider()");
+			return;
+		}
+		try
+		{
+			ContentProviderClient client = GalleryApplication.current().getContentResolver().acquireUnstableContentProviderClient(CONTENT_URI_IMAGE);
+			Cursor cursor = null;
+			if(client != null)
+			{
+				try
+				{
+					cursor = client.query(CONTENT_URI_IMAGE, new String[]{ COLUMN_ONEPLUS_FLAGS }, null, null, null);
+					if(cursor != null)
+					{
+						m_IsOnePlusMediaProvider = true;
+						// create favorite media set
+					}
+				}
+				catch(Throwable ex)
+				{}
+				finally
+				{
+					if(cursor != null)
+						cursor.close();
+					client.release();
+				}
+			}
+			if(m_IsOnePlusMediaProvider)
+				Log.w(TAG, "checkOnePlusMediaProvider()");
+			else
+				Log.w(TAG, "checkOnePlusMediaProvider() - Not OnePlus media provider");
+		}
+		catch(Throwable ex)
+		{
+			Log.e(TAG, "checkOnePlusMediaProvider() - Fail to check", ex);
 		}
 	}
 	
@@ -664,7 +757,7 @@ public class MediaManager
 				Media media = null;
 				try
 				{
-					Cursor cursor = client.query(uri, MediaStoreMedia.MEDIA_COLUMNS, selection, selectionArgs, null);
+					Cursor cursor = client.query(uri, MediaStoreMedia.getMediaColumns(), selection, selectionArgs, null);
 					if(cursor != null)
 					{
 						try
@@ -798,6 +891,8 @@ public class MediaManager
 				MediaManager.handleMessage(msg);
 			}
 		};
+		startContentThread();
+		m_ContentThreadHandler.post(m_CheckOPMediaProviderRunnable);
 	}
 	
 	
@@ -818,6 +913,16 @@ public class MediaManager
 	public static boolean isContentThread()
 	{
 		return (Thread.currentThread() == m_ContentThread);
+	}
+	
+	
+	/**
+	 * Check whether default media provider is OnePlus media provider or not.
+	 * @return True if media provider is OnePlus media provider.
+	 */
+	public static boolean isOnePlusMediaProvider()
+	{
+		return m_IsOnePlusMediaProvider;
 	}
 	
 	

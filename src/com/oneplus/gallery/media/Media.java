@@ -115,6 +115,13 @@ public interface Media extends HandlerObject
 	
 	
 	/**
+	 * Check whether this is a favorite media or not.
+	 * @return True if this is a favorite media.
+	 */
+	boolean isFavorite();
+	
+	
+	/**
 	 * Check whether this is original file or not.
 	 * @return True if this is original file.
 	 */
