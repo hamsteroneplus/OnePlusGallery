@@ -21,6 +21,7 @@ public class DirectoryMediaSet extends MediaStoreMediaSet
 {
 	// Fields.
 	private final int m_Id;
+	private final String m_DirectoryPath;
 	
 	
 	/**
@@ -38,6 +39,7 @@ public class DirectoryMediaSet extends MediaStoreMediaSet
 		
 		// setup query condition
 		m_Id = id;
+		m_DirectoryPath = directoryPath;
 		this.setQueryCondition(FileColumns.PARENT + "=?", Integer.toString(id));
 	}
 		
@@ -104,6 +106,15 @@ public class DirectoryMediaSet extends MediaStoreMediaSet
 	public final int getDirectoryId()
 	{
 		return m_Id;
+	}
+	
+	/**
+	 * Get directory path in media store.
+	 * @return Directory path.
+	 */
+	public final String getDirectoryPath()
+	{
+		return m_DirectoryPath;
 	}
 	
 	
