@@ -639,7 +639,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 				if(maxMediaCount >= 0)
 					sortOrder += (" LIMIT " + maxMediaCount);
 				Cursor cursor = client.query(contentUri, MediaStoreMedia.MEDIA_COLUMNS, m_QueryCondition, m_QueryConditionArgs, sortOrder);
-				int mediaReportThreshold = 1;
+				int mediaReportThreshold = 4;
 				List<Media> tempMediaList = null;
 				Handler handler = getHandler();
 				if(cursor != null)
@@ -744,8 +744,6 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	// Refresh media list.
 	private void refreshMediaList(final MediaListImpl mediaList)
 	{
-		if(mediaList.isEmpty())
-			return;
 		final HashSet<Uri> srcContentUris = new HashSet<>();
 		mediaList.getAllContentUris(srcContentUris);
 		MediaManager.accessContentProvider(CONTENT_URI_FILE, new MediaManager.ContentProviderAccessCallback()
