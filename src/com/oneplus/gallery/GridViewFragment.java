@@ -3,6 +3,7 @@ package com.oneplus.gallery;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -62,7 +63,7 @@ public class GridViewFragment extends GalleryFragment {
 	
 	
 	// Private fields
-	private int m_AnchorPosition; // Keep the very first selected item position
+	private int m_AnchorPosition = GridView.INVALID_POSITION; // Keep the very first selected item position
 	private View m_EmptyMediaView;
 	private GridView m_GridView;
 	private GridViewItemAdapter m_GridViewItemAdapter;
@@ -77,11 +78,13 @@ public class GridViewFragment extends GalleryFragment {
 	private MediaList m_MediaList = null;
 	private PreDecodeBitmapRunnable m_PreDecodeBitmapRunnable;
 	private List<Media> m_SelectionMeidaList = new ArrayList<>();
+	private List<Media> m_TempMeidaList = new ArrayList<>();
 	private Handle m_ThumbManagerActivateHandle;
 	private Toolbar m_Toolbar;
 	private String m_ToolbarTitle = null;
 	private boolean m_ToolbarActionShared = false;
 	private int m_TouchedPosition = GridView.INVALID_POSITION;
+	private Object m_ObjectLock = new Object();
 //	private boolean m_SetEmptyMediaView = false;
 	
 	private static BitmapPool m_SmallBitmapPool = new CenterCroppedBitmapPool("GridViewFragmentSmallBitmapPool", 32 << 20, Bitmap.Config.RGB_565, 4, BitmapPool.FLAG_USE_EMBEDDED_THUMB_ONLY);
@@ -89,7 +92,7 @@ public class GridViewFragment extends GalleryFragment {
 		@Override
 		public void onDeletionProcessCompleted() {
 			super.onDeletionProcessCompleted();
-			toolBarActionCancelSelection();
+			exitSelectionMode();
 		}
 	};
 	
@@ -149,7 +152,7 @@ public class GridViewFragment extends GalleryFragment {
 				{
 					thumbDecoded = true;
 					thumbnailImageView.setImageBitmap(thumb);
-					GridViewFragment.this.removeDecodingHandle(handle);
+					GridViewFragment.this.removeDecodingHandle(media.getFilePath());
 				}
 			}
 		};
@@ -204,13 +207,13 @@ public class GridViewFragment extends GalleryFragment {
 				// visibleLastPosition could be -1
 				for(int i = visibleLastposition; i >= 0 && i < (visibleLastposition + PRE_DECODE_BITMAP_COUNTS) && i < medialist.size() ; ++i) {
 					Media media = medialist.get(i);
-					Handle handle = ThumbnailImageManager.decodeSmallThumbnailImage(media, ThumbnailImageManager.FLAG_ASYNC, preDecodeCallback, handler);
+					Handle handle = ThumbnailImageManager.decodeSmallThumbnailImage(media, preDecodeCallback, handler);
 					m_HandleSet.add(handle);
 				}
 				
 				for(int i = visibleFirstposition; i > (visibleFirstposition - PRE_DECODE_BITMAP_COUNTS) && i >= 0; --i) {
 					Media media = medialist.get(i);
-					Handle handle = ThumbnailImageManager.decodeSmallThumbnailImage(media, ThumbnailImageManager.FLAG_ASYNC, preDecodeCallback, handler);
+					Handle handle = ThumbnailImageManager.decodeSmallThumbnailImage(media, preDecodeCallback, handler);
 					m_HandleSet.add(handle);
 				}
 				
@@ -247,7 +250,6 @@ public class GridViewFragment extends GalleryFragment {
 			onMediaRemoving(e);
 		}
 	};
-
 	
 	
 	private void cancelAllBitmapDecodeTasks() {
@@ -257,7 +259,7 @@ public class GridViewFragment extends GalleryFragment {
 	}
 
 	
-	private void cancelAllSelection() {
+	private void hideSelectImage() {
 		if(m_SelectionMeidaList.isEmpty())
 			return;
 		m_SelectionMeidaList.clear();	
@@ -274,26 +276,32 @@ public class GridViewFragment extends GalleryFragment {
 	}
 	
 	
-	private void exitSelectionMode() {
-		if(m_IsCameraRoll) {
-			m_Toolbar.setNavigationIcon(null);
-			m_Toolbar.setVisibility(View.GONE);	
-		}else {
-			m_Toolbar.setNavigationIcon(R.drawable.button_previous);
-			m_Toolbar.setTitle(m_ToolbarTitle);
+	private void resetToolBar() {
+		if(m_Toolbar != null) {
+			if(m_IsCameraRoll) {
+				m_Toolbar.setNavigationIcon(null);
+				m_Toolbar.setVisibility(View.GONE);	
+			}else {
+				m_Toolbar.setNavigationIcon(R.drawable.button_previous);
+				m_Toolbar.setTitle(m_ToolbarTitle);
+			}
+			m_Toolbar.getMenu().setGroupVisible(R.id.selectModeActionGroup, false);	
 		}
-		m_Toolbar.getMenu().setGroupVisible(R.id.selectModeActionGroup, false);
 		m_IsSelectionMode = false;
+		
+	}
+	
+	//
+	private void exitSelectionMode() {
+		resetToolBar();
+		
+		hideSelectImage();
 		this.set(PROP_IS_SELECTION_MODE, false);
 	}
 	
 	
-	private void toolBarActionCancelSelection() {
-		if(m_Toolbar == null) 
-			return;
-		
-		exitSelectionMode();
-		cancelAllSelection();
+	public GridViewItemAdapter getGridViewItemAdapter() {
+		return this.m_GridViewItemAdapter;
 	}
 	
 	/**
@@ -346,7 +354,7 @@ public class GridViewFragment extends GalleryFragment {
 	
 	
 	// Normal Mode
-	private void onItemClicked(int index, View view)
+	private void onSingleItemClicked(int index, View view)
 	{
 		// check state
 		if(m_MediaList == null)
@@ -373,7 +381,7 @@ public class GridViewFragment extends GalleryFragment {
 	
 	
 	// Selection Mode
-	private void onItemSelected(int index, View view) {
+	private void onSingleItemSelected(int index, View view) {
 		if(view == null) 
 			return;
 		if(index == 0 && m_IsCameraRoll)
@@ -400,8 +408,60 @@ public class GridViewFragment extends GalleryFragment {
 			return;
 		}
 		
+		updateToolBarTitleImageCounts();
+		
+	}
+	
+	
+	private void onMultiItemSelected(int index, View view) {
+		if(view == null) 
+			return;
+		if(index == 0 && m_IsCameraRoll)
+			return;
+		ImageView selectedImage = (ImageView) view.findViewById(R.id.item_selected);
+		Media media = (Media) m_GridViewItemAdapter.getItem(index);
+		if(!m_SelectionMeidaList.contains(media)) {
+			if(!m_TempMeidaList.isEmpty() && m_TempMeidaList.contains(media)) {
+				//Dont remove anchorposition
+//				if(index != m_AnchorPosition){
+//					selectedImage.setVisibility(View.GONE);
+//					m_TempMeidaList.remove(media);
+//				}
+			}else {
+				selectedImage.setVisibility(View.VISIBLE);
+				m_TempMeidaList.add(media);
+			}
+		}
+		
+		
+		updateToolBarTitleImageCounts();
+	}
+	
+	
+	private void onMultiItemDeSelected(int index, View view) {
+		if(view == null) 
+			return;
+		if(index == 0 && m_IsCameraRoll)
+			return;
+		ImageView selectedImage = (ImageView) view.findViewById(R.id.item_selected);
+		Media media = (Media) m_GridViewItemAdapter.getItem(index);
+		if(!m_SelectionMeidaList.contains(media)) {
+			if(!m_TempMeidaList.isEmpty() && m_TempMeidaList.contains(media)) {
+				//Dont remove anchorposition
+				if(index != m_AnchorPosition){
+					selectedImage.setVisibility(View.GONE);
+					m_TempMeidaList.remove(media);
+				}
+			}
+		}
+		
+		
+		updateToolBarTitleImageCounts();
+	}
+	
+	private void updateToolBarTitleImageCounts() {
 		Resources res = this.getActivity().getResources();
-		String selectedItems = String.format(res.getString(R.string.toolbar_selection_total), m_SelectionMeidaList.size());
+		String selectedItems = String.format(res.getString(R.string.toolbar_selection_total), m_SelectionMeidaList.size() + m_TempMeidaList.size());
 		m_Toolbar.setTitle(selectedItems);
 	}
 	
@@ -410,18 +470,27 @@ public class GridViewFragment extends GalleryFragment {
 	{
 		Log.d(TAG, "onMediaAdded mediaList");
 		
+		if(m_MediaList != null && !m_MediaList.isEmpty()) {
+			if(m_EmptyMediaView != null)
+				m_EmptyMediaView.setVisibility(View.GONE);
+			if(m_GridView != null)
+				m_GridView.setVisibility(View.VISIBLE);
+		}
 		
 		// refresh items
-		if(m_GridViewItemAdapter != null)
+		if(m_GridViewItemAdapter != null) {
 			m_GridViewItemAdapter.notifyDataSetChanged();
+		}
 	}
 	
 	private void onMediaRemoved(ListChangeEventArgs e)
 	{
 		// hide grid view
-		if(m_MediaList.isEmpty()) {
-//			if(m_EmptyMediaView != null)
-//				m_EmptyMediaView.setVisibility(View.VISIBLE);
+		if(m_MediaList != null && m_MediaList.isEmpty()) {
+			if(m_EmptyMediaView != null)
+				m_EmptyMediaView.setVisibility(View.VISIBLE);
+			if(m_GridView != null)
+				m_GridView.setVisibility(View.GONE);
 		}
 		
 		// refresh items
@@ -435,6 +504,7 @@ public class GridViewFragment extends GalleryFragment {
 			return;
 		}
 		int itemIndex = e.getStartIndex();
+		
 		if(m_IsSelectionMode) {
 			if(m_IsCameraRoll)
 				++itemIndex;
@@ -445,8 +515,10 @@ public class GridViewFragment extends GalleryFragment {
 			}
 			if(m_SelectionMeidaList.contains(media)) {
 				View itemView = m_GridView.getChildAt(itemIndex - m_GridView.getFirstVisiblePosition());
-				ImageView selectedView = (ImageView) itemView.findViewById(R.id.item_selected);
-				selectedView.setVisibility(View.GONE);
+				if(itemView != null) {
+					ImageView selectedView = (ImageView) itemView.findViewById(R.id.item_selected);
+					selectedView.setVisibility(View.GONE);
+				}
 				m_SelectionMeidaList.remove(media);
 			}
 			
@@ -509,7 +581,7 @@ public class GridViewFragment extends GalleryFragment {
 		// Clear selection after share activity start
 		if(m_ToolbarActionShared) {
 			if(m_IsSelectionMode) {
-				toolBarActionCancelSelection();
+				exitSelectionMode();
 			}
 			m_ToolbarActionShared = false;
 		}
@@ -539,7 +611,7 @@ public class GridViewFragment extends GalleryFragment {
 			m_HasActionBar = (boolean) value;
 		else if(key == PROP_IS_SELECTION_MODE) {
 			if(m_IsSelectionMode && (boolean) value == false) {
-				toolBarActionCancelSelection();
+				exitSelectionMode();
 			}
 			m_IsSelectionMode = (boolean) value;
 		}
@@ -579,10 +651,10 @@ public class GridViewFragment extends GalleryFragment {
 			m_MediaList.addHandler(MediaList.EVENT_MEDIA_ADDED, m_MediaAddedHandler);
 			m_MediaList.addHandler(MediaList.EVENT_MEDIA_REMOVED, m_MediaRemovedHandler);
 			m_MediaList.addHandler(MediaList.EVENT_MEDIA_REMOVING, m_MediaRemovingHandler);
+			
 			Log.d(TAG, "setMediaList m_MediaList != null size: " + m_MediaList.size() );
 		}else {
 			Log.d(TAG, "setMediaList m_MediaList == null");
-//			m_SetEmptyMediaView = true;
 		}
 		//TODO need mediaSet propertychange info
 		
@@ -604,9 +676,10 @@ public class GridViewFragment extends GalleryFragment {
 	public void onStart() {
 		super.onStart();
 		Log.d(TAG, "onStart()" );
+		// leave gallery when was about to share photos, reset to default when re-enter
 		if(m_ToolbarActionShared) {
 			if(m_IsSelectionMode) {
-				toolBarActionCancelSelection();
+				exitSelectionMode();
 			}
 			m_ToolbarActionShared = false;
 		}
@@ -628,7 +701,7 @@ public class GridViewFragment extends GalleryFragment {
 		m_GridView.setNumColumns(m_GridviewColumns);
 		if(m_GridViewItemAdapter == null)
 			m_GridViewItemAdapter = new GridViewItemAdapter(this.getActivity());
-		m_GridView.setAdapter(m_GridViewItemAdapter);
+//		m_GridView.setAdapter(m_GridViewItemAdapter);
 		m_GridView.setSaveInstanceStateEnabled(false);
 		if(m_LastGridViewPosition >= 0)
 		{
@@ -641,9 +714,9 @@ public class GridViewFragment extends GalleryFragment {
 			public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
 				Log.d(TAG, "onItemClick item position:" + position);
 				if(m_IsSelectionMode) {
-					onItemSelected(position, view);
+					onSingleItemSelected(position, view);
 				}else {
-					onItemClicked(position, view);
+					onSingleItemClicked(position, view);
 				}
 			}
 	    });	
@@ -663,13 +736,18 @@ public class GridViewFragment extends GalleryFragment {
 				GridViewFragment.this.set(PROP_IS_SELECTION_MODE, true);
 				Media media = (Media) m_GridViewItemAdapter.getItem(position);
 				Log.d(TAG, "onItemLongClick media:" + media.getFilePath());
-				onItemSelected(position, view);
+				onSingleItemSelected(position, view);
 				
 				return true;
 			}
 		});
 		m_GridView.setOnTouchListener(new OnTouchListener() {
 			int firstTouchItemPosition;
+			int oldPosition = -1;
+			int initialX = -1;
+			int initialY = -1;
+			boolean validGesture = false;
+			boolean invalidGesture = false;
 			// to know if this is a scroll gesture or multi-selection gesutre
 			long downElapseTime;
 			boolean multiSelectToggleOn = false;
@@ -684,13 +762,14 @@ public class GridViewFragment extends GalleryFragment {
 				switch (action) {
 				case MotionEvent.ACTION_DOWN:
 					downElapseTime  = SystemClock.elapsedRealtime();
-					int x = (int)event.getX();
-					int y = (int)event.getY();
+					initialX = (int)event.getX();
+					initialY = (int)event.getY();
 					GridView gridview = (GridView) view;
-					m_TouchedPosition = firstTouchItemPosition = gridview.pointToPosition(x, y);
-					Log.d(TAG, "gridview onTouchListener item touched: " + firstTouchItemPosition);
+					m_TouchedPosition = firstTouchItemPosition = gridview.pointToPosition(initialX, initialY);
+					Log.d(TAG, "onTouchListener ACTION_DOWN item touched: " + firstTouchItemPosition);
 					break;
 				case MotionEvent.ACTION_MOVE:
+					Log.d(TAG, "onTouchListener ACTION_MOVE ");
 					long actionTimeDiff = SystemClock.elapsedRealtime() - downElapseTime;
 					// if time diff < 200, we consider this gesture is a scroll action
 					if(actionTimeDiff < 200) {
@@ -698,8 +777,23 @@ public class GridViewFragment extends GalleryFragment {
 					}
 					int mx = (int)event.getX();
 					int my = (int)event.getY();
-					int movingPosition = ((GridView) view).pointToPosition(mx, my);
+					if(initialX == -1 && initialY == -1) {
+						
+					}else {
+						int deltaX = initialX > mx ? initialX - mx : mx - initialX;
+						int deltaY = initialY > my ? initialY - my : my - initialY;
+						if(deltaX > 10 || deltaY > 10) {
+							invalidGesture = true;
+						}
+						if(invalidGesture && !validGesture) {
+							Log.e(TAG, "InvalidGesture break");
+							break;	
+						}	
+					}
 					
+					int movingPosition = ((GridView) view).pointToPosition(mx, my);
+					Log.d(TAG, "movingPosition: " + movingPosition);
+					Log.d(TAG, "m_TouchedPosition: " + m_TouchedPosition);
 					// finger remains in the same position for more than 200ms 
 					// consider this gesture is a multi-select action
 					// so set multiselectoggleOn=true
@@ -711,16 +805,20 @@ public class GridViewFragment extends GalleryFragment {
 							// means another multi-select action is about to trigger
 							if(m_AnchorPosition == GridView.INVALID_POSITION)
 								m_AnchorPosition = firstTouchItemPosition;
-							Log.e(TAG, "onTouch ACTION_MOVE movingPosition == m_TouchedPosition");
+							Log.e(TAG, "onTouch ACTION_MOVE movingPosition == m_TouchedPosition " + movingPosition +" " + m_TouchedPosition);
 						}
 					}
-
+					
 					if(movingPosition == GridView.INVALID_POSITION) {
+						Log.e(TAG, "entering #790 movingPosition INVALID_POSITION");
 						break;
 					}
-					if(multiSelectToggleOn && movingPosition != firstTouchItemPosition) {
-						
+//					if(multiSelectToggleOn && movingPosition != firstTouchItemPosition) {
+					if(multiSelectToggleOn && movingPosition != oldPosition) {
+						Log.w(TAG, "entering #794 nyktuokeSelect");
 						multipleSelect(action, (GridView) view, movingPosition);
+						oldPosition = movingPosition;
+						validGesture = true;
 					}
 					
 					return true;
@@ -730,7 +828,16 @@ public class GridViewFragment extends GalleryFragment {
 					m_AnchorPosition = GridView.INVALID_POSITION;
 					m_TouchedPosition= GridView.INVALID_POSITION;
 					downElapseTime = 0;
-
+					invalidGesture = false;
+					validGesture = false;
+					initialX = -1;
+					initialY = -1;
+					if(!m_TempMeidaList.isEmpty()) {
+						for(Media media: m_TempMeidaList) {
+							m_SelectionMeidaList.add(media);
+						}
+					}
+					m_TempMeidaList.clear();
 					/* TODO 
 					if(y > 1250) {
 						Log.e(TAG, "gridview scroll 15 px");
@@ -739,9 +846,10 @@ public class GridViewFragment extends GalleryFragment {
 					*/
 					break;
 				default:
+					
 					break;
 				}
-				Log.e(TAG, "onTouch OUTTER return false");
+				Log.e(TAG, "onTouch OUTTER return false " + event.getAction());
 				return false;
 			}
 		});
@@ -773,7 +881,7 @@ public class GridViewFragment extends GalleryFragment {
 			@Override
 			public void onClick(View v) {
 				if(m_IsCameraRoll || m_IsSelectionMode) {
-					toolBarActionCancelSelection();
+					exitSelectionMode();
 				}else {
 					GridViewFragment.this.getGalleryActivity().goBack();
 				}
@@ -801,44 +909,69 @@ public class GridViewFragment extends GalleryFragment {
 			}
 		});
 		
-		m_GridView.setEmptyView(m_EmptyMediaView);
+		
+		this.getHandler().postDelayed(new Runnable() {
+			
+			@Override
+			public void run() {
+				if(m_MediaList != null && !m_MediaList.isEmpty()) {
+					m_GridView.setVisibility(View.VISIBLE);
+				}else
+					m_EmptyMediaView.setVisibility(View.VISIBLE);
+			}
+		}, 100);
 		m_PreDecodeBitmapRunnable = new PreDecodeBitmapRunnable(this);
+		m_GridView.setAdapter(m_GridViewItemAdapter);
 		return view;
-	}
+	}//end of onCreateView
 	
 
 	protected void multipleSelect(int action, GridView gridview, int position) {
-		int selectposition = position;
 		switch (action) 
 		{
 			case MotionEvent.ACTION_DOWN:
 				break;
 			case MotionEvent.ACTION_MOVE:
+				int selectposition = position;
 				if(m_AnchorPosition != selectposition) {
 					
 					if(m_AnchorPosition == GridView.INVALID_POSITION) {
 						View itemView = gridview.getChildAt(selectposition);
 						if(itemView != null) {
 							Log.e(TAG,"multipleSelect should never see this more thane 1 time");
-							onItemSelected(selectposition, itemView);
+							onMultiItemSelected(selectposition, itemView);
 						}
 						m_TouchedPosition = selectposition;
 						break;
 					}
 					
 					if(selectposition != GridView.INVALID_POSITION) {
-						
-						int deviate = m_TouchedPosition - selectposition ;
-						Log.w(TAG, "deviate: " + deviate);
-						Log.w(TAG, "gridview.getFirstVisiblePosition(): " + gridview.getFirstVisiblePosition());
-						int startIndex = deviate < 0 ? selectposition : m_TouchedPosition;
-						int endIndex = deviate < 0 ? m_TouchedPosition : selectposition;
-						while(startIndex > endIndex) {
+						Log.w(TAG, "multipleSelect() - m_AnchorPosition: " + m_AnchorPosition + " selectposition: " + selectposition + "  m_TouchedPosition: " + m_TouchedPosition);
+						int deviate = m_AnchorPosition - selectposition ;
+						Log.w(TAG, "multipleSelect() - deviate: " + deviate);
+						Log.w(TAG, "multipleSelect() - gridview.getFirstVisiblePosition(): " + gridview.getFirstVisiblePosition());
+						int startIndex = deviate < 0 ? selectposition : m_AnchorPosition;
+//						int endIndex = deviate < 0 ? m_TouchedPosition : selectposition;
+						int endIndex = deviate < 0 ? m_AnchorPosition : selectposition;
+						while(startIndex >= endIndex) {
 							View itemView = null;
 							itemView = gridview.getChildAt(startIndex- gridview.getFirstVisiblePosition());
-							onItemSelected(startIndex, itemView);
+							onMultiItemSelected(startIndex, itemView);
 							--startIndex;
 						}
+						
+						if(m_TouchedPosition !=  selectposition) {
+							startIndex = m_TouchedPosition;
+							endIndex = selectposition;
+							while(startIndex > endIndex) {
+								View itemView = null;
+								itemView = gridview.getChildAt(startIndex- gridview.getFirstVisiblePosition());
+								onMultiItemDeSelected(startIndex, itemView);
+								--startIndex;
+							}
+						}
+						
+						
 						m_TouchedPosition = selectposition;
 					}
 					
@@ -847,17 +980,18 @@ public class GridViewFragment extends GalleryFragment {
 					for(int i = m_TouchedPosition; i > m_AnchorPosition; --i) {
 						View itemView = null;
 						itemView = gridview.getChildAt(i- gridview.getFirstVisiblePosition());
-						onItemSelected(i, itemView);
+//						onMultiItemSelected(i, itemView);
+						onMultiItemDeSelected(i, itemView);
 					}
 					m_TouchedPosition = m_AnchorPosition;
 				}
-				
 				break;
 			case MotionEvent.ACTION_UP:
 				break;
 			default:
 				break;
 		}
+		Log.e(TAG, "multipleSelect() - exit m_TouchPosition: " + m_TouchedPosition );
 	}
 
 
@@ -899,9 +1033,9 @@ public class GridViewFragment extends GalleryFragment {
 	}
 
 	
-	private void removeDecodingHandle(Handle handle) {
+	private void removeDecodingHandle(String mediaFilePath) {
 		if(m_GridViewItemAdapter != null) {
-			m_GridViewItemAdapter.removeDecodingHandle(handle);;
+			m_GridViewItemAdapter.removeDecodingHandle(mediaFilePath);;
 		}
 	}
 	
@@ -911,19 +1045,19 @@ public class GridViewFragment extends GalleryFragment {
 		// Private fields
 		private Context m_Context = null;
 		private LayoutInflater m_inflater;
-		private HashSet<Handle> m_DecodeHandleSet = new HashSet<>();
-		
+//		private HashSet<Handle> m_DecodeHandleSet = new HashSet<>();
+		private HashMap<String, Handle> m_DecodeHandleMap = new HashMap<>();
 		public GridViewItemAdapter(Context context) {
 			m_Context = context;
 			m_inflater = (LayoutInflater) m_Context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
 		}
 
 		public void cancelAllBitmapDecodeTasks() {
-			if(m_DecodeHandleSet != null && !m_DecodeHandleSet.isEmpty()) {
-				for(Handle handle : m_DecodeHandleSet) {
+			if(m_DecodeHandleMap != null && !m_DecodeHandleMap.isEmpty()) {
+				for(Handle handle : m_DecodeHandleMap.values()) {
 					Handle.close(handle);
 				}
-				m_DecodeHandleSet.clear();
+				m_DecodeHandleMap.clear();
 			}
 		}
 		
@@ -961,7 +1095,6 @@ public class GridViewFragment extends GalleryFragment {
 		public View getView(int position, View convertView, ViewGroup parent) {
 			final GridViewItemHolder holder; 
 			if (convertView == null) {
-				//Log.d(TAG, "convertView == null getView position:" + position);
 				// holder initialize
 				convertView = m_inflater.inflate(R.layout.fragment_gridview_item, parent, false);
 				holder = new GridViewItemHolder(convertView);
@@ -969,9 +1102,7 @@ public class GridViewFragment extends GalleryFragment {
 				//recycled view
 				holder = (GridViewItemHolder) convertView.getTag();
 				((ViewGroup)holder.typeIconView.getParent()).setVisibility(View.GONE);
-				
 			}
-			holder.thumbnailImageView.setImageDrawable(m_GreySquare);
 			holder.position = position;
 			
 			
@@ -989,12 +1120,10 @@ public class GridViewFragment extends GalleryFragment {
 					// Set item thumbnail
 					holder.thumbnailImageView.setImageResource(R.drawable.camera);
 					holder.thumbnailImageView.setScaleType(ScaleType.CENTER);
-					holder.thumbnailImageView.setBackground(m_GreySquare);
 					holder.contentUri = null;
 					holder.smallThumbDecodeHandle = null;
 					holder.thumbDecodeHandle = null;
 				}else {
-					holder.thumbnailImageView.setBackground(null);
 					holder.thumbnailImageView.setScaleType(ScaleType.CENTER_CROP);
 //					Log.e(TAG, "holder.m_ItemPosition: " + holder.position);
 					// -1 for the first one for CameraIcon to start camera activity
@@ -1004,21 +1133,21 @@ public class GridViewFragment extends GalleryFragment {
 					holder.mimeType = media.getMimeType();
 					if(filePath != null)
 					{
-						holder.smallThumbDecodeHandle = m_SmallBitmapPool.decode(media.getFilePath(), m_GridviewItemWidth, m_GridviewItemHeight, BitmapPool.FLAG_ASYNC | BitmapPool.FLAG_URGENT, holder.smallThumbDecodeCallback, GridViewFragment.this.getHandler());
+						holder.smallThumbDecodeHandle = m_SmallBitmapPool.decode(media.getFilePath(), m_GridviewItemWidth, m_GridviewItemHeight, BitmapPool.FLAG_ASYNC|BitmapPool.FLAG_URGENT, holder.smallThumbDecodeCallback, GridViewFragment.this.getHandler());
 					}
 					else
 					{
 						int mediaType = (media instanceof VideoMedia ? BitmapPool.MEDIA_TYPE_VIDEO : BitmapPool.MEDIA_TYPE_PHOTO);
-						holder.smallThumbDecodeHandle = m_SmallBitmapPool.decode(getActivity(), holder.contentUri, mediaType, m_GridviewItemWidth, m_GridviewItemHeight, BitmapPool.FLAG_ASYNC | BitmapPool.FLAG_URGENT, holder.smallThumbDecodeCallback, GridViewFragment.this.getHandler());
+						holder.smallThumbDecodeHandle = m_SmallBitmapPool.decode(getActivity(), holder.contentUri, mediaType, m_GridviewItemWidth, m_GridviewItemHeight, BitmapPool.FLAG_ASYNC|BitmapPool.FLAG_URGENT, holder.smallThumbDecodeCallback, GridViewFragment.this.getHandler());
 					}
-					holder.thumbDecodeHandle = ThumbnailImageManager.decodeSmallThumbnailImage(media, ThumbnailImageManager.FLAG_ASYNC | ThumbnailImageManager.FLAG_URGENT, holder.thumbDecodeCallback, GridViewFragment.this.getHandler());
+					holder.thumbDecodeHandle = ThumbnailImageManager.decodeSmallThumbnailImage(media, ThumbnailImageManager.FLAG_URGENT|ThumbnailImageManager.FLAG_ASYNC, holder.thumbDecodeCallback, GridViewFragment.this.getHandler());
 					
-					m_DecodeHandleSet.add(holder.smallThumbDecodeHandle);
-					m_DecodeHandleSet.add(holder.thumbDecodeHandle);
+					m_DecodeHandleMap.put(filePath, holder.smallThumbDecodeHandle);
+					m_DecodeHandleMap.put(filePath, holder.thumbDecodeHandle);
 					
 					if(media instanceof VideoMedia) {
 						((ViewGroup)holder.typeIconView.getParent()).setVisibility(View.VISIBLE);
-						holder.typeIconView.setImageResource(R.drawable.button_about);
+						holder.typeIconView.setImageResource(R.drawable.ic_video);
 						holder.durationTextView.setText(getVideoTime((VideoMedia)media));
 					}
 					
@@ -1032,9 +1161,9 @@ public class GridViewFragment extends GalleryFragment {
 			return convertView;
 		}
 		
-		public void removeDecodingHandle(Handle handle) {
-			if(m_DecodeHandleSet != null)
-				m_DecodeHandleSet.remove(handle);
+		public void removeDecodingHandle(String mediaFilePath) {
+			if(m_DecodeHandleMap != null)
+				m_DecodeHandleMap.remove(mediaFilePath);
 		}
 	}
 

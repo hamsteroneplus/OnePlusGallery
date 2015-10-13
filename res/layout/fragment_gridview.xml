@@ -22,7 +22,8 @@
         android:stretchMode="spacingWidth"
         android:horizontalSpacing="1dp"
         android:verticalSpacing="1dp"
-        android:background="@null" />
+        android:background="@null" 
+        android:visibility="gone"/>
     
     <!-- Device has no Photos -->
 	<RelativeLayout 
