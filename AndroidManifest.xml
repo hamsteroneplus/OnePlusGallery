@@ -41,11 +41,11 @@
 			android:name=".VideoPlayerActivity"
 			android:configChanges="orientation"
 			android:theme="@style/GalleryWindow"
-			android:exported="false">
+			android:exported="true">
 			
 		    <intent-filter>
 				<category android:name="android.intent.category.DEFAULT"/>
-				<action android:name="android.intent.action.MAIN"/>
+				<action android:name="android.intent.action.VIEW"/>
 				<data android:mimeType="video/*"/>
 			</intent-filter>
 		    

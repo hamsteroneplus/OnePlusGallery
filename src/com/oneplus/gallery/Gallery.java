@@ -50,6 +50,10 @@ public class Gallery extends HandlerBaseObject
 	 */
 	public static final PropertyKey<GalleryActivity> PROP_ACTIVITY = new PropertyKey<>("Activity", GalleryActivity.class, Gallery.class, PropertyKey.FLAG_READONLY, null);
 	/**
+	 * Read-only property to check if there is dialog visible.
+	 */
+	public static final PropertyKey<Boolean> PROP_HAS_DIALOG = new PropertyKey<>("HasDialog", Boolean.class, Gallery.class, false);
+	/**
 	 * Read-only property to get current media deletion state.
 	 */
 	public static final PropertyKey<Boolean> PROP_IS_DELETING_MEDIA = new PropertyKey<>("IsDeletingMedia", Boolean.class, Gallery.class, false);
@@ -155,6 +159,7 @@ public class Gallery extends HandlerBaseObject
 	private GalleryActivity m_Activity;
 	private View m_ActivityDecorView;
 	private final List<ActivityHandle> m_AttachedActivityHandles = new ArrayList<>();
+	private final List<Handle> m_GalleryDialogHandles = new ArrayList<>();
 	private boolean m_HasNavigationBar;
 	private final String m_Id;
 	private final List<NavBarVisibilityHandle> m_NavBarVisibilityHandles = new ArrayList<>();
@@ -1021,6 +1026,32 @@ public class Gallery extends HandlerBaseObject
 	}
 	
 	
+	// Nofity show dialog, call from GalleryDialogFragment.
+	final Handle notifyShowDialog()
+	{
+		// check state
+		this.verifyAccess();
+		
+		// create handle
+		Handle handle = new Handle("Gallery Dialog Handle")
+		{
+			@Override
+			protected void onClose(int flags)
+			{
+				// remove from handles
+				m_GalleryDialogHandles.remove(this);
+				
+				// check remaining handle counts
+				if(m_GalleryDialogHandles.isEmpty())
+					Gallery.this.setReadOnly(PROP_HAS_DIALOG, false);
+			}
+		};
+		m_GalleryDialogHandles.add(handle);
+		this.setReadOnly(PROP_HAS_DIALOG, true);
+		return handle;
+	}
+	
+	
 	// Release.
 	@Override
 	protected void onRelease()
@@ -1036,6 +1067,7 @@ public class Gallery extends HandlerBaseObject
 		}
 		m_Activity = null;
 		m_AttachedActivityHandles.clear();
+		m_GalleryDialogHandles.clear();
 		
 		// remove from table
 		m_Galleries.remove(m_Id);

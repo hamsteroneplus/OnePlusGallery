@@ -242,11 +242,10 @@ public abstract class GalleryActivity extends BaseActivity
 		// setup instance state
 		Intent intent = this.getIntent();
 		String sharedGalleryId = (intent != null ? intent.getStringExtra(EXTRA_SHARED_GALLERY_ID) : null);
-		InstanceStateFragment stateFragment;
+		InstanceStateFragment stateFragment = (InstanceStateFragment)this.getFragmentManager().findFragmentByTag(InstanceStateFragment.TAG);
 		m_Gallery = Gallery.fromId(sharedGalleryId);
 		if(m_Gallery == null)
 		{
-			stateFragment = (InstanceStateFragment)this.getFragmentManager().findFragmentByTag(InstanceStateFragment.TAG);
 			if(stateFragment != null)
 			{
 				Log.w(TAG, "onCreate() - Use existent Gallery : " + stateFragment.gallery.getId());
@@ -263,7 +262,6 @@ public abstract class GalleryActivity extends BaseActivity
 		else
 		{
 			Log.w(TAG, "onCreate() - Use shared Gallery : " + m_Gallery.getId());
-			stateFragment = null;
 			m_ActivityResultHandles = new SparseArray<>();
 		}
 		

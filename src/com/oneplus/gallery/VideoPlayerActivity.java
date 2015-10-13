@@ -7,9 +7,10 @@ import com.oneplus.base.Handle;
 import com.oneplus.base.HandlerUtils;
 import com.oneplus.base.Log;
 import com.oneplus.base.ScreenSize;
+import com.oneplus.gallery.media.Media;
+import com.oneplus.gallery.media.MediaManager;
 
 import android.content.Intent;
-import android.content.res.Configuration;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
@@ -18,7 +19,6 @@ import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ImageButton;
-import android.widget.ImageView;
 import android.widget.RelativeLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
@@ -30,22 +30,35 @@ public class VideoPlayerActivity extends GalleryActivity
 	private static final long DURATION_ANIMATION = 150;
 	private static final int INTERVAL_UPDATE_ELAPSED_TIME_MILLIS = 1000;
 	private static final int MSG_UPDATE_ELAPSED_TIME = 10001;
+	private static final String STATE_IS_CONTROLS_VISIBLE = "isControlsVisible";
+	private static final String STATE_IS_VIDEO_PLAYING = "isVideoPlaying";
+	private static final String STATE_VIDEO_ELAPSED_TIME_MILLIS = "videoElapsedTimeMillis";
 	
 	
 	// Fields
+	private ImageButton m_BackButton;
+	private ImageButton m_CollectButton;
 	private ViewVisibilityState m_ControlsVisibilityState = ViewVisibilityState.INVISIBLE;
+	private boolean m_DefaultControlsVisible = false;
+	private int m_DefaultVideoElapsedTimeMillis;
+	private boolean m_DefaultVideoPlaying = true;
+	private ImageButton m_DeleteButton;
+	private ImageButton m_DetailsButton;
 	private View m_FooterContainer;
 	private GestureDetector m_GestureDetector;
 	private View m_HeaderContainer;
 	private boolean m_IsControlsVisible;
 	private boolean m_IsPauseBySeekBar;
 	private boolean m_IsVideoPlaying;
+	private Media m_Media;
 	private View m_MediaControlContainer;
 	private TextView m_MediaControlDurationTextView;
 	private TextView m_MediaControlElapsedTextView;
 	private SeekBar m_MediaControlSeekBar;
 	private ImageButton m_PlayButton;
+	private ImageButton m_ShareButton;
 	private Handle m_StatusBarVisibilityHandle;
+	private View m_TouchReceiver;
 	private int m_VideoDurationTimeMillis;
 	private int m_VideoElapsedTimeMillis;
 	private Uri m_VideoUri;
@@ -59,6 +72,33 @@ public class VideoPlayerActivity extends GalleryActivity
 		VISIBLE,
 		OUT_ANIMATING,
 		INVISIBLE
+	}
+	
+	
+	// Collect media
+	private void collectMedia()
+	{
+		// check media
+		if(m_Media == null)
+			return;
+
+		// TODO: collect media
+		
+	}
+	
+	
+	// Delete media
+	private void deleteMedia()
+	{
+		// check media
+		if(m_Media == null)
+			return;
+		
+		// pause
+		this.pause();
+
+		// delete media
+		this.getGallery().deleteMedia(m_Media);
 	}
 	
 	
@@ -91,18 +131,6 @@ public class VideoPlayerActivity extends GalleryActivity
 				break;
 		}
 	}
-	
-	
-	// Call when onConfigurationChanged
-	@Override
-	public void onConfigurationChanged(Configuration newConfig)
-	{
-		// call super
-		super.onConfigurationChanged(newConfig);
-		
-		//
-		Log.v(TAG, "onConfigurationChanged");
-	}
 
 	
 	// Call when onCreate
@@ -116,10 +144,29 @@ public class VideoPlayerActivity extends GalleryActivity
 		Intent intent = this.getIntent();
 		m_VideoUri = intent.getData();
 		
-		// hide status bar by default
-		this.setStatusBarVisibility(false);
+		// get last saved states
+		if(extras != null)
+		{
+			m_DefaultControlsVisible = (Boolean)extras.get(STATE_IS_CONTROLS_VISIBLE);
+			m_DefaultVideoPlaying = (Boolean)extras.get(STATE_IS_VIDEO_PLAYING);
+			m_DefaultVideoElapsedTimeMillis = (Integer)extras.get(STATE_VIDEO_ELAPSED_TIME_MILLIS);
+			
+			Log.v(TAG, "onCreate() - Elapsed time millis: ", m_DefaultVideoElapsedTimeMillis);
+		}
 		
 		Log.v(TAG, "onCreate() - Uri: ", m_VideoUri);
+		
+		// create media
+		MediaManager.createTemporaryMedia(m_VideoUri, new MediaManager.MediaCreationCallback()
+		{	
+			@Override
+			public void onCreationCompleted(Handle handle, Uri contentUri, Media media)
+			{
+				VideoPlayerActivity.this.onMediaCreated(media);
+				Log.v(TAG, "onCreate() - Media created: ", contentUri);
+				m_Media = media;
+			}
+		});
 		
 		// set content view
 		View mainContainer = View.inflate(this, R.layout.activity_video_player, null);
@@ -155,14 +202,6 @@ public class VideoPlayerActivity extends GalleryActivity
 		
 		// setup video view
 		m_VideoView = (VideoView)mainContainer.findViewById(R.id.video_player_video_view);
-		m_VideoView.setOnTouchListener(new View.OnTouchListener()
-		{	
-			@Override
-			public boolean onTouch(View v, MotionEvent event) 
-			{
-				return m_GestureDetector.onTouchEvent(event);
-			}
-		});
 		m_VideoView.setOnPreparedListener(new MediaPlayer.OnPreparedListener()
 		{	
 			@Override
@@ -180,6 +219,17 @@ public class VideoPlayerActivity extends GalleryActivity
 			}
 		});
 		m_VideoView.setVideoURI(m_VideoUri);
+		
+		// setup touch receiver
+		m_TouchReceiver = mainContainer.findViewById(R.id.video_player_touch_receiver);
+		m_TouchReceiver.setOnTouchListener(new View.OnTouchListener()
+		{	
+			@Override
+			public boolean onTouch(View v, MotionEvent event) 
+			{
+				return m_GestureDetector.onTouchEvent(event);
+			}
+		});
 		
 		// setup play button
 		m_PlayButton = (ImageButton)mainContainer.findViewById(R.id.video_player_play_button);
@@ -220,6 +270,25 @@ public class VideoPlayerActivity extends GalleryActivity
 		
 		// setup header
 		m_HeaderContainer = mainContainer.findViewById(R.id.video_player_header_container);
+		m_BackButton = (ImageButton)mainContainer.findViewById(R.id.video_player_header_button_back);
+		m_BackButton.setOnClickListener(new View.OnClickListener()
+		{	
+			@Override
+			public void onClick(View v)
+			{
+				// close activity
+				finish();
+			}
+		});
+		m_DetailsButton = (ImageButton)mainContainer.findViewById(R.id.video_player_header_button_details);
+		m_DetailsButton.setOnClickListener(new View.OnClickListener()
+		{
+			@Override
+			public void onClick(View v) 
+			{
+				VideoPlayerActivity.this.showDetails();
+			}
+		});
 
 		// set header margin top
 		ScreenSize screenSize = this.get(GalleryActivity.PROP_SCREEN_SIZE);
@@ -228,6 +297,38 @@ public class VideoPlayerActivity extends GalleryActivity
 		
 		// setup footer
 		m_FooterContainer = mainContainer.findViewById(R.id.video_player_footer_container);
+		m_ShareButton = (ImageButton)mainContainer.findViewById(R.id.video_player_footer_button_share);
+		m_ShareButton.setOnClickListener(new View.OnClickListener()
+		{	
+			@Override
+			public void onClick(View v)
+			{
+				VideoPlayerActivity.this.shareMedia();
+			}
+		});
+		m_CollectButton = (ImageButton)mainContainer.findViewById(R.id.video_player_footer_button_collect);
+		m_CollectButton.setOnClickListener(new View.OnClickListener()
+		{	
+			@Override
+			public void onClick(View v)
+			{
+				m_CollectButton.setSelected(!m_CollectButton.isSelected());
+				VideoPlayerActivity.this.collectMedia();
+			}
+		});
+		m_DeleteButton = (ImageButton)mainContainer.findViewById(R.id.video_player_footer_button_delete);
+		m_DeleteButton.setOnClickListener(new View.OnClickListener()
+		{	
+			@Override
+			public void onClick(View v)
+			{
+				VideoPlayerActivity.this.deleteMedia();
+			}
+		});
+		
+		// hide status bar by default
+		this.setStatusBarVisibility(m_DefaultControlsVisible);
+		this.setControlsVisibility(m_DefaultControlsVisible, true);		
 	}
 	
 	
@@ -242,18 +343,35 @@ public class VideoPlayerActivity extends GalleryActivity
 	}
 	
 	
+	// Call when media created
+	private void onMediaCreated(Media media)
+	{
+		Log.v(TAG, "onMediaCreated() - Media: ", media.getContentUri());
+		
+		// set media
+		m_Media = media;
+		
+		// set collected button
+		this.updateCollectButtonSelection();
+	}
+	
+	
 	// Call when onPause
 	@Override
 	protected void onPause()
 	{
 		Log.v(TAG, "onPause()");
 		
-		// stop
-		this.stop();
+		// backup default states
+		m_DefaultControlsVisible = m_IsControlsVisible;
+		m_DefaultVideoElapsedTimeMillis = m_VideoView.getCurrentPosition();
+		m_DefaultVideoPlaying = m_IsVideoPlaying;
 		
-		// reset flags
-		m_IsControlsVisible = false;
-		m_ControlsVisibilityState = ViewVisibilityState.INVISIBLE;
+		// show status bar
+		this.setStatusBarVisibility(true);
+		
+		// pause
+		this.pause();
 		
 		// call super
 		super.onPause();
@@ -279,6 +397,25 @@ public class VideoPlayerActivity extends GalleryActivity
 		super.onResume();
 		
 		Log.v(TAG, "onResume()");
+	}
+	
+	
+	// Call when onSaveInstanceState
+	@Override
+	protected void onSaveInstanceState(Bundle outState, Map<String, Object> extras)
+	{
+		Log.v(TAG, "onSaveInstanceState()");
+		
+		// save states
+		if(m_VideoView != null)
+		{
+			extras.put(STATE_IS_CONTROLS_VISIBLE, m_DefaultControlsVisible);
+			extras.put(STATE_IS_VIDEO_PLAYING, m_DefaultVideoPlaying);
+			extras.put(STATE_VIDEO_ELAPSED_TIME_MILLIS, m_DefaultVideoElapsedTimeMillis);
+		}
+		
+		// call super
+		super.onSaveInstanceState(outState, extras);
 	}
 	
 	
@@ -313,6 +450,24 @@ public class VideoPlayerActivity extends GalleryActivity
 	}
 	
 	
+	// Call when onStop
+	@Override
+	protected void onStop()
+	{
+		Log.v(TAG, "onStop()");
+		
+		// stop
+		this.stop();
+		
+		// reset flags
+		m_IsControlsVisible = false;
+		m_ControlsVisibilityState = ViewVisibilityState.INVISIBLE;
+		
+		// call super
+		super.onStop();
+	}
+	
+	
 	// Call when video completion
 	private void onVideoCompletion(MediaPlayer mp)
 	{	
@@ -324,14 +479,22 @@ public class VideoPlayerActivity extends GalleryActivity
 	// Call when video prepared
 	private void onVideoPrepared(MediaPlayer mp)
 	{
+		Log.v(TAG, "onVideoPrepared()");
+		
 		// set duration
 		this.setVideoDurationTimeMillis(m_VideoView.getDuration());
 		
 		// update seek bar max
 		this.updateSeekBarMax();
 		
+		// seek to
+		if(m_DefaultVideoElapsedTimeMillis != 0)
+			this.seekTo(m_DefaultVideoElapsedTimeMillis);
+		
 		// start
 		this.start();
+		if(!m_DefaultVideoPlaying)
+			this.pause();
 	}
 	
 	
@@ -362,6 +525,19 @@ public class VideoPlayerActivity extends GalleryActivity
 	}
 	
 	
+	// Seek to
+	private void seekTo(int timeMillis)
+	{
+		// update elapsed time
+		this.setVideoElapsedTimeMillis(timeMillis);
+		
+		Log.v(TAG, "seekTo() - Time: ", timeMillis);
+		
+		// seek
+		m_VideoView.seekTo(timeMillis);
+	}
+	
+	
 	// Seek to progress
 	private void seekToProgress(int progress)
 	{
@@ -371,6 +547,8 @@ public class VideoPlayerActivity extends GalleryActivity
 		
 		// update elapsed time
 		this.setVideoElapsedTimeMillis(timeMillis);
+		
+		Log.v(TAG, "seekToProgress() - Progress: ", progress, ", time: ", timeMillis);
 		
 		// seek
 		m_VideoView.seekTo(timeMillis);
@@ -395,6 +573,8 @@ public class VideoPlayerActivity extends GalleryActivity
 	// Set status bar visibility
 	private void setStatusBarVisibility(boolean visible)
 	{
+		Log.v(TAG, "setStatusBarVisibility() - Visible: ", visible);
+		
 		if(visible)
 			m_StatusBarVisibilityHandle = Handle.close(m_StatusBarVisibilityHandle);
 		else if(!Handle.isValid(m_StatusBarVisibilityHandle))
@@ -443,11 +623,39 @@ public class VideoPlayerActivity extends GalleryActivity
 	}
 	
 	
+	// Share media
+	private void shareMedia()
+	{
+		// check media
+		if(m_Media == null)
+			return;
+
+		// pause
+		this.pause();
+		
+		// share media
+		this.getGallery().shareMedia(m_Media);
+	}
+	
+	
+	// Show details
+	private void showDetails()
+	{
+		// check media
+		if(m_Media == null)
+			return;
+		
+		// pause
+		this.pause();
+		
+		// show details
+		this.getGallery().showMediaDetails(m_Media);
+	}
+	
+	
 	// Start playing
 	private void start()
 	{
-		Log.v(TAG, "start() - Position: ", m_VideoView.getCurrentPosition());
-		
 		// start
 		m_VideoView.start();
 		m_IsVideoPlaying = true;
@@ -472,6 +680,18 @@ public class VideoPlayerActivity extends GalleryActivity
 		m_IsVideoPlaying = false;
 		this.updatePlayButtonIcon();
 		HandlerUtils.removeMessages(this, MSG_UPDATE_ELAPSED_TIME);
+	}
+	
+	
+	// Update collect button selection
+	private void updateCollectButtonSelection()
+	{
+		// check media
+		if(m_Media == null)
+			return;
+		
+		// update selection
+		m_CollectButton.setSelected(m_Media.isFavorite());
 	}
 	
 	

@@ -10,6 +10,12 @@
         android:layout_height="match_parent"
         android:layout_centerInParent="true" />
     
+    <!-- Touch receiver -->
+    <View
+        android:id="@+id/video_player_touch_receiver"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+    
     <!-- Image play button -->
     <ImageButton
         android:id="@+id/video_player_play_button"
@@ -64,6 +70,7 @@
         android:layout_width="match_parent"
         android:layout_height="@dimen/video_player_header_container_height"
         android:gravity="center_vertical"
+        android:background="@android:color/transparent"
         android:visibility="gone" >
         
         <ImageButton
@@ -96,6 +103,7 @@
         android:layout_alignParentBottom="true"
         android:orientation="horizontal"
         android:gravity="center"
+        android:background="@android:color/transparent"
         android:visibility="gone" >
         
         <RelativeLayout
@@ -110,7 +118,7 @@
 	            android:layout_height="@dimen/video_player_footer_container_height"
 	            android:padding="@dimen/video_player_footer_item_padding"
 	            android:background="@drawable/ripple"
-	            android:src="@drawable/state_button_share" />
+	            android:src="@drawable/button_share_normal" />
             
         </RelativeLayout>
         
@@ -142,7 +150,7 @@
 	            android:layout_height="@dimen/video_player_footer_container_height"
 	            android:padding="@dimen/video_player_footer_item_padding"
 	            android:background="@drawable/ripple"
-	            android:src="@drawable/state_button_delete" />
+	            android:src="@drawable/button_delete_normal" />
             
         </RelativeLayout>
         

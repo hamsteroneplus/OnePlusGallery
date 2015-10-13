@@ -15,6 +15,7 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
+import android.os.Message;
 import android.util.Size;
 import android.util.SparseArray;
 import android.view.LayoutInflater;
@@ -28,8 +29,12 @@ import com.oneplus.base.EventHandler;
 import com.oneplus.base.EventKey;
 import com.oneplus.base.EventSource;
 import com.oneplus.base.Handle;
+import com.oneplus.base.HandlerUtils;
 import com.oneplus.base.Log;
+import com.oneplus.base.PropertyChangeEventArgs;
+import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
+import com.oneplus.base.PropertySource;
 import com.oneplus.base.ScreenSize;
 import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaList;
@@ -64,8 +69,11 @@ public class FilmstripFragment extends GalleryFragment
 	private final static BitmapPool BITMAP_POOL_HIGH_RESOLUTION = new BitmapPool("FilmstripHighResBitmapPool", 64 << 20, 16 << 20, Bitmap.Config.ARGB_8888, 2, 0);
 	private final static BitmapPool BITMAP_POOL_MEDIUM_RESOLUTION = new BitmapPool("FilmstripMediumResBitmapPool", 64 << 20, 16 << 20, Bitmap.Config.ARGB_8888, 3, 0);
 	private static final long DURATION_ANIMATION = 150;
+	private static final long DELAY_HIDE_TOOL_BAR_TIME_MILLIS = 3000;
+	private static final boolean ENABLE_DECODE_LOG = false;
 	private static final int PRE_DECODE_THUMB_WINDOW_SIZE = 2;
 	private static final int PRE_DECODE_THUMB_WINDOW_SIZE_SMALL = 3;
+	private static final int MSG_HIDE_TOOL_BAR = 10001;
 
 	
 	// Fields
@@ -457,6 +465,14 @@ public class FilmstripFragment extends GalleryFragment
 	}
 	
 	
+	// Cancel hide tool bar
+	private void cancelHideToolbar()
+	{
+		Log.v(TAG, "cancelHideToolbar()");
+		HandlerUtils.removeMessages(this, MSG_HIDE_TOOL_BAR);
+	}
+	
+	
 	// Check is action edit supported
 	private void checkActionEditSupported()
 	{
@@ -560,6 +576,9 @@ public class FilmstripFragment extends GalleryFragment
 	// Collect page
 	private void collectPage(int position)
 	{
+		// reset delay hide tool bar
+		this.hideToolbarDelay();
+		
 		// check position
 		if(!validatePosition(position))
 			return;
@@ -611,7 +630,8 @@ public class FilmstripFragment extends GalleryFragment
 			}
 			decodeInfo.decodeHandle = ThumbnailImageManager.decodeSmallThumbnailImage(media, ThumbnailImageManager.FLAG_URGENT, m_LowResBitmapDecodeCallback, this.getHandler());
 			
-			Log.v(TAG, "decodeLowResolutionImage() - Start decoding low-resolution bitmap : ", filePath);
+			if(ENABLE_DECODE_LOG)
+				Log.v(TAG, "decodeLowResolutionImage() - Start decoding low-resolution bitmap : ", filePath);
 		}
 	}
 	
@@ -635,7 +655,8 @@ public class FilmstripFragment extends GalleryFragment
 			}
 			decodeInfo.decodeHandle = BITMAP_POOL_MEDIUM_RESOLUTION.decode(media.getFilePath(), 1920, 1920, BitmapPool.FLAG_URGENT, m_MediumResBitmapDecodeCallback, this.getHandler());
 			
-			Log.v(TAG, "decodeMediumResolutionImage() - Start decoding medium-resolution bitmap : ", filePath);
+			if(ENABLE_DECODE_LOG)
+				Log.v(TAG, "decodeMediumResolutionImage() - Start decoding medium-resolution bitmap : ", filePath);
 		}
 	}
 	
@@ -643,6 +664,9 @@ public class FilmstripFragment extends GalleryFragment
 	// Delete page
 	private void deletePage(int position)
 	{
+		// reset delay hide tool bar
+		this.hideToolbarDelay();
+		
 		// check position
 		if(!validatePosition(position) || !this.isAttachedToGallery())
 			return;
@@ -656,13 +680,18 @@ public class FilmstripFragment extends GalleryFragment
 	// Editor page
 	private void editorPage(int position)
 	{
+		// reset delay hide tool bar
+		this.hideToolbarDelay();
+		
 		// check position
 		if(!validatePosition(position))
 			return;
 
-		// TODO: editor page from activity
+		// editor page
 		Media media = m_MediaList.get(position);
-		GalleryActivity galleryActivity = this.getGalleryActivity();
+		Intent editIntent = new Intent(Intent.ACTION_EDIT);
+		editIntent.setDataAndType(media.getContentUri(),"image/*");
+		this.getActivity().startActivity(editIntent);
 	}
 	
 	
@@ -693,6 +722,35 @@ public class FilmstripFragment extends GalleryFragment
 		if(key == PROP_MEDIA_LIST)
 			return (TValue)m_MediaList;
 		return super.get(key);
+	}
+	
+	
+	// Handle message
+	@Override
+	protected void handleMessage(Message msg)
+	{
+		switch(msg.what)
+		{
+			case MSG_HIDE_TOOL_BAR:
+				this.setToolbarVisibility(false, true);
+				break;
+		
+			default:
+				super.handleMessage(msg);
+				break;
+		}
+	}
+	
+	
+	// Hide tool bar delay
+	private void hideToolbarDelay()
+	{
+		Gallery gallery = this.getGallery();
+		if(m_IsToolbarVisible && !gallery.get(Gallery.PROP_HAS_DIALOG) && !gallery.get(Gallery.PROP_IS_SHARING_MEDIA))
+		{
+			Log.v(TAG, "hideToolbarDelay()");
+			HandlerUtils.sendMessage(FilmstripFragment.this, MSG_HIDE_TOOL_BAR, true, DELAY_HIDE_TOOL_BAR_TIME_MILLIS);
+		}
 	}
 	
 	
@@ -730,6 +788,33 @@ public class FilmstripFragment extends GalleryFragment
 		// check editor supported
 		this.checkActionEditSupported();
 		
+		// add has dialog callback
+		Gallery gallery = galleryActivity.getGallery();
+		gallery.addCallback(Gallery.PROP_HAS_DIALOG, new PropertyChangedCallback<Boolean>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+			{
+				if(e.getNewValue())
+					FilmstripFragment.this.cancelHideToolbar();
+				else
+					FilmstripFragment.this.hideToolbarDelay();
+			}
+		});
+		
+		// add sharing callback
+		gallery.addCallback(Gallery.PROP_IS_SHARING_MEDIA, new PropertyChangedCallback<Boolean>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e) 
+			{
+				if(e.getNewValue())
+					FilmstripFragment.this.cancelHideToolbar();
+				else
+					FilmstripFragment.this.hideToolbarDelay();
+			}
+		});
+		
 		// enable logs
 		this.enablePropertyLogs(PROP_CURRENT_MEDIA_INDEX, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_MEDIA_LIST, LOG_PROPERTY_CHANGE);
@@ -753,6 +838,26 @@ public class FilmstripFragment extends GalleryFragment
 			public void onItemSelected(int position)
 			{
 				FilmstripFragment.this.setCurrentMediaIndexProp(position, false);
+			}
+		});
+		m_FilmstripView.setOnTouchListener(new View.OnTouchListener()
+		{	
+			@Override
+			public boolean onTouch(View v, MotionEvent event) 
+			{
+				// delay to hide tool bar if no interaction
+				switch(event.getAction())
+				{
+					case MotionEvent.ACTION_DOWN:
+						FilmstripFragment.this.cancelHideToolbar();
+						break;
+					
+					case MotionEvent.ACTION_CANCEL:
+					case MotionEvent.ACTION_UP:
+						FilmstripFragment.this.hideToolbarDelay();
+						break;
+				}
+				return false;
 			}
 		});
 		if(m_MediaList != null && m_CurrentMediaIndex >= 0 && m_CurrentMediaIndex <= m_MediaList.size() - 1)
@@ -807,6 +912,7 @@ public class FilmstripFragment extends GalleryFragment
 			@Override
 			public void onClick(View v)
 			{
+				m_CollectButton.setSelected(!m_CollectButton.isSelected());
 				FilmstripFragment.this.collectPage(m_FilmstripView.getCurrentItem());
 			}
 		});
@@ -833,6 +939,9 @@ public class FilmstripFragment extends GalleryFragment
 		// setup toolbar
 		if(m_IsToolbarVisible)
 			this.setToolbarVisibility(true, false);
+		
+		// update collect button
+		this.updateCollectButtonSelection();
 		
 		return view;
 	}
@@ -898,7 +1007,8 @@ public class FilmstripFragment extends GalleryFragment
 		BitmapDecodeInfo decodeInfo = this.findBitmapDecodeInfo(m_LowResBitmapDecodeInfos, filePath);
 		if(decodeInfo == null)
 		{
-			Log.v(TAG, "onLowResImageDecoded() - Drop bitmap : ", filePath);
+			if(ENABLE_DECODE_LOG)
+				Log.v(TAG, "onLowResImageDecoded() - Drop bitmap : ", filePath);
 			return;
 		}
 
@@ -925,13 +1035,14 @@ public class FilmstripFragment extends GalleryFragment
 				{
 					filmstripItem.setImageDecodeState(ImageDecodeState.SMALL_THUMB_DECODED);
 					filmstripItem.setImageDrawable(this.createDrawableForDisplay(bitmap));
-					Log.v(TAG, "onLowResImageDecoded() - Update low-resolution bitmap : ", filePath);
+					if(ENABLE_DECODE_LOG)
+						Log.v(TAG, "onLowResImageDecoded() - Update low-resolution bitmap : ", filePath);
 					isItemFound = true;
 					break;
 				}
 			}
 		}
-		if(!isItemFound)
+		if(!isItemFound && ENABLE_DECODE_LOG)
 			Log.v(TAG, "onLowResImageDecoded() - Item not found : ", filePath);
 	}
 	
@@ -943,7 +1054,8 @@ public class FilmstripFragment extends GalleryFragment
 		BitmapDecodeInfo decodeInfo = this.findBitmapDecodeInfo(m_MediumResBitmapDecodeInfos, filePath);
 		if(decodeInfo == null)
 		{
-			Log.v(TAG, "onMediumResImageDecoded() - Drop bitmap : ", filePath);
+			if(ENABLE_DECODE_LOG)
+				Log.v(TAG, "onMediumResImageDecoded() - Drop bitmap : ", filePath);
 			return;
 		}
 
@@ -970,12 +1082,13 @@ public class FilmstripFragment extends GalleryFragment
 					this.cancelDecodingLowResolutionImage(filmstripItem.getMedia());
 				filmstripItem.setImageDecodeState(ImageDecodeState.THUMB_DECODED);
 				filmstripItem.setImageDrawable(this.createDrawableForDisplay(bitmap));
-				Log.v(TAG, "onMediumResImageDecoded() - Update medium-resolution bitmap : ", filePath);
+				if(ENABLE_DECODE_LOG)
+					Log.v(TAG, "onMediumResImageDecoded() - Update medium-resolution bitmap : ", filePath);
 				isItemFound = true;
 				break;
 			}
 		}
-		if(!isItemFound)
+		if(!isItemFound && ENABLE_DECODE_LOG)
 			Log.v(TAG, "onMediumResImageDecoded() - Item not found : ", filePath);
 	}
 	
@@ -1024,24 +1137,9 @@ public class FilmstripFragment extends GalleryFragment
 	public void onPause()
 	{
 		Log.v(TAG, "onPause()");
-		/*
-		// cancel decoding
-		this.cancelDecodingImages();
 		
-		// deactivate bitmap pools
-		m_HighResBitmapActiveHandle = Handle.close(m_HighResBitmapActiveHandle);
-		m_MediumResBitmapActiveHandle = Handle.close(m_MediumResBitmapActiveHandle);
-		
-		// reset tool bar and system UI
-		if(!m_IsInstanceStateSaved)
-		{
-			// hide tool bar
-			this.setToolbarVisibility(false, false);
-			
-			// restore status bar
-			this.setStatusBarVisibility(true);
-		}
-		*/
+		// cancel hide tool
+		this.cancelHideToolbar();
 		
 		// call super
 		super.onPause();
@@ -1119,6 +1217,9 @@ public class FilmstripFragment extends GalleryFragment
 		m_HighResBitmapActiveHandle = BITMAP_POOL_HIGH_RESOLUTION.activate();
 		m_MediumResBitmapActiveHandle = BITMAP_POOL_MEDIUM_RESOLUTION.activate();
 		
+		// hide tool bar delay
+		this.hideToolbarDelay();
+		
 		// update state
 		m_IsInstanceStateSaved = false;
 	}
@@ -1128,6 +1229,7 @@ public class FilmstripFragment extends GalleryFragment
 	@Override
 	public void onSaveInstanceState(Bundle outState)
 	{
+		Log.v(TAG, "onSaveInstanceState()");
 		m_IsInstanceStateSaved = true;
 		super.onSaveInstanceState(outState);
 	}
@@ -1379,6 +1481,7 @@ public class FilmstripFragment extends GalleryFragment
 		// prepare intent
 		Intent videoPlayerIntent = new Intent(this.getActivity(), VideoPlayerActivity.class);
 		videoPlayerIntent.setDataAndType(media.getContentUri(),"video/*");
+		videoPlayerIntent.putExtra(GalleryActivity.EXTRA_SHARED_GALLERY_ID, this.getGallery().getId());
 
 		// start activity
 		this.startActivity(videoPlayerIntent);
@@ -1426,6 +1529,12 @@ public class FilmstripFragment extends GalleryFragment
 		
 		// check image decoding
 		this.checkImageDecoding(m_CurrentMediaIndex);
+		
+		// check edit button visibility
+		this.updateEditButtonVisibility();
+		
+		// update collect button selection
+		this.updateCollectButtonSelection();
 		
 		// complete
 		return this.notifyPropertyChanged(PROP_CURRENT_MEDIA_INDEX, oldValue, value);
@@ -1516,6 +1625,8 @@ public class FilmstripFragment extends GalleryFragment
 	// Set system UI visibility
 	private void setSystemUiVisibility(boolean visible)
 	{
+		Log.v(TAG, "setSystemUiVisibility() - Visible: ", visible);
+		
 		if(visible)
 		{
 			m_NavBarVisibilityHandle = Handle.close(m_NavBarVisibilityHandle);
@@ -1557,6 +1668,9 @@ public class FilmstripFragment extends GalleryFragment
 	// Share page
 	private void sharePage(int position)
 	{
+		// reset delay hide tool bar
+		this.hideToolbarDelay();
+		
 		// check position
 		if(!validatePosition(position) || !this.isAttachedToGallery())
 			return;
@@ -1570,6 +1684,9 @@ public class FilmstripFragment extends GalleryFragment
 	// Show page details
 	private void showPageDetails(int position)
 	{
+		// reset delay hide tool bar
+		this.hideToolbarDelay();
+		
 		// check position
 		if(!validatePosition(position) || !this.isAttachedToGallery())
 			return;
@@ -1577,6 +1694,24 @@ public class FilmstripFragment extends GalleryFragment
 		// show media details
 		Media media = m_MediaList.get(position);
 		this.getGallery().showMediaDetails(media);
+	}
+	
+	
+	// Update collect button selection
+	private void updateCollectButtonSelection()
+	{
+		// check state
+		if(m_FilmstripView == null)
+			return;
+		
+		// get media
+		int position = m_FilmstripView.getCurrentItem();
+		if(position < 0)
+			return;
+		Media media = m_MediaList.get(position);
+		
+		// update selection
+		m_CollectButton.setSelected(media.isFavorite());
 	}
 	
 	
@@ -1661,6 +1796,7 @@ public class FilmstripFragment extends GalleryFragment
 					public void run()
 					{
 						m_ToolbarVisibilityState = ViewVisibilityState.VISIBLE;
+						FilmstripFragment.this.hideToolbarDelay();
 					}
 				}).start();
 
@@ -1671,6 +1807,7 @@ public class FilmstripFragment extends GalleryFragment
 					public void run()
 					{
 						m_ToolbarVisibilityState = ViewVisibilityState.VISIBLE;
+						FilmstripFragment.this.hideToolbarDelay();
 					}
 				}).start();
 
@@ -1689,10 +1826,15 @@ public class FilmstripFragment extends GalleryFragment
 
 				// change visibility state
 				m_ToolbarVisibilityState = ViewVisibilityState.VISIBLE;
+				this.hideToolbarDelay();
 			}
 		}
 		else
 		{
+			// remove hide tool bar message
+			this.cancelHideToolbar();
+			
+			// check animation
 			if(animation)
 			{
 				switch(m_ToolbarVisibilityState)

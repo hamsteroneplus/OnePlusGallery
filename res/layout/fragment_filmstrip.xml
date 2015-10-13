@@ -14,6 +14,7 @@
         android:layout_width="match_parent"
         android:layout_height="@dimen/filmstrip_header_container_height"
         android:gravity="center_vertical"
+        android:background="@android:color/transparent"
         android:visibility="gone" >
         
         <ImageButton
@@ -46,6 +47,7 @@
         android:layout_alignParentBottom="true"
         android:orientation="horizontal"
         android:gravity="center"
+        android:background="@android:color/transparent"
         android:visibility="gone" >
         
         <RelativeLayout
@@ -60,7 +62,7 @@
 	            android:layout_height="@dimen/filmstrip_footer_container_height"
 	            android:padding="@dimen/filmstrip_footer_item_padding"
 	            android:background="@drawable/ripple"
-	            android:src="@drawable/state_button_share" />
+	            android:src="@drawable/button_share_normal" />
             
         </RelativeLayout>
         
@@ -93,7 +95,7 @@
 	            android:layout_height="@dimen/filmstrip_footer_container_height"
 	            android:padding="@dimen/filmstrip_footer_item_padding"
 	            android:background="@drawable/ripple"
-	            android:src="@drawable/state_button_editor" />
+	            android:src="@drawable/button_editor_normal" />
             
         </RelativeLayout>
         
@@ -109,7 +111,7 @@
 	            android:layout_height="@dimen/filmstrip_footer_container_height"
 	            android:padding="@dimen/filmstrip_footer_item_padding"
 	            android:background="@drawable/ripple"
-	            android:src="@drawable/state_button_delete" />
+	            android:src="@drawable/button_delete_normal" />
             
         </RelativeLayout>
         
