@@ -153,7 +153,9 @@ public abstract class MediaStoreMedia implements Media
 		
 		// get modified time
 		m_LastModifiedTime = CursorUtils.getLong(cursor, MediaColumns.DATE_MODIFIED, 0L);
-		if(m_LastModifiedTime <= 0 && m_FilePath != null)
+		if(m_LastModifiedTime > 0)
+			m_LastModifiedTime *= 1000;
+		else if(m_FilePath != null)
 		{
 			try
 			{

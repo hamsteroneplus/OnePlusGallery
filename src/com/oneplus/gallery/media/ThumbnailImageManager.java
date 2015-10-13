@@ -1,5 +1,6 @@
 package com.oneplus.gallery.media;
 
+import java.io.File;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
@@ -11,9 +12,11 @@ import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Handler;
+import android.os.SystemClock;
 
 import com.oneplus.base.Handle;
 import com.oneplus.base.Log;
+import com.oneplus.base.Ref;
 import com.oneplus.cache.Cache;
 import com.oneplus.cache.HybridBitmapLruCache;
 import com.oneplus.gallery.GalleryApplication;
@@ -34,6 +37,8 @@ public final class ThumbnailImageManager
 	private static final long THUMB_POOL_CAPACITY = (64 << 20);
 	private static final long MAX_CACHE_WAITING_TIME = 3000;
 	private static final int MAX_FREE_DECODING_TASKS = 256;
+	private static final long DURATION_CLEAR_INVALID_THUMBS_DELAY = 1500;
+	private static final long DURATION_MAX_CLEAR_INVALID_THUMBS = 1000;
 	
 	
 	/**
@@ -58,6 +63,26 @@ public final class ThumbnailImageManager
 	private static volatile int m_SmallThumbSize;
 	private static volatile Executor m_ThumbDecodeExecutor;
 	private static volatile BitmapPool m_ThumbPool;
+	
+	
+	// Runnables.
+	private static final Runnable m_ClearInvalidThumbsRunnable = new Runnable()
+	{
+		@Override
+		public void run()
+		{
+			clearInvalidThumbnailImages();
+		}
+	};
+	private static final Runnable m_ClearInvalidThumbsDelayedRunnable = new Runnable()
+	{
+		@Override
+		public void run()
+		{
+			if(m_SmallThumbDecodeExecutor != null)
+				m_SmallThumbDecodeExecutor.execute(m_ClearInvalidThumbsRunnable);
+		}
+	};
 	
 	
 	/**
@@ -266,8 +291,62 @@ public final class ThumbnailImageManager
 		if(!Handle.isValid(m_CacheManagerActivateHandle))
 			m_CacheManagerActivateHandle = CacheManager.activate();
 		
+		// cancel clearing invalid thumbnail images
+		GalleryApplication.current().getHandler().removeCallbacks(m_ClearInvalidThumbsDelayedRunnable);
+		
 		// complete
 		return handle;
+	}
+	
+	
+	// Clear invalid thumbnail images in cache.
+	private static void clearInvalidThumbnailImages()
+	{
+		// get cache
+		Cache<ImageCacheKey, Bitmap> cache = CacheManager.getSmallThumbnailImageCache();
+		if(cache == null)
+			return;
+		
+		// clear
+		Log.v(TAG, "clearInvalidThumbnailImages() - Start");
+		final long startTime = SystemClock.elapsedRealtime();
+		final int[] count = new int[1];
+		cache.remove(new Cache.RemovingPredication<ImageCacheKey>()
+		{
+			@Override
+			public boolean canRemove(ImageCacheKey key, Ref<Boolean> isCancelled)
+			{
+				// check time
+				if((SystemClock.elapsedRealtime() - startTime) >= DURATION_MAX_CLEAR_INVALID_THUMBS)
+				{
+					Log.w(TAG, "clearInvalidThumbnailImages() - Take long time to clear, interrupt");
+					isCancelled.set(true);
+					return false;
+				}
+				
+				// check file
+				if(key.filePath != null)
+				{
+					try
+					{
+						File file = new File(key.filePath);
+						if(!file.exists() || file.lastModified() != key.lastModifiedTime || file.length() != key.fileSize)
+						{
+							++count[0];
+							return true;
+						}
+					}
+					catch(Throwable ex)
+					{
+						++count[0];
+						return true;
+					}
+				}
+				return false;
+			}
+		});
+		long time = (SystemClock.elapsedRealtime() - startTime);
+		Log.v(TAG, "clearInvalidThumbnailImages() - Take ", time , " ms to removed ", count[0], " invalid images");
 	}
 	
 	
@@ -285,6 +364,9 @@ public final class ThumbnailImageManager
 		
 		// deactivate
 		m_CacheManagerActivateHandle = Handle.close(m_CacheManagerActivateHandle);
+		
+		// clear invalid thumbnail images
+		GalleryApplication.current().getHandler().postDelayed(m_ClearInvalidThumbsDelayedRunnable, DURATION_CLEAR_INVALID_THUMBS_DELAY);
 	}
 	
 	
