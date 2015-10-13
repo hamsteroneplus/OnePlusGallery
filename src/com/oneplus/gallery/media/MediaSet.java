@@ -5,6 +5,7 @@ import java.util.Comparator;
 import android.os.Handler;
 
 import com.oneplus.base.BaseObject;
+import com.oneplus.base.EventKey;
 import com.oneplus.base.Handle;
 import com.oneplus.base.HandlerObject;
 import com.oneplus.base.PropertyKey;
@@ -22,6 +23,12 @@ public interface MediaSet extends BaseObject, HandlerObject
 	 * Property for name of this set.
 	 */
 	PropertyKey<String> PROP_NAME = new PropertyKey<>("Name", String.class, MediaSet.class, 0, null);
+	
+	
+	/**
+	 * Raised when specific media updated.
+	 */
+	EventKey<MediaEventArgs> EVENT_MEDIA_UPDATED = new EventKey<>("MediaUpdated", MediaEventArgs.class, MediaSet.class);
 	
 	
 	/**

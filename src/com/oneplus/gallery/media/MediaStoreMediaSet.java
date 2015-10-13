@@ -23,6 +23,7 @@ import com.oneplus.base.HandleSet;
 import com.oneplus.base.HandlerBaseObject;
 import com.oneplus.base.HandlerUtils;
 import com.oneplus.base.Log;
+import com.oneplus.io.Path;
 
 /**
  * Media set based-on media store.
@@ -39,11 +40,11 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	private static final int MSG_REMOVE_MEDIA_FROM_MEDIA_LIST = -10011;
 	private static final int MSG_MEDIA_DELETED = -10020;
 	private static final int MSG_MEDIA_SET_DELETED = -10021;
+	private static final int MSG_MEDIA_UPDATED = -10030;
 	
 	
 	// Fields.
 	private List<WeakReference<MediaListImpl>> m_ActiveMediaLists;
-	private boolean m_IsMediaStoreContentChanged;
 	private final boolean m_IsOriginalMedia;
 	private volatile Handle m_MediaCountRefreshHandle;
 	private final MediaManager.ActiveStateCallback m_MediaManagerActiveStateCB = new MediaManager.ActiveStateCallback()
@@ -89,6 +90,19 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 		public MediaListImpl(MediaComparator comparator, int maxMediaCount)
 		{
 			super(comparator, maxMediaCount);
+		}
+		
+		public Media findMedia(Uri contentUri)
+		{
+			if(contentUri == null)
+				return null;
+			for(int i = this.size() - 1 ; i >= 0 ; --i)
+			{
+				Media media = this.get(i);
+				if(contentUri.equals(media.getContentUri()))
+					return media;
+			}
+			return null;
 		}
 		
 		public void getAllContentUris(Set<Uri> result)
@@ -401,17 +415,39 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	
 	
 	// Handle media store content change event.
-	private void handleMediaStoreContentChange()
+	private void handleMediaStoreContentChange(Uri contentUri)
 	{
 		// check state
-		if(this.get(PROP_IS_RELEASED))
+		if(contentUri == null || this.get(PROP_IS_RELEASED))
 			return;
-		if(!MediaManager.isActive())
+		
+		// update specific media
+		if(contentUri.getPath().matches(".+/[\\d]+$"))
 		{
-			m_IsMediaStoreContentChanged = true;
+			if(m_ActiveMediaLists != null && !m_ActiveMediaLists.isEmpty())
+			{
+				List<Media> mediaToUpdate = null;
+				for(int i = m_ActiveMediaLists.size() - 1 ; i >= 0 ; --i)
+				{
+					MediaListImpl mediaList = m_ActiveMediaLists.get(i).get();
+					if(mediaList != null)
+					{
+						Media media = mediaList.findMedia(contentUri);
+						if(media != null)
+						{
+							if(mediaToUpdate == null)
+								mediaToUpdate = new ArrayList<>();
+							mediaToUpdate.add(media);
+						}
+					}
+					else
+						m_ActiveMediaLists.remove(i);
+				}
+				if(mediaToUpdate != null)
+					this.updateMedia(contentUri, mediaToUpdate);
+			}
 			return;
 		}
-		m_IsMediaStoreContentChanged = false;
 		
 		// refresh media count
 		this.refreshMediaCount(false);
@@ -449,7 +485,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 			}
 			
 			case MSG_HANDLE_MS_CONTENT_CHANGE:
-				this.handleMediaStoreContentChange();
+				this.handleMediaStoreContentChange((Uri)msg.obj);
 				break;
 			
 			case MSG_MEDIA_COUNT_CHANGED:
@@ -462,6 +498,10 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 				
 			case MSG_MEDIA_SET_DELETED:
 				this.onDeleted();
+				break;
+				
+			case MSG_MEDIA_UPDATED:
+				this.onMediaUpdated((Media)msg.obj);
 				break;
 				
 			case MSG_REMOVE_MEDIA_FROM_MEDIA_LIST:
@@ -548,13 +588,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	 * Called when {@link MediaManager} activated.
 	 */
 	protected void onMediaManagerActivated()
-	{
-		if(m_IsMediaStoreContentChanged)
-		{
-			m_IsMediaStoreContentChanged = false;
-			this.handleMediaStoreContentChange();
-		}
-	}
+	{}
 	
 	
 	/**
@@ -570,7 +604,19 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	 */
 	protected void onMediaStoreContentChanged(Uri contentUri)
 	{
-		this.getHandler().sendEmptyMessage(MSG_HANDLE_MS_CONTENT_CHANGE);
+		Message.obtain(this.getHandler(), MSG_HANDLE_MS_CONTENT_CHANGE, contentUri).sendToTarget();
+	}
+	
+	
+	/**
+	 * Called when specific media updated.
+	 * @param media Updated media.
+	 */
+	protected void onMediaUpdated(Media media)
+	{
+		if(this.get(PROP_IS_RELEASED))
+			return;
+		this.raise(EVENT_MEDIA_UPDATED, new MediaEventArgs(media));
 	}
 	
 	
@@ -810,5 +856,48 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 		if(condition != null)
 			m_QueryCondition += (" AND " + condition);
 		this.refreshMediaCount(true);
+	}
+	
+	
+	// Update media.
+	private void updateMedia(Uri contentUri, final List<Media> mediaToUpdate)
+	{
+		MediaManager.accessContentProvider(contentUri, new MediaManager.ContentProviderAccessCallback()
+		{
+			@Override
+			public void onAccessContentProvider(ContentResolver contentResolver, Uri contentUri, ContentProviderClient client) throws RemoteException
+			{
+				// change to file content URI
+				contentUri = Uri.parse(CONTENT_URI_FILE.toString() + "/" + Path.getFileName(contentUri.getPath()));
+				
+				// update
+				Cursor cursor = client.query(contentUri, MediaStoreMedia.getMediaColumns(), null, null, null);
+				if(cursor != null)
+				{
+					try
+					{
+						if(cursor.moveToNext())
+						{
+							for(int i = mediaToUpdate.size() - 1 ; i >= 0 ; --i)
+							{
+								MediaStoreMedia media = (MediaStoreMedia)mediaToUpdate.get(i);
+								if(media.update(cursor))
+									HandlerUtils.sendMessage(MediaStoreMediaSet.this, MSG_MEDIA_UPDATED, media);
+							}
+						}
+						else
+						{
+							Log.w(TAG, "updateMedia() - Media " + contentUri + " is not found");
+							for(int i = mediaToUpdate.size() - 1 ; i >= 0 ; --i)
+								HandlerUtils.sendMessage(MediaStoreMediaSet.this, MSG_MEDIA_DELETED, mediaToUpdate.get(i));
+						}
+					}
+					finally
+					{
+						cursor.close();
+					}
+				}
+			}
+		});
 	}
 }

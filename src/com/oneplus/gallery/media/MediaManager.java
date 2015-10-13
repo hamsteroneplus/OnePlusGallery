@@ -14,6 +14,7 @@ import com.oneplus.base.HandleSet;
 import com.oneplus.base.HandlerBaseObject;
 import com.oneplus.base.ListHandlerBaseObject;
 import com.oneplus.base.Log;
+import com.oneplus.database.CursorUtils;
 import com.oneplus.gallery.GalleryApplication;
 import com.oneplus.gallery.ListChangeEventArgs;
 import com.oneplus.gallery.media.MediaSet.Type;
@@ -21,6 +22,7 @@ import com.oneplus.io.Path;
 
 import android.content.ContentProviderClient;
 import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Environment;
@@ -86,6 +88,9 @@ public class MediaManager
 		FileColumns.PARENT,
 		FileColumns.DATA,
 	};
+	private static final String[] ONEPLUS_FLAGS_COLUMNS = new String[]{
+		COLUMN_ONEPLUS_FLAGS,
+	};
 	private static final String DIR_QUERY_CONDITION = 
 			"(" 
 					+ FileColumns.MEDIA_TYPE + "=" + FileColumns.MEDIA_TYPE_IMAGE
@@ -101,6 +106,7 @@ public class MediaManager
 	private static final int MSG_DIR_MEDIA_SET_DELETED = 10021;
 	private static final int MSG_REFRESH_MEDIA_SET_LISTS = 10030;
 	private static final int MSG_CHECK_CONTENT_CHANGES = 10040;
+	private static final int MSG_NOTIFY_CONTENT_CHANGED = 10041;
 	
 	
 	// Fields.
@@ -313,10 +319,14 @@ public class MediaManager
 		
 		public void notifyChange(boolean resetChangeTime)
 		{
+			this.notifyChange(this.contentUri, resetChangeTime);
+		}
+		public void notifyChange(Uri contentUri, boolean resetChangeTime)
+		{
 			if(resetChangeTime)
 				this.lastChangedTime = 0;
 			for(int i = this.callbackHandles.size() - 1 ; i >= 0 ; --i)
-				this.callbackHandles.get(i).notifyContentChanged(this.contentUri);
+				this.callbackHandles.get(i).notifyContentChanged(contentUri);
 		}
 		
 		@Override
@@ -584,6 +594,18 @@ public class MediaManager
 	}
 	
 	
+	/**
+	 * Add OnePlus flags to media store. 
+	 * @param contentUri Content URI to update.
+	 * @param flags New flags to add.
+	 * @return True if update successfully.
+	 */
+	public static boolean addOnePlusFlagsToMediaStore(Uri contentUri, final int flags)
+	{
+		return updateOnePlusFlagsInMediaStore(contentUri, flags, true);
+	}
+	
+	
 	// Cancel content provider access.
 	private static void cancelContentProviderAccess(ContentProviderAccessHandle handle)
 	{
@@ -845,6 +867,10 @@ public class MediaManager
 				checkContentChanges();
 				break;
 				
+			case MSG_NOTIFY_CONTENT_CHANGED:
+				notifyContentChangedDirectly((Uri)msg.obj);
+				break;
+				
 			case MSG_REGISTER_CONTENT_CHANGED_CB:
 				registerContentChangedCallback((ContentChangeCallbackHandle)msg.obj);
 				break;
@@ -923,6 +949,45 @@ public class MediaManager
 	public static boolean isOnePlusMediaProvider()
 	{
 		return m_IsOnePlusMediaProvider;
+	}
+	
+	
+	/**
+	 * Notify content changed directly.
+	 * @param contentUri Content URI.
+	 */
+	public static void notifyContentChanged(Uri contentUri)
+	{
+		if(contentUri == null)
+		{
+			Log.e(TAG, "notifyContentChanged() - No content URI");
+			return;
+		}
+		
+		Log.v(TAG, "notifyContentChanged() - Content URI : ", contentUri);
+		
+		if(isContentThread())
+			notifyContentChangedDirectly(contentUri);
+		else
+		{
+			startContentThread();
+			Message.obtain(m_ContentThreadHandler, MSG_NOTIFY_CONTENT_CHANGED, contentUri).sendToTarget();
+		}
+	}
+	
+	
+	// Notify content change (in content thread).
+	private static void notifyContentChangedDirectly(Uri contentUri)
+	{
+		String uriString = contentUri.toString();
+		for(ContentObserver observer : m_ContentObservers.values())
+		{
+			if(uriString.startsWith(observer.contentUri.toString()))
+			{
+				observer.notifyChange(contentUri, false);
+				break;
+			}
+		}
 	}
 	
 	
@@ -1181,6 +1246,47 @@ public class MediaManager
 	}
 	
 	
+	/**
+	 * Remove OnePlus flags from media store. 
+	 * @param contentUri Content URI to update.
+	 * @param flags Flags to remove.
+	 * @return True if update successfully.
+	 */
+	public static boolean removeOnePlusFlagsFromMediaStore(Uri contentUri, final int flags)
+	{
+		return updateOnePlusFlagsInMediaStore(contentUri, flags, false);
+	}
+	
+	
+	/**
+	 * Change favorite state for specific media.
+	 * @param media Media to set favorite state.
+	 * @param isFavorite True to set as favorite media, False otherwise.
+	 * @return True if update successfully.
+	 */
+	public static boolean setFavorite(Media media, boolean isFavorite)
+	{
+		if(media == null)
+		{
+			Log.e(TAG, "setFavorite() - No media to set");
+			return false;
+		}
+		return updateOnePlusFlagsInMediaStore(media.getContentUri(), ONEPLUS_FLAG_FAVORITE, isFavorite);
+	}
+	
+	
+	/**
+	 * Change favorite state for specific media.
+	 * @param contentUri Content URI of media.
+	 * @param isFavorite True to set as favorite media, False otherwise.
+	 * @return True if update successfully.
+	 */
+	public static boolean setFavorite(Uri contentUri, boolean isFavorite)
+	{
+		return updateOnePlusFlagsInMediaStore(contentUri, ONEPLUS_FLAG_FAVORITE, isFavorite);
+	}
+	
+	
 	// Start content thread.
 	private static void startContentThread()
 	{
@@ -1218,6 +1324,83 @@ public class MediaManager
 		Log.v(TAG, "unregisterContentChangedCallback() - Unregister from ", handle.contentUri);
 		m_ContentObservers.remove(handle.contentUri);
 		m_ContentResolver.unregisterContentObserver(observer);
+	}
+	
+	
+	// Update OnePlus flags column.
+	private static boolean updateOnePlusFlagsInMediaStore(Uri contentUri, final int flags, final boolean add)
+	{
+		// check state
+		if(contentUri == null)
+		{
+			Log.e(TAG, "updateOnePlusFlagsInMediaStore() - No content URI to set");
+			return false;
+		}
+		if(!m_IsOnePlusMediaProvider)
+		{
+			Log.e(TAG, "updateOnePlusFlagsInMediaStore() - Not OnePlus media provider");
+			return false;
+		}
+		
+		// set favorite
+		Handle handle = accessContentProvider(contentUri, new ContentProviderAccessCallback()
+		{
+			@Override
+			public void onAccessContentProvider(ContentResolver contentResolver, Uri contentUri, ContentProviderClient client) throws RemoteException
+			{
+				// get current flags
+				Cursor cursor = client.query(contentUri, ONEPLUS_FLAGS_COLUMNS , null, null, null);
+				int currentFlags;
+				if(cursor != null)
+				{
+					try
+					{
+						if(cursor.getCount() == 1)
+						{
+							cursor.moveToNext();
+							currentFlags = CursorUtils.getInt(cursor, COLUMN_ONEPLUS_FLAGS, 0);
+						}
+						else
+						{
+							Log.e(TAG, "updateOnePlusFlagsInMediaStore() - Not an unique content URI");
+							return;
+						}
+					}
+					catch(Throwable ex)
+					{
+						Log.e(TAG, "updateOnePlusFlagsInMediaStore() - Fail to query current flags", ex);
+						return;
+					}
+					finally
+					{
+						cursor.close();
+					}
+				}
+				else
+				{
+					Log.e(TAG, "updateOnePlusFlagsInMediaStore() - Fail to query current flags");
+					return;
+				}
+				
+				// check flags
+				int newFlags;
+				if(add)
+					newFlags = (currentFlags | flags);
+				else
+					newFlags = (currentFlags & ~flags);
+				if(currentFlags == newFlags)
+					return;
+				
+				// update flags
+				ContentValues values = new ContentValues(1);
+				values.put(COLUMN_ONEPLUS_FLAGS, newFlags);
+				if(client.update(contentUri, values, null, null) > 0)
+					Message.obtain(m_ContentThreadHandler, MSG_NOTIFY_CONTENT_CHANGED, contentUri).sendToTarget();
+			}
+		});
+		
+		// complete
+		return Handle.isValid(handle);
 	}
 	
 	

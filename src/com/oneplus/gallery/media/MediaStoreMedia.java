@@ -485,7 +485,17 @@ public abstract class MediaStoreMedia implements Media
 			m_Location.setLongitude(lng);
 		}
 		if(!changed && !fromConstructor)
-			changed = ((prevLocation != null && !prevLocation.equals(m_Location)) || (prevLocation == null && m_Location != null));
+		{
+			if(prevLocation != null)
+			{
+				if(m_Location != null)
+					changed = (prevLocation.getLatitude() != m_Location.getLatitude() || prevLocation.getLongitude() != m_Location.getLongitude());
+				else
+					changed = true;
+			}
+			else if(m_Location != null)
+				changed = true;
+		}
 		
 		// get taken time
 		prevTime = m_TakenTime;

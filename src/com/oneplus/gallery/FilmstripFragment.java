@@ -38,6 +38,7 @@ import com.oneplus.base.PropertySource;
 import com.oneplus.base.ScreenSize;
 import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaList;
+import com.oneplus.gallery.media.MediaManager;
 import com.oneplus.gallery.media.PhotoMedia;
 import com.oneplus.gallery.media.ThumbnailImageManager;
 import com.oneplus.gallery.media.VideoMedia;
@@ -572,7 +573,7 @@ public class FilmstripFragment extends GalleryFragment
 	
 	
 	// Collect page
-	private void collectPage(int position)
+	private void collectPage(int position, boolean isCollected)
 	{
 		// reset delay hide tool bar
 		this.hideToolbarDelay();
@@ -581,9 +582,9 @@ public class FilmstripFragment extends GalleryFragment
 		if(!validatePosition(position))
 			return;
 
-		// TODO: collect page from activity
+		// set favorite state
 		Media media = m_MediaList.get(position);
-		GalleryActivity galleryActivity = this.getGalleryActivity();
+		MediaManager.setFavorite(media, isCollected);
 	}
 	
 	
@@ -921,7 +922,7 @@ public class FilmstripFragment extends GalleryFragment
 			public void onClick(View v)
 			{
 				m_CollectButton.setSelected(!m_CollectButton.isSelected());
-				FilmstripFragment.this.collectPage(m_FilmstripView.getCurrentItem());
+				FilmstripFragment.this.collectPage(m_FilmstripView.getCurrentItem(), m_CollectButton.isSelected());
 			}
 		});
 		m_EditorButtonContainer = view.findViewById(R.id.filmstrip_footer_button_editor_container);
