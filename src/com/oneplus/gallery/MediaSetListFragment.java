@@ -238,6 +238,7 @@ public class MediaSetListFragment extends GalleryFragment
 
 	@Override
 	public void onDestroy() {
+		this.setMediaSetList(null);
 		super.onDestroy();
 		
 		removeCallback(PROP_IS_SELECTION_MODE, m_IsSelectionModeChangedCallback);

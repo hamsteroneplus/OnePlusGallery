@@ -23,6 +23,7 @@ import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.PropertySource;
 import com.oneplus.base.ScreenSize;
+import com.oneplus.base.ThreadMonitor;
 import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaComparator;
 import com.oneplus.gallery.media.MediaList;
@@ -409,6 +410,9 @@ public class OPGalleryActivity extends GalleryActivity
 	{
 		// call super
 		super.onCreate(savedInstanceState, tempInstanceState);
+		
+		// start thread monitor
+		ThreadMonitor.startMonitorCurrentThread();
 
 		// setup media set list
 		this.setupMediaSetList();
@@ -843,12 +847,30 @@ public class OPGalleryActivity extends GalleryActivity
 	}
 	
 	
+	// Called when start.
+	@Override
+	protected void onStart()
+	{
+		super.onStart();
+		ThreadMonitor.startMonitorCurrentThread();
+	}
+	
+	
 	// Called when status bar visibility changed.
 	@Override
 	protected void onStatusBarVisibilityChanged(boolean isVisible)
 	{
 		super.onStatusBarVisibilityChanged(isVisible);
 		this.updateUIMargins(isVisible, this.getGallery().get(Gallery.PROP_IS_NAVIGATION_BAR_VISIBLE));
+	}
+	
+	
+	// Called when stop
+	@Override
+	protected void onStop()
+	{
+		ThreadMonitor.stopMonitorCurrentThread();
+		super.onStop();
 	}
 	
 	
