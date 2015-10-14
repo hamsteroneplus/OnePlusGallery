@@ -72,6 +72,8 @@ public class FilmstripFragment extends GalleryFragment
 	private static final long DURATION_ANIMATION = 150;
 	private static final long DELAY_HIDE_TOOL_BAR_TIME_MILLIS = 3000;
 	private static final boolean ENABLE_DECODE_LOG = false;
+	private static final int MEDIA_ADDED = 1;
+	private static final int MEDIA_REMOVED = 2;
 	private static final int PRE_DECODE_THUMB_WINDOW_SIZE = 2;
 	private static final int PRE_DECODE_THUMB_WINDOW_SIZE_SMALL = 3;
 	private static final int MSG_HIDE_TOOL_BAR = 10001;
@@ -139,12 +141,20 @@ public class FilmstripFragment extends GalleryFragment
 		}
 	};
 	private List<BitmapDecodeInfo> m_LowResBitmapDecodeInfos = new ArrayList<>();
-	private EventHandler<ListChangeEventArgs> m_MediaChangedEventHandler = new EventHandler<ListChangeEventArgs>()
+	private EventHandler<ListChangeEventArgs> m_MediaAddedEventHandler = new EventHandler<ListChangeEventArgs>()
 	{
 		@Override
 		public void onEventReceived(EventSource source, EventKey<ListChangeEventArgs> key, ListChangeEventArgs e)
 		{
-			FilmstripFragment.this.onMediaListUpdated(e.getStartIndex(), e.getEndIndex());
+			FilmstripFragment.this.onMediaListUpdated(e.getStartIndex(), e.getEndIndex(), MEDIA_ADDED);
+		}
+	};
+	private EventHandler<ListChangeEventArgs> m_MediaRemovedEventHandler = new EventHandler<ListChangeEventArgs>()
+	{
+		@Override
+		public void onEventReceived(EventSource source, EventKey<ListChangeEventArgs> key, ListChangeEventArgs e)
+		{
+			FilmstripFragment.this.onMediaListUpdated(e.getStartIndex(), e.getEndIndex(), MEDIA_REMOVED);
 		}
 	};
 	private MediaList m_MediaList;
@@ -672,7 +682,21 @@ public class FilmstripFragment extends GalleryFragment
 
 		// delete page
 		Media media = m_MediaList.get(position);
-		this.getGallery().deleteMedia(media);
+		this.getGallery().deleteMedia(media, new Gallery.MediaDeletionCallback()
+		{
+			@Override
+			public void onDeletionCompleted(Media media, boolean success)
+			{
+				// check remaining media size
+				if(m_MediaList.size() == 0)
+				{
+					Log.v(TAG, "deletePage() - Last media");
+					FilmstripFragment.this.closeFragment();
+				}
+			}
+		});
+		
+		
 	}
 	
 	
@@ -1108,9 +1132,9 @@ public class FilmstripFragment extends GalleryFragment
 	// Call when media list updated
 	private void onMediaListUpdated()
 	{
-		this.onMediaListUpdated(-1, -1);
+		this.onMediaListUpdated(-1, -1, -1);
 	}
-	private void onMediaListUpdated(int startIndex, int endIndex)
+	private void onMediaListUpdated(int startIndex, int endIndex, int updateType)
 	{
 		// check media list
 		if(m_MediaList == null)
@@ -1120,11 +1144,22 @@ public class FilmstripFragment extends GalleryFragment
 		if(startIndex > endIndex)
 			return;
 		
-		Log.v(TAG, "onMediaListUpdated() - Start: ", startIndex, ", end: ", endIndex);
+		// calculate previous media count
+		int prevMediaCount = 0;
+		if(updateType == MEDIA_ADDED)
+			prevMediaCount = m_MediaList.size() - (endIndex - startIndex + 1);
+		else if(updateType == MEDIA_REMOVED)
+			prevMediaCount = m_MediaList.size() + (endIndex - startIndex + 1);
+		else
+			prevMediaCount = -1;
+		
+		Log.v(TAG, "onMediaListUpdated() - Start: ", startIndex, ", end: ", endIndex, ", current: ", m_CurrentMediaIndex, ", size: ", prevMediaCount);
+		
+		
 		
 		// update media list
-		if(startIndex < 0 || startIndex > (m_MediaList.size() - 1) ||
-				endIndex < 0 || endIndex > (m_MediaList.size() - 1))
+		if(startIndex < 0 || startIndex > (prevMediaCount - 1) ||
+				endIndex < 0 || endIndex > (prevMediaCount - 1))
 		{
 			// set default item to -1
 			m_FilmstripAdapter.notifyDataSetChanged();
@@ -1132,12 +1167,24 @@ public class FilmstripFragment extends GalleryFragment
 		}
 		else
 		{
-			// update media list and keep current item
-			int newPosition = m_FilmstripView.getCurrentItem();
-			if(newPosition >= startIndex && newPosition >= endIndex)
-				newPosition += (endIndex - startIndex + 1);
-			else if(newPosition >= startIndex && newPosition <= endIndex)
-				newPosition += (newPosition - startIndex + 1);
+			int newPosition = m_CurrentMediaIndex;
+			if(updateType == MEDIA_ADDED)
+			{
+				if(newPosition >= startIndex && newPosition >= endIndex)
+					newPosition += (endIndex - startIndex + 1);
+				else if(newPosition >= startIndex && newPosition <= endIndex)
+					newPosition += (newPosition - startIndex + 1);
+			}
+			else if(updateType == MEDIA_REMOVED)
+			{
+				if(newPosition >= startIndex && newPosition >= endIndex)
+					newPosition -= (endIndex - startIndex + 1);
+				else if(newPosition >= startIndex && newPosition <= endIndex)
+					newPosition -= (newPosition - startIndex + 1);
+				if(newPosition < 0 && m_MediaList.size() > 0)
+					newPosition = 0;
+			}
+			
 			m_FilmstripAdapter.notifyDataSetChanged();
 			this.setCurrentMediaIndexProp(newPosition, true);
 		}
@@ -1625,13 +1672,13 @@ public class FilmstripFragment extends GalleryFragment
 		// setup call-backs
 		if(oldList != null)
 		{
-			oldList.removeHandler(MediaList.EVENT_MEDIA_ADDED, m_MediaChangedEventHandler);
-			oldList.removeHandler(MediaList.EVENT_MEDIA_REMOVED, m_MediaChangedEventHandler);
+			oldList.removeHandler(MediaList.EVENT_MEDIA_ADDED, m_MediaAddedEventHandler);
+			oldList.removeHandler(MediaList.EVENT_MEDIA_REMOVED, m_MediaRemovedEventHandler);
 		}
 		if(m_MediaList != null)
 		{
-			m_MediaList.addHandler(MediaList.EVENT_MEDIA_ADDED, m_MediaChangedEventHandler);
-			m_MediaList.addHandler(MediaList.EVENT_MEDIA_REMOVED, m_MediaChangedEventHandler);
+			m_MediaList.addHandler(MediaList.EVENT_MEDIA_ADDED, m_MediaAddedEventHandler);
+			m_MediaList.addHandler(MediaList.EVENT_MEDIA_REMOVED, m_MediaRemovedEventHandler);
 		}
 		
 		// update media list
