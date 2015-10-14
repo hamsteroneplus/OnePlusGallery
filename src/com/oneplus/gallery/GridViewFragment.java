@@ -64,6 +64,7 @@ public class GridViewFragment extends GalleryFragment {
 	
 	// Private fields
 	private int m_AnchorPosition = GridView.INVALID_POSITION; // Keep the very first selected item position
+	boolean m_MultiSelectToggleOn = false;
 	private View m_EmptyMediaView;
 	private GridView m_GridView;
 	private GridViewItemAdapter m_GridViewItemAdapter;
@@ -84,7 +85,6 @@ public class GridViewFragment extends GalleryFragment {
 	private String m_ToolbarTitle = null;
 	private boolean m_ToolbarActionShared = false;
 	private int m_TouchedPosition = GridView.INVALID_POSITION;
-	private Object m_ObjectLock = new Object();
 //	private boolean m_SetEmptyMediaView = false;
 	
 	private static BitmapPool m_SmallBitmapPool = new CenterCroppedBitmapPool("GridViewFragmentSmallBitmapPool", 32 << 20, Bitmap.Config.RGB_565, 4, BitmapPool.FLAG_USE_EMBEDDED_THUMB_ONLY);
@@ -93,6 +93,7 @@ public class GridViewFragment extends GalleryFragment {
 		public void onDeletionProcessCompleted() {
 			super.onDeletionProcessCompleted();
 			exitSelectionMode();
+			GridViewFragment.this.set(PROP_IS_SELECTION_MODE, false);
 		}
 	};
 	
@@ -258,8 +259,8 @@ public class GridViewFragment extends GalleryFragment {
 		}
 	}
 
-	
-	private void hideSelectImage() {
+
+	private void hideSelectImageIcon() {
 		if(m_SelectionMeidaList.isEmpty())
 			return;
 		m_SelectionMeidaList.clear();	
@@ -287,16 +288,12 @@ public class GridViewFragment extends GalleryFragment {
 			}
 			m_Toolbar.getMenu().setGroupVisible(R.id.selectModeActionGroup, false);	
 		}
-		m_IsSelectionMode = false;
-		
 	}
-	
-	//
+
+
 	private void exitSelectionMode() {
 		resetToolBar();
-		
-		hideSelectImage();
-		this.set(PROP_IS_SELECTION_MODE, false);
+		hideSelectImageIcon();
 	}
 	
 	
@@ -405,6 +402,7 @@ public class GridViewFragment extends GalleryFragment {
 		// Exit selection mode if selection set is empty and is not in selection mode
 		if(m_IsSelectionMode && m_SelectionMeidaList.isEmpty()) {
 			exitSelectionMode();
+			GridViewFragment.this.set(PROP_IS_SELECTION_MODE, false);
 			return;
 		}
 		
@@ -522,9 +520,10 @@ public class GridViewFragment extends GalleryFragment {
 				m_SelectionMeidaList.remove(media);
 			}
 			
-			if(m_SelectionMeidaList.isEmpty())
+			if(m_SelectionMeidaList.isEmpty()){
 				exitSelectionMode();
-			else {
+				GridViewFragment.this.set(PROP_IS_SELECTION_MODE, false);
+			}else {
 				Resources res = this.getActivity().getResources();
 				String selectedItems = String.format(res.getString(R.string.toolbar_selection_total), m_SelectionMeidaList.size());
 				m_Toolbar.setTitle(selectedItems);
@@ -582,6 +581,7 @@ public class GridViewFragment extends GalleryFragment {
 		if(m_ToolbarActionShared) {
 			if(m_IsSelectionMode) {
 				exitSelectionMode();
+				GridViewFragment.this.set(PROP_IS_SELECTION_MODE, false);
 			}
 			m_ToolbarActionShared = false;
 		}
@@ -609,16 +609,16 @@ public class GridViewFragment extends GalleryFragment {
 			return this.setMediaList((MediaList)value);
 		else if(key == PROP_HAS_ACTION_BAR)
 			m_HasActionBar = (boolean) value;
-		else if(key == PROP_IS_SELECTION_MODE) {
-			if(m_IsSelectionMode && (boolean) value == false) {
-				exitSelectionMode();
-			}
+		else if(key == PROP_IS_SELECTION_MODE)
+		{
 			m_IsSelectionMode = (boolean) value;
+			if(!m_IsSelectionMode)
+				exitSelectionMode();
 		}
-		else if(key == PROP_IS_CAMERA_ROLL) {
+		else if(key == PROP_IS_CAMERA_ROLL)
 			m_IsCameraRoll = (boolean) value;
-		}
-		else if(key == PROP_TITLE) {
+		else if(key == PROP_TITLE)
+		{
 			m_ToolbarTitle = (String) value;
 			if(m_Toolbar != null && m_HasActionBar)
 				m_Toolbar.setTitle(m_ToolbarTitle);
@@ -680,6 +680,7 @@ public class GridViewFragment extends GalleryFragment {
 		if(m_ToolbarActionShared) {
 			if(m_IsSelectionMode) {
 				exitSelectionMode();
+				GridViewFragment.this.set(PROP_IS_SELECTION_MODE, false);
 			}
 			m_ToolbarActionShared = false;
 		}
@@ -701,7 +702,6 @@ public class GridViewFragment extends GalleryFragment {
 		m_GridView.setNumColumns(m_GridviewColumns);
 		if(m_GridViewItemAdapter == null)
 			m_GridViewItemAdapter = new GridViewItemAdapter(this.getActivity());
-//		m_GridView.setAdapter(m_GridViewItemAdapter);
 		m_GridView.setSaveInstanceStateEnabled(false);
 		if(m_LastGridViewPosition >= 0)
 		{
@@ -712,7 +712,7 @@ public class GridViewFragment extends GalleryFragment {
 		m_GridView.setOnItemClickListener(new OnItemClickListener() {
 			@Override
 			public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-				Log.d(TAG, "onItemClick item position:" + position);
+				Log.d(TAG, "onItemClick position:" + position);
 				if(m_IsSelectionMode) {
 					onSingleItemSelected(position, view);
 				}else {
@@ -724,7 +724,7 @@ public class GridViewFragment extends GalleryFragment {
 			@Override
 			public boolean onItemLongClick(AdapterView<?> parent, View view, int position, long id) {
 				// Position 0 is not valid photo item.
-				if(m_IsCameraRoll && position == 0) 
+				if(m_IsSelectionMode || (m_IsCameraRoll && position == 0)) 
 					return false;
 				Log.d(TAG, "gridview onItemLongClick event item position:" + position);
 				m_Toolbar.getMenu().setGroupVisible(R.id.selectModeActionGroup, true);
@@ -742,15 +742,12 @@ public class GridViewFragment extends GalleryFragment {
 			}
 		});
 		m_GridView.setOnTouchListener(new OnTouchListener() {
-			int firstTouchItemPosition;
-			int oldPosition = -1;
-			int initialX = -1;
-			int initialY = -1;
-			boolean validGesture = false;
-			boolean invalidGesture = false;
+			int previousPosition = -1;
+			int downx = -1;
+			int downy = -1;
 			// to know if this is a scroll gesture or multi-selection gesutre
 			long downElapseTime;
-			boolean multiSelectToggleOn = false;
+//			boolean multiSelectToggleOn = false;
 			@Override
 			public boolean onTouch(View view, MotionEvent event) {
 				
@@ -761,15 +758,14 @@ public class GridViewFragment extends GalleryFragment {
 				int action = event.getActionMasked();
 				switch (action) {
 				case MotionEvent.ACTION_DOWN:
+					Log.d(TAG, "onTouchListener ACTION_DOWN ");
 					downElapseTime  = SystemClock.elapsedRealtime();
-					initialX = (int)event.getX();
-					initialY = (int)event.getY();
-					GridView gridview = (GridView) view;
-					m_TouchedPosition = firstTouchItemPosition = gridview.pointToPosition(initialX, initialY);
-//					Log.d(TAG, "onTouchListener ACTION_DOWN item touched: " + firstTouchItemPosition);
+					downx = (int)event.getX();
+					downy = (int)event.getY();
+					m_TouchedPosition = ((GridView) view).pointToPosition(downx, downy);
 					break;
 				case MotionEvent.ACTION_MOVE:
-//					Log.d(TAG, "onTouchListener ACTION_MOVE ");
+					Log.d(TAG, "onTouchListener ACTION_MOVE ");
 					long actionTimeDiff = SystemClock.elapsedRealtime() - downElapseTime;
 					// if time diff < 200, we consider this gesture is a scroll action
 					if(actionTimeDiff < 200) {
@@ -777,82 +773,82 @@ public class GridViewFragment extends GalleryFragment {
 					}
 					int mx = (int)event.getX();
 					int my = (int)event.getY();
-					if(initialX == -1 && initialY == -1) {
-						
+					if(downx == -1 && downy == -1) {
+						Log.w(TAG, "onTouchListener ACTION_MOVE downx == -1 && downy == -1");
 					}else {
-						int deltaX = initialX > mx ? initialX - mx : mx - initialX;
-						int deltaY = initialY > my ? initialY - my : my - initialY;
+						int deltaX = downx > mx ? downx - mx : mx - downx;
+						int deltaY = downy > my ? downy - my : my - downy;
 						if(deltaX > 10 || deltaY > 10) {
-							invalidGesture = true;
+							if(m_MultiSelectToggleOn == false)
+								break;;
 						}
-						if(invalidGesture && !validGesture) {
-							Log.e(TAG, "InvalidGesture break");
-							break;	
-						}	
 					}
-					
 					int movingPosition = ((GridView) view).pointToPosition(mx, my);
-//					Log.d(TAG, "movingPosition: " + movingPosition);
-//					Log.d(TAG, "m_TouchedPosition: " + m_TouchedPosition);
 					// finger remains in the same position for more than 200ms 
 					// consider this gesture is a multi-select action
 					// so set multiselectoggleOn=true
 					if( movingPosition == m_TouchedPosition) {
-						if(multiSelectToggleOn == false) {
-							multiSelectToggleOn = true;
+						if(m_MultiSelectToggleOn == false) {
+							m_MultiSelectToggleOn = true;
 						}else {
 							// already in selection mode, and anchorpostion is invalid
 							// means another multi-select action is about to trigger
 							if(m_AnchorPosition == GridView.INVALID_POSITION)
-								m_AnchorPosition = firstTouchItemPosition;
-//							Log.e(TAG, "onTouch ACTION_MOVE movingPosition == m_TouchedPosition " + movingPosition +" " + m_TouchedPosition);
+								m_AnchorPosition = m_TouchedPosition;
 						}
 					}
 					
 					if(movingPosition == GridView.INVALID_POSITION) {
-						Log.e(TAG, "entering #790 movingPosition INVALID_POSITION");
 						break;
 					}
-//					if(multiSelectToggleOn && movingPosition != firstTouchItemPosition) {
-					if(multiSelectToggleOn && movingPosition != oldPosition) {
-//						Log.w(TAG, "entering #794 nyktuokeSelect");
+					if(m_MultiSelectToggleOn && movingPosition != previousPosition) {
 						multipleSelect(action, (GridView) view, movingPosition);
-						oldPosition = movingPosition;
-						validGesture = true;
+						previousPosition = movingPosition;
 					}
 					
-					return true;
+					break;
 				case MotionEvent.ACTION_UP:
+					Log.d(TAG, "onTouchListener ACTION_UP ");
 					// multi-select action is done, but not yet leave selection mode
-					multiSelectToggleOn = false;
+					// merge tempMedialist to selectionmedialist
+					if(m_MultiSelectToggleOn) {
+						if(!m_TempMeidaList.isEmpty()) {
+							for(Media media: m_TempMeidaList) {
+								m_SelectionMeidaList.add(media);
+							}
+						}
+						m_TempMeidaList.clear();	
+					}
+					
+					
 					m_AnchorPosition = GridView.INVALID_POSITION;
 					m_TouchedPosition= GridView.INVALID_POSITION;
+					previousPosition = -1;
 					downElapseTime = 0;
-					invalidGesture = false;
-					validGesture = false;
-					initialX = -1;
-					initialY = -1;
-					
-					if(!m_TempMeidaList.isEmpty()) {
-						for(Media media: m_TempMeidaList) {
-							m_SelectionMeidaList.add(media);
-						}
-					}
-					
-					m_TempMeidaList.clear();
+					downx = -1;
+					downy = -1;
 					/* TODO 
 					if(y > 1250) {
 						Log.e(TAG, "gridview scroll 15 px");
 						gridview.smoothScrollByOffset (15);
 					}
 					*/
+					
+					// return true when multiSelectToggleOn, otherwise this gesture would be considered as a click event
+					// and gridview.onItemClickListener will be called which is not what we want.
+					if(m_MultiSelectToggleOn) {
+						m_MultiSelectToggleOn = false;
+						return true;
+					}
 					break;
 				default:
-					
 					break;
 				}
-				Log.e(TAG, "onTouch OUTTER return false " + event.getAction());
-				return false;
+				if(m_MultiSelectToggleOn)
+					return true;
+				else
+					return false;
+				
 			}
 		});
 		
@@ -884,6 +880,7 @@ public class GridViewFragment extends GalleryFragment {
 			public void onClick(View v) {
 				if(m_IsCameraRoll || m_IsSelectionMode) {
 					exitSelectionMode();
+					GridViewFragment.this.set(PROP_IS_SELECTION_MODE, false);
 				}else {
 					GridViewFragment.this.getGalleryActivity().goBack();
 				}
@@ -932,15 +929,18 @@ public class GridViewFragment extends GalleryFragment {
 		switch (action) 
 		{
 			case MotionEvent.ACTION_DOWN:
+				Log.w(TAG, "multipleSelect() - ACTION DOWN");
 				break;
 			case MotionEvent.ACTION_MOVE:
+				Log.w(TAG, "multipleSelect() - ACTION MOVE");
 				int selectposition = position;
+				Log.w(TAG, "multipleSelect() - selectionPosition:" + selectposition);
+				Log.w(TAG, "multipleSelect() - m_AnchorPosition:" + m_AnchorPosition);
 				if(m_AnchorPosition != selectposition) {
 					
 					if(m_AnchorPosition == GridView.INVALID_POSITION) {
-						View itemView = gridview.getChildAt(selectposition);
+						View itemView = gridview.getChildAt(selectposition - gridview.getFirstVisiblePosition());
 						if(itemView != null) {
-							Log.e(TAG,"multipleSelect should never see this more thane 1 time");
 							onMultiItemSelected(selectposition, itemView);
 						}
 						m_TouchedPosition = selectposition;
@@ -951,8 +951,8 @@ public class GridViewFragment extends GalleryFragment {
 						Log.w(TAG, "multipleSelect() - m_AnchorPosition: " + m_AnchorPosition + " selectposition: " + selectposition + "  m_TouchedPosition: " + m_TouchedPosition);
 						
 						if(m_TouchedPosition !=  selectposition) {
-							Log.w(TAG, "multipleSelect() - deSelect Enter  ");
 							int deviate = m_AnchorPosition - selectposition ;
+							Log.w(TAG, "multipleSelect() - deviate: " + deviate);
 //							int startIndex = deviate < 0 ? m_TouchedPosition : selectposition;
 //							int endIndex = deviate < 0 ? selectposition : m_TouchedPosition;
 						
@@ -963,6 +963,7 @@ public class GridViewFragment extends GalleryFragment {
 								if( selectposition < m_AnchorPosition && m_AnchorPosition < m_TouchedPosition){
 									startIndex = m_AnchorPosition +1;
 									endIndex = m_TouchedPosition;
+									Log.w(TAG, "multipleSelect() - while loop 1");
 									while(startIndex <= endIndex) {
 										View itemView = null;
 										itemView = gridview.getChildAt(startIndex- gridview.getFirstVisiblePosition());
@@ -970,6 +971,7 @@ public class GridViewFragment extends GalleryFragment {
 										++startIndex;
 									}		
 								}else {
+									Log.w(TAG, "multipleSelect() - while loop 2");
 									while(startIndex < endIndex) {
 										View itemView = null;
 										itemView = gridview.getChildAt(startIndex- gridview.getFirstVisiblePosition());
@@ -984,6 +986,7 @@ public class GridViewFragment extends GalleryFragment {
 								if( m_TouchedPosition < m_AnchorPosition && m_AnchorPosition < selectposition){
 									startIndex = m_TouchedPosition;
 									endIndex = m_AnchorPosition;
+									Log.w(TAG, "multipleSelect() - while loop 3");
 									while(startIndex < endIndex) {
 										View itemView = null;
 										itemView = gridview.getChildAt(startIndex- gridview.getFirstVisiblePosition());
@@ -991,13 +994,15 @@ public class GridViewFragment extends GalleryFragment {
 										++startIndex;
 									}	
 								}else {
-									while(startIndex > endIndex) {
+									Log.w(TAG, "multipleSelect() - while loop 4 startIndex: " + startIndex + " endIndex: " + endIndex);
+									while(startIndex >= endIndex) {
 										View itemView = null;
 										itemView = gridview.getChildAt(startIndex- gridview.getFirstVisiblePosition());
 										onMultiItemDeSelected(startIndex, itemView);
 										--startIndex;
+										if(startIndex < 0)
+											break;
 									}	
-									Log.w(TAG, "multipleSelect()2 - deSelect Enter start: " + startIndex + " endIndex: " + endIndex);
 								}
 								
 							}
@@ -1153,6 +1158,7 @@ public class GridViewFragment extends GalleryFragment {
 				//recycled view
 				holder = (GridViewItemHolder) convertView.getTag();
 				((ViewGroup)holder.typeIconView.getParent()).setVisibility(View.GONE);
+				holder.selectedImageView.setVisibility(View.GONE);
 			}
 			holder.position = position;
 			
@@ -1176,7 +1182,7 @@ public class GridViewFragment extends GalleryFragment {
 					holder.thumbDecodeHandle = null;
 				}else {
 					holder.thumbnailImageView.setScaleType(ScaleType.CENTER_CROP);
-//					Log.e(TAG, "holder.m_ItemPosition: " + holder.position);
+					holder.thumbnailImageView.setImageDrawable(m_GreySquare);
 					// -1 for the first one for CameraIcon to start camera activity
 					Media media = m_MediaList.get(m_IsCameraRoll ? position - 1 : position);
 					String filePath = media.getFilePath();
