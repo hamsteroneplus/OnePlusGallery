@@ -51,6 +51,17 @@ public class CameraRollMediaSet extends MediaStoreMediaSet
 		
 		return true;
 	}
+
+
+	@Override
+	protected void onDeleted() {
+		
+		// notify MediaManager
+		MediaManager.notifyMediaSetDeleted(CameraRollMediaSet.this);
+		
+		// reset media count
+		setReadOnly(PROP_MEDIA_COUNT, 0);
+	}
 	
 	
 }
