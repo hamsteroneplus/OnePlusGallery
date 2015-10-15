@@ -6,6 +6,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.SparseArray;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
@@ -24,6 +25,8 @@ import android.widget.Toolbar.OnMenuItemClickListener;
 import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.LinkedList;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 import com.oneplus.base.EventHandler;
 import com.oneplus.base.EventKey;
@@ -52,13 +55,14 @@ import com.oneplus.media.BitmapPool;
 public class MediaSetListFragment extends GalleryFragment
 {
 	// constant 
-	private static final long MEMORY_CACHE_SIZE = 10 * 1024 * 1024;
+	private static final long MEMORY_CACHE_SIZE = 20 * 1024 * 1024;
 	private static final long DISK_CACHE_SIZE = 200 * 1024 * 1024;
 	private static final String COVER_IMAGE_CACHE_NAME = "MediaSetCoverImage";
 	private static final String CAMERA_ROLL_COVER_IMAGE_KEY = "ThankYou9527";
 	
 	// static fields
 	private static HybridBitmapLruCache<String> m_CoverImageCache;
+	private static volatile Executor m_CacheImageLoaderExecutor;
 	
 	// Fields
 	private Activity m_Activity;
@@ -149,6 +153,59 @@ public class MediaSetListFragment extends GalleryFragment
 	};
 	
 	/**
+	 * Cache image loaded call-back interface.
+	 */
+	public interface CacheImageLoadedCallback
+	{
+		/**
+		 * Called when cache image loaded.
+		 * @param cachedImage Loaded cache image
+		 */
+		void onCacheImageLoaded(Bitmap cachedImage);
+	}
+	private static final class LoadCacheImageTask implements Runnable
+	{	
+		private static final long TIME_OUT = 500;
+		
+		private volatile String key;
+		private volatile Bitmap defaultBitmap;
+		private volatile Handler callbackHandler;
+		private volatile CacheImageLoadedCallback callback;
+		
+		public LoadCacheImageTask(String key, Bitmap defaultBitmap, Handler callbackHandler, CacheImageLoadedCallback callback)
+		{
+			this.key = key;
+			this.defaultBitmap = defaultBitmap;
+			this.callbackHandler = callbackHandler;
+			this.callback = callback;
+		}
+		
+		@Override
+		public void run() {
+			
+			final Bitmap bitmapInCache = m_CoverImageCache.get(key, defaultBitmap, TIME_OUT);
+			
+			if(callbackHandler != null && this.callbackHandler.getLooper().getThread() != Thread.currentThread())
+			{
+				this.callbackHandler.post(new Runnable()
+				{
+					@Override
+					public void run()
+					{
+						if(callback != null)
+							callback.onCacheImageLoaded(bitmapInCache);
+					}
+				});
+			}
+			else
+			{
+				if(callback != null)
+					callback.onCacheImageLoaded(bitmapInCache);
+			}	
+		}		
+	}
+	
+	/**
 	 * Initialize new MediaSetListFragment instance.
 	 */
 	public MediaSetListFragment()
@@ -176,12 +233,20 @@ public class MediaSetListFragment extends GalleryFragment
 		{
 			for(int i = m_MediaSetList.size() - 1 ; i >= 0 ; --i)
 			{
-				MediaSet mediaSet = m_MediaSetList.get(i);
-				Bitmap coverImage = m_CoverImageCache.get(CoverImageInfo.getMediaSetImageKey(mediaSet), null, 0);
-				if(coverImage == null)
-					m_MediaSetDecodeQueue.add(mediaSet);
+				final MediaSet mediaSet = m_MediaSetList.get(i);
+				LoadCacheImageTask task = new LoadCacheImageTask(CoverImageInfo.getMediaSetImageKey(mediaSet), null, getHandler(), new CacheImageLoadedCallback() {
+					
+					@Override
+					public void onCacheImageLoaded(Bitmap cachedImage) {
+						if(cachedImage == null)
+						{
+							m_MediaSetDecodeQueue.add(mediaSet);
+							createMediaListCoverImageFromQueue();		
+						}			
+					}
+				});
+				m_CacheImageLoaderExecutor.execute(task);
 			}
-			this.createMediaListCoverImageFromQueue();
 		}
 	}
 	
@@ -243,6 +308,8 @@ public class MediaSetListFragment extends GalleryFragment
 		m_MediaSetListAdapter = new MediaSetListAdapter();
 		
 		initializeCoverImageCache(m_Activity);
+		if(m_CacheImageLoaderExecutor == null)
+			m_CacheImageLoaderExecutor = Executors.newFixedThreadPool(4);
 		
 		addCallback(PROP_IS_SELECTION_MODE, m_IsSelectionModeChangedCallback);
 	}
