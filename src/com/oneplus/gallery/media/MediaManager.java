@@ -8,6 +8,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 
 import com.oneplus.base.Handle;
 import com.oneplus.base.HandleSet;
@@ -84,9 +85,13 @@ public class MediaManager
 	private static final Uri CONTENT_URI_FILE = Files.getContentUri("external");
 	private static final Uri CONTENT_URI_IMAGE = Images.Media.EXTERNAL_CONTENT_URI;
 	private static final Uri CONTENT_URI_VIDEO = Video.Media.EXTERNAL_CONTENT_URI;
+	private static final String PATTERN_SPECIFIC_CONTENT_URI = ".+/[\\d]+$";
 	private static final String[] DIR_COLUMNS = new String[]{
 		FileColumns.PARENT,
 		FileColumns.DATA,
+	};
+	private static final String[] MEDIA_ID_COLUMNS = new String[]{
+		MediaColumns._ID,
 	};
 	private static final String[] ONEPLUS_FLAGS_COLUMNS = new String[]{
 		COLUMN_ONEPLUS_FLAGS,
@@ -98,8 +103,16 @@ public class MediaManager
 			+ ")"
 			+ " AND NOT (" + FileColumns.DATA + " LIKE ?)"
 	;
+	private static final String MEDIA_QUERY_CONDITION = 
+			FileColumns.MEDIA_TYPE + "=" + FileColumns.MEDIA_TYPE_IMAGE
+			+ " OR " + FileColumns.MEDIA_TYPE + "=" + FileColumns.MEDIA_TYPE_VIDEO
+	;
 	private static final long INTERVAL_CHECK_CONTENT_CHANGES = 2000;
+	private static final long DURATION_RELEASE_MEDIA_TABLE_DELAY = 3000;
 	private static final int MSG_ACCESS_CONTENT_PROVIDER = 10000;
+	private static final int MSG_SETUP_MEDIA_TABLE = 10001;
+	private static final int MSG_RELEASE_MEDIA_TABLE = 10002;
+	private static final int MSG_SYNC_MEDIA_TABLE = 10003;
 	private static final int MSG_REGISTER_CONTENT_CHANGED_CB = 10010;
 	private static final int MSG_UNREGISTER_CONTENT_CHANGED_CB = 10011;
 	private static final int MSG_DIR_MEDIA_SET_CREATED = 10020;
@@ -107,6 +120,8 @@ public class MediaManager
 	private static final int MSG_REFRESH_MEDIA_SET_LISTS = 10030;
 	private static final int MSG_CHECK_CONTENT_CHANGES = 10040;
 	private static final int MSG_NOTIFY_CONTENT_CHANGED = 10041;
+	private static final int MSG_REGISTER_MEDIA_CHANGED_CB = 10050;
+	private static final int MSG_UNREGISTER_MEDIA_CHANGED_CB = 10051;
 	
 	
 	// Fields.
@@ -122,17 +137,26 @@ public class MediaManager
 	private static volatile Handler m_Handler;
 	private static volatile boolean m_IsOnePlusMediaProvider;
 	private static final Object m_Lock = new Object();
-	private static Handle m_MediaSetListContentChangeCBHandle;
+	private static final List<MediaChangeCallbackHandle> m_MediaChangeCallbackHandles = new ArrayList<>();
+	private static Handle m_MediaContentChangeCBHandle;
+	private static final Map<Integer, Media> m_MediaTable = new HashMap<>();
 	private static TempMediaSet m_TempMediaSet;
 	
 	
 	// Call-backs.
-	private static final ContentChangeCallback m_MediaSetListContentChangeCB = new ContentChangeCallback()
+	private static final ContentChangeCallback m_MediaContentChangeCB = new ContentChangeCallback()
 	{
 		@Override
 		public void onContentChanged(Uri contentUri)
 		{
-			m_Handler.sendEmptyMessage(MSG_REFRESH_MEDIA_SET_LISTS);
+			if(contentUri != null && contentUri.getPath().matches(PATTERN_SPECIFIC_CONTENT_URI))
+				;
+			else 
+			{
+				if(!m_ContentThreadHandler.hasMessages(MSG_SYNC_MEDIA_TABLE))
+					m_ContentThreadHandler.sendEmptyMessage(MSG_SYNC_MEDIA_TABLE);
+				m_Handler.sendEmptyMessage(MSG_REFRESH_MEDIA_SET_LISTS);
+			}
 		}
 	};
 	
@@ -208,6 +232,32 @@ public class MediaManager
 	
 	
 	/**
+	 * Call-back interface for media change.
+	 */
+	public interface MediaChangeCallback
+	{
+		/**
+		 * Called when media created.
+		 * @param id Media ID.
+		 * @param media Instance of this media, may be Null.
+		 */
+		void onMediaCreated(int id, Media media);
+		/**
+		 * Called when media deleted.
+		 * @param id Media ID.
+		 * @param media Instance of this media, may be Null.
+		 */
+		void onMediaDeleted(int id, Media media);
+		/**
+		 * Called when media updated.
+		 * @param id Media ID.
+		 * @param media Instance of this media, may be Null.
+		 */
+		void onMediaUpdated(int id, Media media);
+	}
+	
+	
+	/**
 	 * {@link Handler} runs on content thread.
 	 */
 	public static abstract class ContentThreadHandler extends Handler
@@ -244,6 +294,100 @@ public class MediaManager
 		protected void onClose(int flags)
 		{
 			cancelContentProviderAccess(this);
+		}
+	}
+	
+	
+	// Base class for call-back related handle.
+	private abstract static class CallbackHandle<TCallback> extends Handle
+	{
+		// Fields.
+		public final TCallback callback;
+		public final Handler callbackHandler;
+		public final Thread callbackThread;
+		
+		// Constructor.
+		protected CallbackHandle(String name, TCallback callback, Handler callbackHandler)
+		{
+			super(name);
+			this.callback = callback;
+			this.callbackHandler = callbackHandler;
+			this.callbackThread = (callbackHandler != null ? callbackHandler.getLooper().getThread() : null);
+		}
+	}
+	
+	
+	// Handle for media change call-back.
+	private static final class MediaChangeCallbackHandle extends CallbackHandle<MediaChangeCallback>
+	{
+		// Constructor.
+		public MediaChangeCallbackHandle(MediaChangeCallback callback, Handler handler)
+		{
+			super("MediaChangeCallback", callback, handler);
+		}
+		
+		// Call onMediaCreated().
+		public void callOnMediaCreated(final int id, final Media media)
+		{
+			if(this.callbackThread != null && this.callbackThread != Thread.currentThread())
+			{
+				this.callbackHandler.post(new Runnable()
+				{
+					@Override
+					public void run()
+					{
+						callback.onMediaCreated(id, media);
+					}
+				});
+			}
+			else
+				this.callback.onMediaCreated(id, media);
+		}
+		
+		// Call onMediaDeleted().
+		public void callOnMediaDeleted(final int id, final Media media)
+		{
+			if(this.callbackThread != null && this.callbackThread != Thread.currentThread())
+			{
+				this.callbackHandler.post(new Runnable()
+				{
+					@Override
+					public void run()
+					{
+						callback.onMediaDeleted(id, media);
+					}
+				});
+			}
+			else
+				this.callback.onMediaDeleted(id, media);
+		}
+		
+		// Call onMediaUpdated().
+		public void callOnMediaUpdated(final int id, final Media media)
+		{
+			if(this.callbackThread != null && this.callbackThread != Thread.currentThread())
+			{
+				this.callbackHandler.post(new Runnable()
+				{
+					@Override
+					public void run()
+					{
+						callback.onMediaUpdated(id, media);
+					}
+				});
+			}
+			else
+				this.callback.onMediaUpdated(id, media);
+		}
+
+		// Close handle.
+		@Override
+		protected void onClose(int flags)
+		{
+			if(!isContentThread())
+				Message.obtain(m_ContentThreadHandler, MSG_UNREGISTER_MEDIA_CHANGED_CB, this).sendToTarget();
+			else
+				unregisterMediaChangeCallback(this);
 		}
 	}
 	
@@ -571,11 +715,23 @@ public class MediaManager
 		if(m_ActivateHandles.size() == 1)
 		{
 			Log.w(TAG, "activate()");
+			
+			// call-back
 			for(int i = m_ActiveStateCallbacks.size() - 1 ; i >= 0 ; --i)
 				m_ActiveStateCallbacks.get(i).onActivated();
+			
+			// activate
 			startContentThread();
 			m_ContentThreadHandler.post(m_CheckOPMediaProviderRunnable);
+			m_ContentThreadHandler.removeMessages(MSG_RELEASE_MEDIA_TABLE);
+			m_ContentThreadHandler.sendEmptyMessage(MSG_SETUP_MEDIA_TABLE);
 			m_ContentThreadHandler.sendEmptyMessage(MSG_CHECK_CONTENT_CHANGES);
+			
+			// register content change call-back
+			HandleSet handles = new HandleSet();
+			handles.addHandle(registerContentChangedCallback(CONTENT_URI_IMAGE, m_MediaContentChangeCB, m_Handler));
+			handles.addHandle(registerContentChangedCallback(CONTENT_URI_VIDEO, m_MediaContentChangeCB, m_Handler));
+			m_MediaContentChangeCBHandle = handles;
 		}
 		
 		// complete
@@ -692,9 +848,9 @@ public class MediaManager
 		if(m_ActiveMediaSetLists.size() == 1)
 		{
 			HandleSet handles = new HandleSet();
-			handles.addHandle(registerContentChangedCallback(CONTENT_URI_IMAGE, m_MediaSetListContentChangeCB, m_Handler));
-			handles.addHandle(registerContentChangedCallback(CONTENT_URI_VIDEO, m_MediaSetListContentChangeCB, m_Handler));
-			m_MediaSetListContentChangeCBHandle = handles;
+			handles.addHandle(registerContentChangedCallback(CONTENT_URI_IMAGE, m_MediaContentChangeCB, m_Handler));
+			handles.addHandle(registerContentChangedCallback(CONTENT_URI_VIDEO, m_MediaContentChangeCB, m_Handler));
+			m_MediaContentChangeCBHandle = handles;
 		}
 		
 		// create system sets
@@ -843,6 +999,12 @@ public class MediaManager
 		// stop checking content changes
 		if(m_ContentThreadHandler != null)
 			m_ContentThreadHandler.removeMessages(MSG_CHECK_CONTENT_CHANGES);
+		
+		// unregister content change call-back
+		m_MediaContentChangeCBHandle = Handle.close(m_MediaContentChangeCBHandle);
+		
+		// release media table later
+		m_ContentThreadHandler.sendEmptyMessageDelayed(MSG_RELEASE_MEDIA_TABLE, DURATION_RELEASE_MEDIA_TABLE_DELAY);
 	}
 	
 	
@@ -875,8 +1037,28 @@ public class MediaManager
 				registerContentChangedCallback((ContentChangeCallbackHandle)msg.obj);
 				break;
 				
+			case MSG_REGISTER_MEDIA_CHANGED_CB:
+				registerMediaChangeCallback((MediaChangeCallbackHandle)msg.obj);
+				break;
+				
+			case MSG_RELEASE_MEDIA_TABLE:
+				releaseMediaTable(msg.arg1 != 0);
+				break;
+				
+			case MSG_SETUP_MEDIA_TABLE:
+				setupMediaTable();
+				break;
+				
+			case MSG_SYNC_MEDIA_TABLE:
+				syncMediaTable();
+				break;
+				
 			case MSG_UNREGISTER_CONTENT_CHANGED_CB:
 				unregisterContentChangedCallback((ContentChangeCallbackHandle)msg.obj);
+				break;
+				
+			case MSG_UNREGISTER_MEDIA_CHANGED_CB:
+				unregisterMediaChangeCallback((MediaChangeCallbackHandle)msg.obj);
 				break;
 		}
 	}
@@ -1014,6 +1196,74 @@ public class MediaManager
 		}	
 	}
 	
+	
+	//
+	public static Media obtainMedia(Cursor cursor, int idColumnIndex)
+	{
+		// check parameter
+		if(cursor == null)
+		{
+			Log.e(TAG, "obtainMedia() - No cursor");
+			return null;
+		}
+		
+		// obtain media
+		try
+		{
+			// get ID
+			Integer id;
+			if(idColumnIndex >= 0)
+				id = cursor.getInt(idColumnIndex);
+			else
+				id = CursorUtils.getInt(cursor, MediaColumns._ID, -1);
+			if(id < 0)
+			{
+				Log.e(TAG, "obtainMedia() - No media ID");
+				return null;
+			}
+			
+			// obtain media
+			synchronized(m_MediaTable)
+			{
+				// use current media
+				Media media = m_MediaTable.get(id);
+				if(media != null)
+				{
+					if(media instanceof MediaStoreMedia)
+					{
+						if(((MediaStoreMedia)media).update(cursor))
+						{
+							for(int i = m_MediaChangeCallbackHandles.size() - 1 ; i >= 0 ; --i)
+								m_MediaChangeCallbackHandles.get(i).callOnMediaUpdated(id, media);
+						}
+					}
+					return media;
+				}
+				
+				// create new media
+				int mediaCount = m_MediaTable.size();
+				//
+				m_MediaTable.put(id, media);
+				
+				// check whether this is new media or not
+				if(m_MediaTable.size() != mediaCount)
+				{
+					for(int i = m_MediaChangeCallbackHandles.size() - 1 ; i >= 0 ; --i)
+						m_MediaChangeCallbackHandles.get(i).callOnMediaCreated(id, media);
+				}
+				
+				// complete
+				return media;
+			}
+		}
+		catch(Throwable ex)
+		{
+			Log.e(TAG, "obtainMedia() - Fail to obtain", ex);
+			return null;
+		}
+	}
+	
+	
 	// Called when new directory media set created. (in main thread)
 	private static void onDirectoryMediaSetCreated(int id, String path)
 	{
@@ -1075,9 +1325,6 @@ public class MediaManager
 					for(DirectoryMediaSet set : m_DirectoryMediaSets.values())
 						set.release();
 					m_DirectoryMediaSets.clear();
-					
-					// unregister content change call-back
-					m_MediaSetListContentChangeCBHandle = Handle.close(m_MediaSetListContentChangeCBHandle);
 				}
 			}
 			else if(candList == null)
@@ -1236,6 +1483,58 @@ public class MediaManager
 	
 	
 	/**
+	 * Register call-back to monitor media change.
+	 * @param callback Call-back to add.
+	 * @param handler Handler to perform call-back.
+	 * @return Handle to call-back.
+	 */
+	public static Handle registerMediaChangeCallback(MediaChangeCallback callback, Handler handler)
+	{
+		if(callback == null)
+		{
+			Log.e(TAG, "registerMediaChangeCallback() - No call-back to register");
+			return null;
+		}
+		MediaChangeCallbackHandle handle = new MediaChangeCallbackHandle(callback, handler);
+		if(!isContentThread())
+		{
+			startContentThread();
+			Message.obtain(m_ContentThreadHandler, MSG_REGISTER_MEDIA_CHANGED_CB, handle).sendToTarget();
+		}
+		else
+			registerMediaChangeCallback(handle);
+		return handle;
+	}
+	
+	
+	// Register media change call-back (in content thread).
+	private static void registerMediaChangeCallback(MediaChangeCallbackHandle handle)
+	{
+		m_MediaChangeCallbackHandles.add(handle);
+	}
+	
+	
+	// Release media table (in content thread).
+	private static void releaseMediaTable(boolean clearId)
+	{
+		Log.w(TAG, "releaseMediaTable() - Clear ID : " + clearId);
+		synchronized(m_MediaTable)
+		{
+			if(clearId)
+				m_MediaTable.clear();
+			else if(!m_MediaTable.isEmpty())
+			{
+				Integer[] idArray = new Integer[m_MediaTable.size()];
+				m_MediaTable.keySet().toArray(idArray);
+				for(int i = idArray.length - 1 ; i >= 0 ; --i)
+					m_MediaTable.put(idArray[i], null);
+			}
+		}
+		m_ContentThreadHandler.removeMessages(MSG_SYNC_MEDIA_TABLE);
+	}
+	
+	
+	/**
 	 * Remove {@link ActiveStateCallback}.
 	 * @param callback Call-back to remove.
 	 */
@@ -1287,6 +1586,61 @@ public class MediaManager
 	}
 	
 	
+	// Setup media table (in content thread).
+	private static void setupMediaTable()
+	{
+		// check state
+		synchronized(m_MediaTable)
+		{
+			if(!m_MediaTable.isEmpty())
+			{
+				Log.w(TAG, "setupMediaTable() - Ready, " + m_MediaTable.size() + " entries");
+				syncMediaTable();
+				return;
+			}
+		}
+		
+		// create table with IDs
+		try
+		{
+			// create table with IDs
+			long time = SystemClock.elapsedRealtime();
+			ContentResolver contentResolver = GalleryApplication.current().getContentResolver();
+			ContentProviderClient client = contentResolver.acquireUnstableContentProviderClient(CONTENT_URI_FILE);
+			if(client != null)
+			{
+				Cursor cursor = null;
+				try
+				{
+					cursor = client.query(CONTENT_URI_FILE, MEDIA_ID_COLUMNS, MEDIA_QUERY_CONDITION, null, null);
+					synchronized(m_MediaTable)
+					{
+						while(cursor.moveToNext())
+						{
+							int id = cursor.getInt(0);
+							m_MediaTable.put(id, null);
+						}
+					}
+				}
+				finally
+				{
+					if(cursor != null)
+						cursor.close();
+					client.release();
+					time = (SystemClock.elapsedRealtime() - time);
+					Log.w(TAG, "setupMediaTable() - Take " + time + " ms to setup table with " + m_MediaTable.size() + " entries");
+				}
+			}
+			else
+				Log.e(TAG, "setupMediaTable() - Fail to acquire content provider client");
+		}
+		catch(Throwable ex)
+		{
+			Log.e(TAG, "setupMediaTable() - Fail to setup table", ex);
+		}
+	}
+	
+	
 	// Start content thread.
 	private static void startContentThread()
 	{
@@ -1313,7 +1667,70 @@ public class MediaManager
 	}
 	
 	
-	// Register content change call-back (in content thread)
+	// Synchronize media table with media provider (in content thread).
+	private static void syncMediaTable()
+	{
+		long time = SystemClock.elapsedRealtime();
+		accessContentProvider(CONTENT_URI_FILE, new ContentProviderAccessCallback()
+		{
+			@Override
+			public void onAccessContentProvider(ContentResolver contentResolver, Uri contentUri, ContentProviderClient client) throws RemoteException
+			{
+				// copy current IDs
+				HashSet<Integer> currentIDs;
+				synchronized(m_MediaTable)
+				{
+					currentIDs = new HashSet<Integer>(m_MediaTable.keySet());
+				}
+				
+				// synchronize
+				Cursor cursor = client.query(CONTENT_URI_FILE, MEDIA_ID_COLUMNS, MEDIA_QUERY_CONDITION, null, null);
+				if(cursor != null)
+				{
+					synchronized(m_MediaTable)
+					{
+						// add entries
+						int addedCount = 0;
+						while(cursor.moveToNext())
+						{
+							Integer id = cursor.getInt(0);
+							if(!currentIDs.remove(id))
+							{
+								++addedCount;
+								m_MediaTable.put(id, null);
+								for(int i = m_MediaChangeCallbackHandles.size() - 1 ; i >= 0 ; --i)
+									m_MediaChangeCallbackHandles.get(i).callOnMediaCreated(id, null);
+							}
+						}
+						if(addedCount > 0)
+							Log.w(TAG, "syncMediaTable() - Add " + addedCount + " entries");
+						
+						// remove entries
+						if(!currentIDs.isEmpty())
+						{
+							for(Integer id : currentIDs)
+							{
+								Media media = m_MediaTable.remove(id);
+								for(int i = m_MediaChangeCallbackHandles.size() - 1 ; i >= 0 ; --i)
+									m_MediaChangeCallbackHandles.get(i).callOnMediaDeleted(id, media);
+							}
+							Log.w(TAG, "syncMediaTable() - Remove " + currentIDs.size() + " entries");
+						}
+					}
+				}
+				else
+				{
+					Log.e(TAG, "syncMediaTable() - Fail to query");
+					return;
+				}
+			}
+		});
+		time = (SystemClock.elapsedRealtime() - time);
+		Log.w(TAG, "syncMediaTable() - Take " + time + " ms to synchronize");
+	}
+	
+	
+	// Unregister content change call-back (in content thread)
 	private static void unregisterContentChangedCallback(ContentChangeCallbackHandle handle)
 	{
 		if(m_ContentObservers == null)
@@ -1324,6 +1741,13 @@ public class MediaManager
 		Log.v(TAG, "unregisterContentChangedCallback() - Unregister from ", handle.contentUri);
 		m_ContentObservers.remove(handle.contentUri);
 		m_ContentResolver.unregisterContentObserver(observer);
+	}
+	
+	
+	// Unregister media change call-back (in content thread).
+	private static void unregisterMediaChangeCallback(MediaChangeCallbackHandle handle)
+	{
+		m_MediaChangeCallbackHandles.remove(handle);
 	}
 	
 	
