@@ -974,7 +974,8 @@ public class FilmstripFragment extends GalleryFragment
 			this.setToolbarVisibility(true, false);
 		
 		// update tool bar margin
-		this.updateToolbarMargins(m_IsToolbarVisible);
+		boolean isNavBarVisible = this.getGallery().get(Gallery.PROP_IS_NAVIGATION_BAR_VISIBLE);
+		this.updateToolbarMargins(isNavBarVisible && m_IsToolbarVisible);
 		
 		// update collect button
 		this.updateCollectButtonSelection();
@@ -1154,8 +1155,6 @@ public class FilmstripFragment extends GalleryFragment
 			prevMediaCount = -1;
 		
 		Log.v(TAG, "onMediaListUpdated() - Start: ", startIndex, ", end: ", endIndex, ", current: ", m_CurrentMediaIndex, ", size: ", prevMediaCount);
-		
-		
 		
 		// update media list
 		if(startIndex < 0 || startIndex > (prevMediaCount - 1) ||
