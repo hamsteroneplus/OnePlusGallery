@@ -248,8 +248,6 @@ public class MediaSetListFragment extends GalleryFragment
 	// Called when media count changed.
 	private void onMediaCountChanged(MediaSet mediaSet, PropertyChangeEventArgs<Integer> e)
 	{
-		Log.v(TAG, "onMediaSetCountChanged() - old value : "+e.getOldValue()+" , new count value : "+e.getNewValue());
-		
 		CoverImageInfo.onMediaSetCountChanged(mediaSet, e);
 		
 		m_MediaSetDecodeQueue.add(mediaSet);
@@ -584,7 +582,6 @@ public class MediaSetListFragment extends GalleryFragment
 			viewInfo.sizeTextView.setText(mediaCount != null ? String.valueOf(mediaCount) : "");
 			
 			Bitmap coverImage = m_CoverImageCache.get(CoverImageInfo.getMediaSetImageKey(mediaSet), null, 0);
-			Log.v(TAG, "getView() - coverImage for "+CoverImageInfo.getMediaSetImageKey(mediaSet)+" is "+coverImage);
 			if(coverImage != null)
 				viewInfo.coverImage.setImageBitmap(coverImage);
 			else
@@ -675,8 +672,6 @@ public class MediaSetListFragment extends GalleryFragment
 			@Override
 			public void onEventReceived(EventSource source, EventKey<ListChangeEventArgs> key, ListChangeEventArgs e) {
 				
-				Log.v(TAG, "onEventReceived() - targetGridCount is "+targetGridCount+", e.getEndIndex() is "+e.getEndIndex());
-				
 				// try to decode image when all images are ready
 				if(e.getEndIndex() == targetGridCount-1)
 				{
@@ -684,14 +679,11 @@ public class MediaSetListFragment extends GalleryFragment
 					{
 						if(CoverImageInfo.isInCache(CoverImageInfo.getMediaSetImageKey(mediaSet), 0, mediaList.get(0)))
 						{
-							Log.v(TAG, "createMediaListCoverImage() - CoverImageInfo.isInCache");
 							// decode next media set
 							createMediaListCoverImageFromQueue();
 						}			
 						else
 						{					
-							Log.v(TAG, "createMediaListCoverImage() - Not in cache");
-							
 							// update cover image info
 							CoverImageInfo.updateCoverImageInfo(CoverImageInfo.getMediaSetImageKey(mediaSet), 0, mediaList.get(0));
 							
@@ -699,12 +691,8 @@ public class MediaSetListFragment extends GalleryFragment
 								@Override
 								public void onBitmapDecoded(Handle handle, String filePath, Bitmap bitmap) {
 							
-									Log.v(TAG, "onBitmapDecoded() - targetGridCount is "+targetGridCount);
-									
 									// update bitmap table
 									m_CoverImageCache.add(CoverImageInfo.getMediaSetImageKey(mediaSet), bitmap);		
-									
-									Log.v(TAG, "onBitmapDecoded() - coverImage for "+CoverImageInfo.getMediaSetImageKey(mediaSet)+" is "+bitmap);
 									
 									// notify data changed
 									if(m_MediaSetListAdapter != null)
@@ -747,8 +735,6 @@ public class MediaSetListFragment extends GalleryFragment
 							// check if need to refresh cache
 							if(CoverImageInfo.isInCache(CoverImageInfo.getMediaSetImageKey(mediaSet), i, mediaList.get(i)))
 							{
-								Log.v(TAG, "createMediaListCoverImage() - index : "+index+" ,CoverImageInfo.isInCache");
-								
 								// decode next media set
 								if(i == targetGridCount -1)
 								{
@@ -757,8 +743,6 @@ public class MediaSetListFragment extends GalleryFragment
 							}		
 							else
 							{
-								Log.v(TAG, "createMediaListCoverImage() - index : "+index+" ,Not in cache");
-								
 								// update cover image info
 								CoverImageInfo.updateCoverImageInfo(CoverImageInfo.getMediaSetImageKey(mediaSet), i, mediaList.get(i));
 								
@@ -767,8 +751,6 @@ public class MediaSetListFragment extends GalleryFragment
 									@Override
 									public void onThumbnailImageDecoded(Handle handle, Media media, Bitmap thumb)
 									{
-										Log.v(TAG, "onThumbnailImageDecoded() - index : "+index+" ,targetGridCount is "+targetGridCount);
-										
 										if(thumb == null)
 										{
 											Log.w(TAG, "onThumbnailImageDecoded() - thumb is null");
@@ -797,8 +779,6 @@ public class MediaSetListFragment extends GalleryFragment
 										
 										// update bitmap table
 										m_CoverImageCache.add(CoverImageInfo.getMediaSetImageKey(mediaSet), gridCover);
-										
-										Log.v(TAG, "onThumbnailImageDecoded() - index : "+index+" , coverImage for "+CoverImageInfo.getMediaSetImageKey(mediaSet)+" is "+gridCover);
 										
 										// notify data changed
 										if(m_MediaSetListAdapter != null)
@@ -898,7 +878,6 @@ public class MediaSetListFragment extends GalleryFragment
 			// clear hash table if count is changed from different UI
 			if(getUiStyle(e.getOldValue()) != getUiStyle(e.getNewValue()))
 			{
-				Log.v("CoverImageInfo", "onMediaSetCountChanged() - info.getImageHashCode().clear();");
 				info.getImageHashCode().clear();
 			}
 		}
