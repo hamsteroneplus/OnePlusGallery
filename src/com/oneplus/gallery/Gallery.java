@@ -172,7 +172,8 @@ public class Gallery extends HandlerBaseObject
 		@Override
 		public void onSystemUiVisibilityChange(int visibility)
 		{
-			onSystemUiVisibilityChanged(visibility);
+			if(m_Activity != null && m_Activity.get(GalleryActivity.PROP_IS_RUNNING))
+				onSystemUiVisibilityChanged(visibility);
 		}
 	};
 	
@@ -184,7 +185,10 @@ public class Gallery extends HandlerBaseObject
 		public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
 		{
 			if(e.getNewValue())
+			{
 				checkSystemNavigationBarState(m_Activity);
+				setSystemUiVisibility();
+			}
 		}
 	};
 	private final GalleryActivity.ActivityResultCallback m_MediaShareResultCallback = new GalleryActivity.ActivityResultCallback()
@@ -1084,7 +1088,7 @@ public class Gallery extends HandlerBaseObject
 	{
 		// check visibilities
 		boolean isStatusBarVisible = ((visibility & View.SYSTEM_UI_FLAG_FULLSCREEN) == 0);
-		boolean isNavBarVisible = ((visibility & View.SYSTEM_UI_FLAG_HIDE_NAVIGATION) == 0);
+		boolean isNavBarVisible = (m_HasNavigationBar && (visibility & View.SYSTEM_UI_FLAG_HIDE_NAVIGATION) == 0);
 		
 		// check status bar visibility
 		Boolean showStatusBar = null;
@@ -1321,6 +1325,25 @@ public class Gallery extends HandlerBaseObject
 	
 	
 	// Set system UI visibility.
+	private void setSystemUiVisibility()
+	{
+		// check status bar state
+		boolean showStatusBar;
+		if(m_StatusBarVisibilityHandles.isEmpty())
+			showStatusBar = true;
+		else
+			showStatusBar = m_StatusBarVisibilityHandles.get(m_StatusBarVisibilityHandles.size() - 1).isVisible;
+		
+		// check navigation bar state
+		boolean showNavBar;
+		if(m_NavBarVisibilityHandles.isEmpty())
+			showNavBar = m_HasNavigationBar;
+		else
+			showNavBar = m_NavBarVisibilityHandles.get(m_NavBarVisibilityHandles.size() - 1).isVisible;
+		
+		// set visibility
+		this.setSystemUiVisibility(showStatusBar, showNavBar);
+	}
 	private boolean setSystemUiVisibility(Boolean isStatusBarVisible, Boolean isNavBarVisible)
 	{
 		// check state

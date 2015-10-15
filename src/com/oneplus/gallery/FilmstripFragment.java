@@ -1287,6 +1287,9 @@ public class FilmstripFragment extends GalleryFragment
 		// hide tool bar delay
 		this.hideToolbarDelay();
 		
+		// set system UI visibility
+		this.setSystemUiVisibility(m_IsToolbarVisible);
+		
 		// update state
 		m_IsInstanceStateSaved = false;
 	}
@@ -1825,7 +1828,8 @@ public class FilmstripFragment extends GalleryFragment
 		Log.v(TAG, "updateToolbarVisibility() - Visible: ", m_IsToolbarVisible);
 		
 		// set status bar visibility
-		this.setSystemUiVisibility(m_IsToolbarVisible);
+		if(this.get(PROP_STATE) == State.RUNNING)
+			this.setSystemUiVisibility(m_IsToolbarVisible);
 
 		// show/hide toolbar
 		if(m_IsToolbarVisible)

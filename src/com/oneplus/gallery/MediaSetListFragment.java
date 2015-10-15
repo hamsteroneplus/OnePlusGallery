@@ -202,6 +202,26 @@ public class MediaSetListFragment extends GalleryFragment
 	}
 	
 	
+	// Called when attaching to gallery.
+	@Override
+	protected void onAttachToGallery(Gallery gallery)
+	{
+		// call super
+		super.onAttachToGallery(gallery);
+		
+		// add call-backs.
+		gallery.addCallback(Gallery.PROP_IS_NAVIGATION_BAR_VISIBLE, new PropertyChangedCallback<Boolean>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+			{
+				if(m_AddAlbumButton != null)
+					m_AddAlbumButton.requestLayout();
+			}
+		});
+	}
+	
+	
 	// Called when backing to initial UI state.
 	@Override
 	protected void onBackToInitialUIState()

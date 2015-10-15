@@ -7,6 +7,7 @@ import android.app.FragmentManager;
 import android.app.FragmentTransaction;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
 import android.os.Bundle;
 import android.support.v4.view.PagerAdapter;
 import android.view.View;
@@ -238,11 +239,14 @@ public class OPGalleryActivity extends GalleryActivity
 				break;
 				
 			case FILMSTRIP:
+			{
+				boolean rotateActivity = (this.get(PROP_CONFIG_ORIENTATION) != Configuration.ORIENTATION_PORTRAIT);
 				this.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
-				this.closeFilmstrip(animate);
+				this.closeFilmstrip(animate && !rotateActivity);
 				if(mode == Mode.ENTRY)
-					this.closeGridView(animate);
+					this.closeGridView(animate && !rotateActivity);
 				break;
+			}
 		}
 		
 		// complete
