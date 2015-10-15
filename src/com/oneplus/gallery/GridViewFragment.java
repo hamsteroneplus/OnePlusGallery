@@ -130,35 +130,42 @@ public class GridViewFragment extends GalleryFragment {
 		public ImageView typeIconView;
 		public TextView durationTextView;
 		public String mimeType;
-		public final BitmapPool.Callback smallThumbDecodeCallback = new BitmapPool.Callback()
+		public Handle lowResolutionThumbDecodeHandle;
+		public Handle highResolutionThumbDecodeHandle;
+		public boolean highThumbDecoded;
+		public final BitmapPool.Callback lowResolutionThumbDecodeCallback = new BitmapPool.Callback()
 		{
 			public void onBitmapDecoded(Handle handle, Uri contentUri, Bitmap bitmap) 
 			{
-				if(handle == smallThumbDecodeHandle && bitmap != null && !thumbDecoded)
+				if(handle == lowResolutionThumbDecodeHandle && bitmap != null && !highThumbDecoded)
 					thumbnailImageView.setImageBitmap(bitmap);
 			}
 			public void onBitmapDecoded(Handle handle, String filePath, Bitmap bitmap) 
 			{
-				if(handle == smallThumbDecodeHandle && bitmap != null && !thumbDecoded)
+				Media media = (Media)GridViewFragment.this.getGridViewItemAdapter().getItem(position);
+				String mediaFilePath = null;
+				if(media != null)
+					mediaFilePath = media.getFilePath();
+				if(filePath.equals(mediaFilePath) && bitmap != null && !highThumbDecoded) {
 					thumbnailImageView.setImageBitmap(bitmap);
+					GridViewFragment.this.removeLowResDecodingHandle(filePath);
+				}
 			}
 		};
-		public Handle smallThumbDecodeHandle;
-		public final ThumbnailImageManager.DecodingCallback thumbDecodeCallback = new ThumbnailImageManager.DecodingCallback()
+		public final ThumbnailImageManager.DecodingCallback hightResolutionThumbDecodeCallback = new ThumbnailImageManager.DecodingCallback()
 		{
 			@Override
 			public void onThumbnailImageDecoded(Handle handle, Media media, Bitmap thumb)
 			{
-				if(handle == thumbDecodeHandle && thumb != null)
+				if(GridViewFragment.this.getGridViewItemAdapter().getItem(position) == media && thumb != null)
 				{
-					thumbDecoded = true;
+					highThumbDecoded = true;
 					thumbnailImageView.setImageBitmap(thumb);
-					GridViewFragment.this.removeDecodingHandle(media.getFilePath());
+					GridViewFragment.this.removeDecodingHandle(media);
 				}
 			}
 		};
-		public Handle thumbDecodeHandle;
-		public boolean thumbDecoded;
+		
 		
 		public GridViewItemHolder(View itemView)
 		{
@@ -469,10 +476,12 @@ public class GridViewFragment extends GalleryFragment {
 		Log.d(TAG, "onMediaAdded mediaList");
 		
 		if(m_MediaList != null && !m_MediaList.isEmpty()) {
+			this.getHandler().removeCallbacks(emptyViewRunnable);
 			if(m_EmptyMediaView != null)
 				m_EmptyMediaView.setVisibility(View.GONE);
-			if(m_GridView != null)
+			if(m_GridView != null) {
 				m_GridView.setVisibility(View.VISIBLE);
+			}
 		}
 		
 		// refresh items
@@ -909,22 +918,19 @@ public class GridViewFragment extends GalleryFragment {
 		});
 		
 		
-		this.getHandler().postDelayed(new Runnable() {
-			
-			@Override
-			public void run() {
-				if(m_MediaList != null && !m_MediaList.isEmpty()) {
-					m_GridView.setVisibility(View.VISIBLE);
-				}else
-					m_EmptyMediaView.setVisibility(View.VISIBLE);
-			}
-		}, 100);
+		this.getHandler().postDelayed(emptyViewRunnable, 200);
 		m_PreDecodeBitmapRunnable = new PreDecodeBitmapRunnable(this);
 		m_GridView.setAdapter(m_GridViewItemAdapter);
 		return view;
 	}//end of onCreateView
 	
-
+	private Runnable emptyViewRunnable = new Runnable() {
+		
+		@Override
+		public void run() {
+			m_EmptyMediaView.setVisibility(View.VISIBLE);
+		}
+	};
 	protected void multipleSelect(int action, GridView gridview, int position) {
 		switch (action) 
 		{
@@ -1089,9 +1095,15 @@ public class GridViewFragment extends GalleryFragment {
 	}
 
 	
-	private void removeDecodingHandle(String mediaFilePath) {
+	private void removeDecodingHandle(Media media) {
 		if(m_GridViewItemAdapter != null) {
-			m_GridViewItemAdapter.removeDecodingHandle(mediaFilePath);;
+			m_GridViewItemAdapter.removeDecodingHandle(media);
+		}
+	}
+	
+	private void removeLowResDecodingHandle(String filePath) {
+		if(m_GridViewItemAdapter != null) {
+			m_GridViewItemAdapter.removeLowResDecodingHandle(filePath);
 		}
 	}
 	
@@ -1099,21 +1111,30 @@ public class GridViewFragment extends GalleryFragment {
 	private class GridViewItemAdapter extends BaseAdapter {
 		
 		// Private fields
+		private int visibleItemPosition = -1;
 		private Context m_Context = null;
 		private LayoutInflater m_inflater;
 //		private HashSet<Handle> m_DecodeHandleSet = new HashSet<>();
-		private HashMap<String, Handle> m_DecodeHandleMap = new HashMap<>();
+		private HashMap<Media, Handle> m_HighResolutionDecodeHandleMap = new HashMap<>();
+		private HashMap<String, Handle> m_LowResolutionDecodeHandleMap = new HashMap<>();
 		public GridViewItemAdapter(Context context) {
 			m_Context = context;
 			m_inflater = (LayoutInflater) m_Context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
 		}
-
+		
+		
 		public void cancelAllBitmapDecodeTasks() {
-			if(m_DecodeHandleMap != null && !m_DecodeHandleMap.isEmpty()) {
-				for(Handle handle : m_DecodeHandleMap.values()) {
+			if(m_HighResolutionDecodeHandleMap != null && !m_HighResolutionDecodeHandleMap.isEmpty()) {
+				for(Handle handle : m_HighResolutionDecodeHandleMap.values()) {
 					Handle.close(handle);
 				}
-				m_DecodeHandleMap.clear();
+				m_HighResolutionDecodeHandleMap.clear();
+			}
+			if(m_LowResolutionDecodeHandleMap != null && !m_LowResolutionDecodeHandleMap.isEmpty()) {
+				for(Handle handle : m_LowResolutionDecodeHandleMap.values()) {
+					Handle.close(handle);
+				}
+				m_LowResolutionDecodeHandleMap.clear();
 			}
 		}
 		
@@ -1149,6 +1170,8 @@ public class GridViewFragment extends GalleryFragment {
 
 		// create a new ImageView for each item referenced by the Adapter
 		public View getView(int position, View convertView, ViewGroup parent) {
+			if(visibleItemPosition == -1)
+				visibleItemPosition = m_GridView.getFirstVisiblePosition();
 			final GridViewItemHolder holder; 
 			if (convertView == null) {
 				// holder initialize
@@ -1171,18 +1194,29 @@ public class GridViewFragment extends GalleryFragment {
 			}
 			
 			
-			holder.thumbDecoded = false;
+			holder.highThumbDecoded = false;
 			if(m_MediaList != null) {
 				if(holder.position == 0 && m_IsCameraRoll) {
 					// Set item thumbnail
 					holder.thumbnailImageView.setImageResource(R.drawable.camera);
+					holder.thumbnailImageView.setBackground(m_GreySquare);
 					holder.thumbnailImageView.setScaleType(ScaleType.CENTER);
 					holder.contentUri = null;
-					holder.smallThumbDecodeHandle = null;
-					holder.thumbDecodeHandle = null;
+					holder.lowResolutionThumbDecodeHandle = null;
+					holder.highResolutionThumbDecodeHandle = null;
 				}else {
+					
+					// Temp workaround for fixing gridview flicker.
+					// 1. lowThumb image is quickly set into thumbnailImageView 
+					// 2. onMediaAdded called notifyDataSetChanged, greySquare is set into thumbnailImageView
+					// 3. and finally the hightThumb image is setted
+					// between step 1 and step2 is why the flicker happened
+					// so when the first getView entered, keep the firstVisibleItem position,  
+					// if the visibleItemPosition != m_GridView.getFirstVisiblePosition() means gridview is scrolling
+					if(m_GridView != null && visibleItemPosition != m_GridView.getFirstVisiblePosition())
+						holder.thumbnailImageView.setImageDrawable(m_GreySquare);
+					
 					holder.thumbnailImageView.setScaleType(ScaleType.CENTER_CROP);
-					holder.thumbnailImageView.setImageDrawable(m_GreySquare);
 					// -1 for the first one for CameraIcon to start camera activity
 					Media media = m_MediaList.get(m_IsCameraRoll ? position - 1 : position);
 					String filePath = media.getFilePath();
@@ -1190,17 +1224,16 @@ public class GridViewFragment extends GalleryFragment {
 					holder.mimeType = media.getMimeType();
 					if(filePath != null)
 					{
-						holder.smallThumbDecodeHandle = m_SmallBitmapPool.decode(media.getFilePath(), m_GridviewItemWidth, m_GridviewItemHeight, BitmapPool.FLAG_ASYNC|BitmapPool.FLAG_URGENT, holder.smallThumbDecodeCallback, GridViewFragment.this.getHandler());
+						holder.lowResolutionThumbDecodeHandle = m_SmallBitmapPool.decode(media.getFilePath(), m_GridviewItemWidth, m_GridviewItemHeight, BitmapPool.FLAG_URGENT/*|BitmapPool.FLAG_ASYNC*/ , holder.lowResolutionThumbDecodeCallback, GridViewFragment.this.getHandler());
 					}
 					else
 					{
 						int mediaType = (media instanceof VideoMedia ? BitmapPool.MEDIA_TYPE_VIDEO : BitmapPool.MEDIA_TYPE_PHOTO);
-						holder.smallThumbDecodeHandle = m_SmallBitmapPool.decode(getActivity(), holder.contentUri, mediaType, m_GridviewItemWidth, m_GridviewItemHeight, BitmapPool.FLAG_ASYNC|BitmapPool.FLAG_URGENT, holder.smallThumbDecodeCallback, GridViewFragment.this.getHandler());
+						holder.lowResolutionThumbDecodeHandle = m_SmallBitmapPool.decode(getActivity(), holder.contentUri, mediaType, m_GridviewItemWidth, m_GridviewItemHeight, BitmapPool.FLAG_URGENT/*|BitmapPool.FLAG_ASYNC*/, holder.lowResolutionThumbDecodeCallback, GridViewFragment.this.getHandler());
 					}
-					holder.thumbDecodeHandle = ThumbnailImageManager.decodeSmallThumbnailImage(media, ThumbnailImageManager.FLAG_URGENT|ThumbnailImageManager.FLAG_ASYNC, holder.thumbDecodeCallback, GridViewFragment.this.getHandler());
-					
-					m_DecodeHandleMap.put(filePath, holder.smallThumbDecodeHandle);
-					m_DecodeHandleMap.put(filePath, holder.thumbDecodeHandle);
+					holder.highResolutionThumbDecodeHandle = ThumbnailImageManager.decodeSmallThumbnailImage(media, ThumbnailImageManager.FLAG_URGENT, holder.hightResolutionThumbDecodeCallback, GridViewFragment.this.getHandler());
+					m_LowResolutionDecodeHandleMap.put(filePath, holder.lowResolutionThumbDecodeHandle);
+					m_HighResolutionDecodeHandleMap.put(media, holder.highResolutionThumbDecodeHandle);
 					
 					if(media instanceof VideoMedia) {
 						((ViewGroup)holder.typeIconView.getParent()).setVisibility(View.VISIBLE);
@@ -1218,9 +1251,14 @@ public class GridViewFragment extends GalleryFragment {
 			return convertView;
 		}
 		
-		public void removeDecodingHandle(String mediaFilePath) {
-			if(m_DecodeHandleMap != null)
-				m_DecodeHandleMap.remove(mediaFilePath);
+		public void removeDecodingHandle(Media media) {
+			if(m_HighResolutionDecodeHandleMap != null)
+				m_HighResolutionDecodeHandleMap.remove(media);
+		}
+		
+		public void removeLowResDecodingHandle(String filePath) {
+			if(m_LowResolutionDecodeHandleMap != null)
+				m_LowResolutionDecodeHandleMap.remove(filePath);
 		}
 	}
 
