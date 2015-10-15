@@ -12,15 +12,15 @@
     <RelativeLayout
         android:id="@+id/filmstrip_header_container"
         android:layout_width="match_parent"
-        android:layout_height="@dimen/filmstrip_header_container_height"
+        android:layout_height="?android:attr/actionBarSize"
         android:gravity="center_vertical"
         android:background="@android:color/transparent"
         android:visibility="gone" >
         
         <ImageButton
             android:id="@+id/filmstrip_header_button_back"
-            android:layout_width="@dimen/filmstrip_header_container_height"
-            android:layout_height="@dimen/filmstrip_header_container_height"
+            android:layout_width="?android:attr/actionBarSize"
+            android:layout_height="?android:attr/actionBarSize"
             android:layout_marginStart="@dimen/filmstrip_header_item_margin"
             android:layout_alignParentStart="true"
             android:padding="@dimen/filmstrip_header_item_padding"
@@ -29,8 +29,8 @@
         
         <ImageButton
             android:id="@+id/filmstrip_header_button_details"
-            android:layout_width="@dimen/filmstrip_header_container_height"
-            android:layout_height="@dimen/filmstrip_header_container_height"
+            android:layout_width="?android:attr/actionBarSize"
+            android:layout_height="?android:attr/actionBarSize"
             android:layout_marginEnd="@dimen/filmstrip_header_item_margin"
             android:layout_alignParentEnd="true"
             android:padding="@dimen/filmstrip_header_item_padding"
@@ -43,7 +43,7 @@
     <LinearLayout
         android:id="@+id/filmstrip_footer_container"
         android:layout_width="match_parent"
-        android:layout_height="@dimen/filmstrip_footer_container_height"
+        android:layout_height="?android:attr/actionBarSize"
         android:layout_alignParentBottom="true"
         android:orientation="horizontal"
         android:gravity="center"
@@ -58,8 +58,8 @@
             
             <ImageButton
 	            android:id="@+id/filmstrip_footer_button_share"
-	            android:layout_width="@dimen/filmstrip_footer_container_height"
-	            android:layout_height="@dimen/filmstrip_footer_container_height"
+	            android:layout_width="?android:attr/actionBarSize"
+	            android:layout_height="?android:attr/actionBarSize"
 	            android:padding="@dimen/filmstrip_footer_item_padding"
 	            android:background="@drawable/ripple"
 	            android:src="@drawable/button_share_normal" />
@@ -74,8 +74,8 @@
             
             <ImageButton
 	            android:id="@+id/filmstrip_footer_button_collect"
-	            android:layout_width="@dimen/filmstrip_footer_container_height"
-	            android:layout_height="@dimen/filmstrip_footer_container_height"
+	            android:layout_width="?android:attr/actionBarSize"
+	            android:layout_height="?android:attr/actionBarSize"
 	            android:padding="@dimen/filmstrip_footer_item_padding"
 	            android:background="@drawable/ripple"
 	            android:src="@drawable/state_button_collect" />
@@ -91,8 +91,8 @@
             
             <ImageButton
 	            android:id="@+id/filmstrip_footer_button_editor"
-	            android:layout_width="@dimen/filmstrip_footer_container_height"
-	            android:layout_height="@dimen/filmstrip_footer_container_height"
+	            android:layout_width="?android:attr/actionBarSize"
+	            android:layout_height="?android:attr/actionBarSize"
 	            android:padding="@dimen/filmstrip_footer_item_padding"
 	            android:background="@drawable/ripple"
 	            android:src="@drawable/button_editor_normal" />
@@ -107,8 +107,8 @@
             
             <ImageButton
 	            android:id="@+id/filmstrip_footer_button_delete"
-	            android:layout_width="@dimen/filmstrip_footer_container_height"
-	            android:layout_height="@dimen/filmstrip_footer_container_height"
+	            android:layout_width="?android:attr/actionBarSize"
+	            android:layout_height="?android:attr/actionBarSize"
 	            android:padding="@dimen/filmstrip_footer_item_padding"
 	            android:background="@drawable/ripple"
 	            android:src="@drawable/button_delete_normal" />

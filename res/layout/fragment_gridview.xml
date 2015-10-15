@@ -7,7 +7,7 @@
     <Toolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
-        android:layout_height="@dimen/action_bar_height"
+        android:layout_height="?android:attr/actionBarSize"
         android:layout_alignParentTop="true"
         android:visibility="gone"
         />
