@@ -233,19 +233,19 @@ public class MediaSetListFragment extends GalleryFragment
 		{
 			for(int i = m_MediaSetList.size() - 1 ; i >= 0 ; --i)
 			{
-				final MediaSet mediaSet = m_MediaSetList.get(i);
+				// load cache into memory cache
+				MediaSet mediaSet = m_MediaSetList.get(i);
 				LoadCacheImageTask task = new LoadCacheImageTask(CoverImageInfo.getMediaSetImageKey(mediaSet), null, getHandler(), new CacheImageLoadedCallback() {
 					
 					@Override
-					public void onCacheImageLoaded(Bitmap cachedImage) {
-						if(cachedImage == null)
-						{
-							m_MediaSetDecodeQueue.add(mediaSet);
-							createMediaListCoverImageFromQueue();		
-						}			
+					public void onCacheImageLoaded(Bitmap cachedImage) {		
 					}
 				});
 				m_CacheImageLoaderExecutor.execute(task);
+				
+				// decode cover image anyway
+				m_MediaSetDecodeQueue.add(mediaSet);
+				createMediaListCoverImageFromQueue();	
 			}
 		}
 	}
