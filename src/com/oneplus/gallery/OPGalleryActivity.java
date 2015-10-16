@@ -73,6 +73,7 @@ public class OPGalleryActivity extends GalleryActivity
 	private MediaSet m_DefaultMediaSet;
 	private View m_EntryPageContainer;
 	private ViewGroup m_EntryPageTabContainer;
+	private View m_EntryPageTabs;
 	private ViewPager m_EntryViewPager;
 	private View m_FilmstripContainer;
 	private FilmstripFragment m_FilmstripFragment;
@@ -516,12 +517,12 @@ public class OPGalleryActivity extends GalleryActivity
 	{
 		if(isSelectionMode)
 		{
-			m_EntryPageTabContainer.setVisibility(View.GONE);
+			m_EntryPageTabs.setVisibility(View.GONE);
 			m_EntryViewPager.lockPosition();
 		}
 		else
 		{
-			m_EntryPageTabContainer.setVisibility(View.VISIBLE);
+			m_EntryPageTabs.setVisibility(View.VISIBLE);
 			m_EntryViewPager.unlockPosition();
 		}
 	}
@@ -770,12 +771,12 @@ public class OPGalleryActivity extends GalleryActivity
 	{
 		if(isSelectionMode)
 		{
-			m_EntryPageTabContainer.setVisibility(View.GONE);
+			m_EntryPageTabs.setVisibility(View.GONE);
 			m_EntryViewPager.lockPosition();
 		}
 		else
 		{
-			m_EntryPageTabContainer.setVisibility(View.VISIBLE);
+			m_EntryPageTabs.setVisibility(View.VISIBLE);
 			m_EntryViewPager.unlockPosition();
 		}
 	}
@@ -1065,7 +1066,8 @@ public class OPGalleryActivity extends GalleryActivity
 		
 		// find views
 		m_EntryPageContainer = this.findViewById(R.id.entry_page_container);
-		m_EntryPageTabContainer = (ViewGroup)m_EntryPageContainer.findViewById(R.id.entry_page_tab_container);
+		m_EntryPageTabs = this.findViewById(R.id.entry_page_tabs);
+		m_EntryPageTabContainer = (ViewGroup)m_EntryPageTabs.findViewById(R.id.entry_page_tab_container);
 		m_GridViewContainer = this.findViewById(R.id.grid_view_container);
 		
 		// setup margins

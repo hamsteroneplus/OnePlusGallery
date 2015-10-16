@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 	
+	<!-- Action bar -->
+	<color name="action_bar_background">#FF121212</color>
+    
 	<!-- Entry page -->
 	<color name="entry_page_tab_background">#121212</color>
 	<color name="entry_page_tab_text">#7FFFFFFF</color>
@@ -12,6 +15,11 @@
 	<!-- Gallery seekbar -->
 	<color name="gallery_seek_bar_primary">#FF23A3F5</color>
 	<color name="gallery_seek_bar_background">#FFDFDFDF</color>
+	
+	<!-- Grid view -->
+	<color name="gridview_no_photo_icon_background">#1F2124</color>
+	<color name="gridview_no_photo_icon_background_inner">#2C2E31</color>
+	<color name="gridview_no_photo_text">#89FFFFFF</color>
 	
 	<!-- Media set list item -->
 	<color name="media_set_list_item_background">#FF16181B</color>

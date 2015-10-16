@@ -10,6 +10,7 @@
         android:layout_height="?android:attr/actionBarSize"
         android:layout_alignParentTop="true"
         android:visibility="gone"
+        style="@style/Widget.ActionBar"
         />
     
     <!-- Device has Photos -->
@@ -18,42 +19,44 @@
         android:layout_below="@id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:columnWidth="89dp"
+        android:columnWidth="@dimen/gridview_item_width"
         android:stretchMode="spacingWidth"
-        android:horizontalSpacing="1dp"
-        android:verticalSpacing="1dp"
+        android:horizontalSpacing="@dimen/gridview_item_spacing_horizontal"
+        android:verticalSpacing="@dimen/gridview_item_spacing_vertical"
         android:background="@null" 
         android:visibility="gone"/>
     
     <!-- Device has no Photos -->
-	<RelativeLayout 
+	<LinearLayout 
 	    android:id="@+id/no_photo"
 	    android:layout_width="wrap_content"
 	    android:layout_height="wrap_content"
+	    android:layout_centerHorizontal="true"
+	    android:layout_alignParentTop="true"
+	    android:layout_marginTop="@dimen/gridview_no_photo_icon_margin_top"
+	    android:orientation="vertical"
+	    android:gravity="center"
 	    android:visibility="gone" >
 	    
 	    <!-- Icon -->
 	    <ImageView
 	        android:id="@+id/take_picture_image"
-	        android:layout_width="160dp"
-	        android:layout_height="160dp"
-	        android:layout_alignParentTop="true"
-	        android:layout_centerHorizontal="true"
-	        android:layout_marginTop="210dp"
-	        android:scaleType="centerCrop"
+	        android:layout_width="@dimen/gridview_no_photo_icon_background_width"
+	        android:layout_height="@dimen/gridview_no_photo_icon_background_height"
+	        android:background="@drawable/gridview_no_photo_icon_background"
+	        android:scaleType="center"
 	        android:src="@drawable/camera_big"/>
 	    
 	    <!-- Text -->
 	    <TextView android:id="@+id/take_picture_text"
-	        android:layout_below="@id/take_picture_image"
-	        android:layout_marginTop="24dp"
+	        android:layout_marginTop="@dimen/gridview_no_photo_text_margin_top"
 	        android:layout_width="match_parent"
 	        android:layout_height="wrap_content"
 	        android:singleLine="true"
-	        android:layout_centerHorizontal="true"
 	        android:gravity="center"
-	        android:textSize="16sp"
+	        android:textColor="@color/gridview_no_photo_text"
+	        android:textSize="@dimen/gridview_no_photo_text_size"
 	        android:text="@string/fragment_launch_camera"
 	        />
-	</RelativeLayout>
+	</LinearLayout>
 </RelativeLayout>

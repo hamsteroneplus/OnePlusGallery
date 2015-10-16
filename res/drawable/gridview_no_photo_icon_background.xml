@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+	
+	<item>
+		<shape android:shape="oval">
+			<solid android:color="@color/gridview_no_photo_icon_background"/>
+		</shape>
+	</item>
+	
+	<item
+		android:left="@dimen/gridview_no_photo_icon_background_margin_inner"
+		android:top="@dimen/gridview_no_photo_icon_background_margin_inner"
+		android:right="@dimen/gridview_no_photo_icon_background_margin_inner"
+		android:bottom="@dimen/gridview_no_photo_icon_background_margin_inner">
+		<shape android:shape="oval">
+			<solid android:color="@color/gridview_no_photo_icon_background_inner"/>
+		</shape>
+	</item>
+	
+</layer-list>

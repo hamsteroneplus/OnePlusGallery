@@ -499,7 +499,7 @@ public class GridViewFragment extends GalleryFragment {
 	{
 		// hide grid view
 		if(m_MediaList != null && m_MediaList.isEmpty()) {
-			if(m_EmptyMediaView != null)
+			if(m_IsCameraRoll && m_EmptyMediaView != null)
 				m_EmptyMediaView.setVisibility(View.VISIBLE);
 			if(m_GridView != null)
 				m_GridView.setVisibility(View.GONE);
@@ -922,8 +922,10 @@ public class GridViewFragment extends GalleryFragment {
 			}
 		});
 		
-		
-		this.getHandler().postDelayed(emptyViewRunnable, 200);
+		if(m_MediaList == null || m_MediaList.isEmpty())
+			this.getHandler().postDelayed(emptyViewRunnable, 200);
+		else
+			m_GridView.setVisibility(View.VISIBLE);
 		m_PreDecodeBitmapRunnable = new PreDecodeBitmapRunnable(this);
 		m_GridView.setAdapter(m_GridViewItemAdapter);
 		return view;
@@ -933,7 +935,8 @@ public class GridViewFragment extends GalleryFragment {
 		
 		@Override
 		public void run() {
-			m_EmptyMediaView.setVisibility(View.VISIBLE);
+			if(m_IsCameraRoll)
+				m_EmptyMediaView.setVisibility(View.VISIBLE);
 		}
 	};
 	protected void multipleSelect(int action, GridView gridview, int position) {
