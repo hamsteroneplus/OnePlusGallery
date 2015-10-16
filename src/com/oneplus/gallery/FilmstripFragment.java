@@ -36,6 +36,7 @@ import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.PropertySource;
 import com.oneplus.base.ScreenSize;
+import com.oneplus.drawable.ProgressiveBitmapDrawable;
 import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaList;
 import com.oneplus.gallery.media.MediaManager;
@@ -72,7 +73,6 @@ public class FilmstripFragment extends GalleryFragment
 	
 	
 	// Constants
-	private final static BitmapPool BITMAP_POOL_HIGH_RESOLUTION = new BitmapPool("FilmstripHighResBitmapPool", 64 << 20, 16 << 20, Bitmap.Config.ARGB_8888, 2, 0);
 	private final static BitmapPool BITMAP_POOL_MEDIUM_RESOLUTION = new BitmapPool("FilmstripMediumResBitmapPool", 64 << 20, 16 << 20, Bitmap.Config.ARGB_8888, 3, 0);
 	private static final long DURATION_ANIMATION = 150;
 	private static final long DELAY_HIDE_TOOL_BAR_TIME_MILLIS = 3000;
@@ -122,16 +122,7 @@ public class FilmstripFragment extends GalleryFragment
 	private FilmstripView m_FilmstripView;
 	private View m_FooterContainer;
 	private View m_HeaderContainer;
-	private Handle m_HighResBitmapActiveHandle;
-	private final BitmapPool.Callback m_HighResBitmapDecodeCallback = new BitmapPool.Callback() 
-	{
-		@Override
-		public void onBitmapDecoded(Handle handle, String filePath, Bitmap bitmap) 
-		{
-			FilmstripFragment.this.onHighResImageDecoded(handle, filePath, bitmap);
-		}
-	};
-	private Handle m_HighResBitmapDecodeHandle;
+	private ProgressiveBitmapDrawable m_HighResBitmapDrawable;
 	private boolean m_IsActionEditSupported;
 	private boolean m_IsInstanceStateSaved;
 	private boolean m_IsOverScaledDown;
@@ -304,6 +295,15 @@ public class FilmstripFragment extends GalleryFragment
 			return m_Media;
 		}
 		
+		// Get position
+		public int getPosition()
+		{
+			Object tag = m_ScaleImageView.getTag();
+			if(tag instanceof Integer)
+				return (Integer)tag;
+			return -1;
+		}
+		
 		// Check is stretch image
 		private boolean isStretchedImage()
 		{
@@ -404,12 +404,12 @@ public class FilmstripFragment extends GalleryFragment
 	
 	
 	// Cancel decoding high resolution image
-	private void cancelDecodingHighResolutionImage(Media media)
+	private void cancelDecodingHighResolutionImage()
 	{
-		if(Handle.isValid(m_HighResBitmapDecodeHandle))
+		if(m_HighResBitmapDrawable != null)
 		{
-			Log.v(TAG, "cancelDecodingHighResolutionImage() - Cancel decoding high-resolution bitmap : ", media.getFilePath());
-			m_HighResBitmapDecodeHandle = Handle.close(m_HighResBitmapDecodeHandle);
+			m_HighResBitmapDrawable.setVisible(false, false);
+			m_HighResBitmapDrawable = null;
 		}
 	}
 	
@@ -431,7 +431,7 @@ public class FilmstripFragment extends GalleryFragment
 			info.decodeHandle = Handle.close(info.decodeHandle);
 			m_ReusedBitmapDecodeInfos.add(info);
 		}
-		m_HighResBitmapDecodeHandle = Handle.close(m_HighResBitmapDecodeHandle);
+		this.cancelDecodingHighResolutionImage();
 		m_LowResBitmapDecodeInfos.clear();
 		m_ReusedBitmapDecodeInfos.clear();
 	}
@@ -613,15 +613,6 @@ public class FilmstripFragment extends GalleryFragment
 			return drawable;
 		}
 		return null;
-	}
-	
-	
-	// Start decode high resolution image
-	private void decodeHighResolutionImage(Media media)
-	{
-		Log.v(TAG, "decodeHighResolutionImage() - Start decoding high-resolution bitmap : ", media.getFilePath());
-		m_HighResBitmapDecodeHandle = Handle.close(m_HighResBitmapDecodeHandle);
-		m_HighResBitmapDecodeHandle = BITMAP_POOL_HIGH_RESOLUTION.decode(media.getFilePath(), 4096, 4096, BitmapPool.FLAG_ASYNC | BitmapPool.FLAG_URGENT, m_HighResBitmapDecodeCallback, this.getHandler());
 	}
 	
 	
@@ -996,51 +987,6 @@ public class FilmstripFragment extends GalleryFragment
 	}
 	
 	
-	// Called when high-resolution image decoded.
-	private void onHighResImageDecoded(Handle handle, String filePath, Bitmap bitmap)
-	{
-		// check state
-		if(m_HighResBitmapDecodeHandle != handle)
-		{
-			Log.v(TAG, "onHighResImageDecoded() - Drop bitmap : ", filePath);
-			return;
-		}
-		
-		// update state
-		m_HighResBitmapDecodeHandle = null;
-		if(bitmap == null)
-		{
-			Log.w(TAG, "onHighResImageDecoded() - Fail to decode bitmap");
-			return;
-		}
-		
-		// update display
-		boolean isItemFound = false;
-		for(int i = m_FilmstripItems.size() - 1 ; i >= 0 ; --i)
-		{
-			Object obj = m_FilmstripItems.valueAt(i);
-			if(!(obj instanceof FilmstripItem))
-				continue;
-			FilmstripItem filmstripItem = (FilmstripItem)obj;
-			if(filmstripItem != null && filmstripItem.getMedia() != null && filePath.equals(filmstripItem.getMedia().getFilePath()))
-			{
-				if(filmstripItem.getImageBoundsType() != BoundsType.FIT_SHORT_SIDE)
-				{
-					filmstripItem.setImageDecodeState(ImageDecodeState.LARGE_IMAGE_DECODED);
-					filmstripItem.setImageDrawable(this.createDrawableForDisplay(bitmap));
-					Log.v(TAG, "onHighResImageDecoded() - Update high-resolution bitmap : ", filePath);
-				}
-				else
-					Log.v(TAG, "onHighResImageDecoded() - High-resolution bitmap is not needed : ", filePath);
-				isItemFound = true;
-				break;
-			}
-		}
-		if(!isItemFound)
-			Log.v(TAG, "onHighResImageDecoded() - Item not found : ", filePath);
-	}
-	
-	
 	// Call when low resolution image decoded
 	private void onLowResImageDecoded(Handle handle, Media media, Bitmap bitmap)
 	{
@@ -1112,6 +1058,7 @@ public class FilmstripFragment extends GalleryFragment
 
 		// update display
 		boolean isItemFound = false;
+		boolean isCurrentItem = false;
 		for(int i = m_FilmstripItems.size() - 1 ; i >= 0 ; --i)
 		{
 			Object obj = m_FilmstripItems.valueAt(i);
@@ -1127,11 +1074,16 @@ public class FilmstripFragment extends GalleryFragment
 				if(ENABLE_DECODE_LOG)
 					Log.v(TAG, "onMediumResImageDecoded() - Update medium-resolution bitmap : ", filePath);
 				isItemFound = true;
+				isCurrentItem = (filmstripItem.getPosition() == m_CurrentMediaIndex);
 				break;
 			}
 		}
 		if(!isItemFound && ENABLE_DECODE_LOG)
 			Log.v(TAG, "onMediumResImageDecoded() - Item not found : ", filePath);
+		
+		// update thumbnail image in high resolution bitmap drawable
+		if(isCurrentItem && m_HighResBitmapDrawable != null)
+			m_HighResBitmapDrawable.setThumbnailBitmap(bitmap);
 	}
 	
 	
@@ -1285,7 +1237,6 @@ public class FilmstripFragment extends GalleryFragment
 		Log.v(TAG, "onResume()");
 		
 		// active bitmap pools
-		m_HighResBitmapActiveHandle = BITMAP_POOL_HIGH_RESOLUTION.activate();
 		m_MediumResBitmapActiveHandle = BITMAP_POOL_MEDIUM_RESOLUTION.activate();
 		
 		// hide tool bar delay
@@ -1348,7 +1299,14 @@ public class FilmstripFragment extends GalleryFragment
 		{
 			// load high-resolution bitmap
 			Media media = m_MediaList.get(position);
-			this.decodeHighResolutionImage(media);
+			if(m_HighResBitmapDrawable == null)
+			{
+				Bitmap thumb = BITMAP_POOL_MEDIUM_RESOLUTION.getCachedBitmap(media.getFilePath());
+				if(thumb == null)
+					thumb = ThumbnailImageManager.getCachedSmallThumbnailImage(media);
+				m_HighResBitmapDrawable = new ProgressiveBitmapDrawable(media.getFilePath(), Bitmap.Config.ARGB_8888, thumb);
+			}
+			view.setImageDrawable(m_HighResBitmapDrawable);
 			
 			// reset over scale state
 			m_IsOverScaledDown = false;
@@ -1357,7 +1315,7 @@ public class FilmstripFragment extends GalleryFragment
 		{			
 			// cancel decoding high-resolution bitmap
 			Media media = m_MediaList.get(position);
-			this.cancelDecodingHighResolutionImage(media);
+			this.cancelDecodingHighResolutionImage();
 			
 			// show thumbnail image
 			FilmstripItem filmstripItem = m_FilmstripItems.get(position);
@@ -1487,7 +1445,6 @@ public class FilmstripFragment extends GalleryFragment
 		this.cancelDecodingImages();
 		
 		// deactivate bitmap pools
-		m_HighResBitmapActiveHandle = Handle.close(m_HighResBitmapActiveHandle);
 		m_MediumResBitmapActiveHandle = Handle.close(m_MediumResBitmapActiveHandle);
 		
 		// reset state
@@ -1609,6 +1566,9 @@ public class FilmstripFragment extends GalleryFragment
 		
 		// update collect button selection
 		this.updateCollectButtonSelection();
+		
+		// cancel decoding high resolution bitmap
+		this.cancelDecodingHighResolutionImage();
 		
 		// complete
 		return this.notifyPropertyChanged(PROP_CURRENT_MEDIA_INDEX, oldValue, value);

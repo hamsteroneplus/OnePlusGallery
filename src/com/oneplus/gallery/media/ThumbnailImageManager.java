@@ -505,6 +505,22 @@ public final class ThumbnailImageManager
 	
 	
 	/**
+	 * Get cached small thumbnail image directly.
+	 * @param media Media.
+	 * @return Small thumbnail image, or Null if there is no cached image in memory.
+	 */
+	public static Bitmap getCachedSmallThumbnailImage(Media media)
+	{
+		if(media == null)
+			return null;
+		Cache<ImageCacheKey, Bitmap> cache = CacheManager.getSmallThumbnailImageCache();
+		if(cache == null)
+			return null;
+		return cache.get(new ImageCacheKey(media), null, 0);
+	}
+	
+	
+	/**
 	 * Initialize thumbnail image manager in current thread.
 	 */
 	public static void initialize()
