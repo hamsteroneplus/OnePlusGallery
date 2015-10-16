@@ -118,7 +118,7 @@ public class VideoPlayerActivity extends GalleryActivity
 		this.pause();
 
 		// delete media
-		this.getGallery().deleteMedia(m_Media);
+		this.getGallery().deleteMedia(null, m_Media);
 	}
 	
 	

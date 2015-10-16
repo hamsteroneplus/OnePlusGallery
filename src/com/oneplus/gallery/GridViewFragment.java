@@ -16,6 +16,7 @@ import com.oneplus.base.Log;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaList;
+import com.oneplus.gallery.media.MediaSet;
 import com.oneplus.gallery.media.ThumbnailImageManager;
 import com.oneplus.gallery.media.VideoMedia;
 import com.oneplus.gallery.widget.GridView;
@@ -109,6 +110,10 @@ public class GridViewFragment extends GalleryFragment {
 	 * Property to get or set media list to display.
 	 */
 	public final static PropertyKey<MediaList> PROP_MEDIA_LIST = new PropertyKey<>("MediaList", MediaList.class, GridViewFragment.class, 0, null);
+	/**
+	 * Property to get or set media set which is related to media list.
+	 */
+	public final static PropertyKey<MediaSet> PROP_MEDIA_SET = new PropertyKey<>("MediaSet", MediaSet.class, GridViewFragment.class, 0, null);
 	/**
 	 * Read-only property to get number of selected media.
 	 */
@@ -878,7 +883,7 @@ public class GridViewFragment extends GalleryFragment {
 					break;
 				}
 				case R.id.toolbar_delete:
-					getGallery().deleteMedia(getSelectedMedia(), m_DeleteCallback);
+					getGallery().deleteMedia(get(PROP_MEDIA_SET), getSelectedMedia(), m_DeleteCallback);
 					break;
 				}
 				return false;

@@ -3,6 +3,8 @@ package com.oneplus.gallery.media;
 import java.io.File;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.Executor;
@@ -35,7 +37,7 @@ public final class ThumbnailImageManager
 	private static final String TAG = "ThumbnailImageManager";
 	private static final long IDLE_POOL_CAPACITY = (16 << 20);
 	private static final long THUMB_POOL_CAPACITY = (64 << 20);
-	private static final long MAX_CACHE_WAITING_TIME = 3000;
+	private static final long MAX_CACHE_WAITING_TIME = 1000;
 	private static final int MAX_FREE_DECODING_TASKS = 256;
 	private static final long DURATION_CLEAR_INVALID_THUMBS_DELAY = 1500;
 	private static final long DURATION_MAX_CLEAR_INVALID_THUMBS = 1000;
@@ -60,6 +62,7 @@ public final class ThumbnailImageManager
 	private static volatile Thread m_MainThread;
 	private static volatile Executor m_SmallThumbDecodeExecutor;
 	private static volatile BitmapPool m_SmallThumbDecoder;
+	private static volatile LinkedList<DecodingTask> m_SmallThumbDecodeQueue;
 	private static volatile int m_SmallThumbSize;
 	private static volatile Executor m_ThumbDecodeExecutor;
 	private static volatile BitmapPool m_ThumbPool;
@@ -81,6 +84,20 @@ public final class ThumbnailImageManager
 		{
 			if(m_SmallThumbDecodeExecutor != null)
 				m_SmallThumbDecodeExecutor.execute(m_ClearInvalidThumbsRunnable);
+		}
+	};
+	private static final Runnable m_DecodeSmallThumbRunnable = new Runnable()
+	{
+		@Override
+		public void run()
+		{
+			DecodingTask task;
+			synchronized(m_Lock)
+			{
+				task = m_SmallThumbDecodeQueue.pollFirst();
+			}
+			if(task != null)
+				task.run();
 		}
 	};
 	
@@ -105,18 +122,25 @@ public final class ThumbnailImageManager
 	{
 		// Fields.
 		private final DecodingTask decodingTask;
+		private final Collection<DecodingTask> decodingTaskQueue;
 		
 		// Constructor.
-		public DecodingHandle(DecodingTask task)
+		public DecodingHandle(Collection<DecodingTask> decodingTaskQueue, DecodingTask decodingTask)
 		{
 			super("DecodeThumbnailImage");
-			this.decodingTask = task;
+			this.decodingTaskQueue = decodingTaskQueue;
+			this.decodingTask = decodingTask;
 		}
 
 		// Close handle.
 		@Override
 		protected void onClose(int flags)
-		{}
+		{
+			synchronized(m_Lock)
+			{
+				this.decodingTaskQueue.remove(this.decodingTask);
+			}
+		}
 	}
 	
 	
@@ -422,8 +446,15 @@ public final class ThumbnailImageManager
 		task.targetHeight = m_SmallThumbSize;
 		task.targetWidth = m_SmallThumbSize;
 		
+		// create decoding queue
+		synchronized(m_Lock)
+		{
+			if(m_SmallThumbDecodeQueue == null)
+				m_SmallThumbDecodeQueue = new LinkedList<>();
+		}
+		
 		// create handle
-		DecodingHandle handle = new DecodingHandle(task);
+		DecodingHandle handle = new DecodingHandle(m_SmallThumbDecodeQueue, task);
 		task.decodingHandle = handle;
 		
 		// use cached bitmap
@@ -438,7 +469,14 @@ public final class ThumbnailImageManager
 		}
 		
 		// start decode
-		m_SmallThumbDecodeExecutor.execute(task);
+		synchronized(m_Lock)
+		{
+			if((flags & FLAG_URGENT) == 0)
+				m_SmallThumbDecodeQueue.addLast(task);
+			else
+				m_SmallThumbDecodeQueue.addFirst(task);
+		}
+		m_SmallThumbDecodeExecutor.execute(m_DecodeSmallThumbRunnable);
 		return handle;
 	}
 	

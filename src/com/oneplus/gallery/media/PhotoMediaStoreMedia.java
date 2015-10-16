@@ -43,9 +43,9 @@ class PhotoMediaStoreMedia extends MediaStoreMedia implements PhotoMedia
 	
 	
 	// Constructor.
-	PhotoMediaStoreMedia(MediaSet mediaSet, Cursor cursor, boolean isOriginal, Handler handler)
+	PhotoMediaStoreMedia(Cursor cursor, Handler handler)
 	{
-		super(mediaSet, getContentUri(cursor), cursor, isOriginal, handler);
+		super(getContentUri(cursor), cursor, handler);
 	}
 	
 	

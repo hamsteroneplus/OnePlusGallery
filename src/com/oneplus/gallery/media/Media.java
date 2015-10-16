@@ -73,13 +73,6 @@ public interface Media extends HandlerObject
 	
 	
 	/**
-	 * Get {@link MediaSet} which contains this media.
-	 * @return {@link MediaSet}.
-	 */
-	MediaSet getMediaSet();
-	
-	
-	/**
 	 * Get MIME type of this media.
 	 * @return MIME type.
 	 */
@@ -119,11 +112,4 @@ public interface Media extends HandlerObject
 	 * @return True if this is a favorite media.
 	 */
 	boolean isFavorite();
-	
-	
-	/**
-	 * Check whether this is original file or not.
-	 * @return True if this is original file.
-	 */
-	boolean isOriginal();
 }

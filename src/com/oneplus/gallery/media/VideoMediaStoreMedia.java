@@ -21,10 +21,10 @@ class VideoMediaStoreMedia extends MediaStoreMedia implements VideoMedia
 	
 	
 	// Constructor.
-	VideoMediaStoreMedia(MediaSet mediaSet, Cursor cursor, boolean isOriginal, Handler handler)
+	VideoMediaStoreMedia(Cursor cursor, Handler handler)
 	{
 		// call super
-		super(mediaSet, getContentUri(cursor), cursor, isOriginal, handler);
+		super(getContentUri(cursor), cursor, handler);
 		
 		// get duration
 		m_Duration = CursorUtils.getLong(cursor, VideoColumns.DURATION, 0);

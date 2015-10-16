@@ -23,7 +23,7 @@ public class CameraRollMediaSet extends MediaStoreMediaSet
 	public CameraRollMediaSet()
 	{
 		// call super
-		super(Type.SYSTEM, true);
+		super(Type.SYSTEM);
 		
 		// setup name
 		super.set(PROP_NAME, GalleryApplication.current().getString(R.string.media_set_name_camera_roll));

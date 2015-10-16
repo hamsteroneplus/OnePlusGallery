@@ -39,6 +39,7 @@ import com.oneplus.base.ScreenSize;
 import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaList;
 import com.oneplus.gallery.media.MediaManager;
+import com.oneplus.gallery.media.MediaSet;
 import com.oneplus.gallery.media.PhotoMedia;
 import com.oneplus.gallery.media.ThumbnailImageManager;
 import com.oneplus.gallery.media.VideoMedia;
@@ -64,6 +65,10 @@ public class FilmstripFragment extends GalleryFragment
 	 * Property to get or set media list to display.
 	 */
 	public final static PropertyKey<MediaList> PROP_MEDIA_LIST = new PropertyKey<>("MediaList", MediaList.class, FilmstripFragment.class, 0, null);
+	/**
+	 * Property to get or set media set which is related to media list.
+	 */
+	public final static PropertyKey<MediaSet> PROP_MEDIA_SET = new PropertyKey<>("MediaSet", MediaSet.class, FilmstripFragment.class, 0, null);
 	
 	
 	// Constants
@@ -682,7 +687,7 @@ public class FilmstripFragment extends GalleryFragment
 
 		// delete page
 		Media media = m_MediaList.get(position);
-		this.getGallery().deleteMedia(media, new Gallery.MediaDeletionCallback()
+		this.getGallery().deleteMedia(this.get(PROP_MEDIA_SET), media, new Gallery.MediaDeletionCallback()
 		{
 			@Override
 			public void onDeletionCompleted(Media media, boolean success)

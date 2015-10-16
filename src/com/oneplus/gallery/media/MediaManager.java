@@ -1,5 +1,6 @@
 package com.oneplus.gallery.media;
 
+import java.io.File;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,6 +24,7 @@ import com.oneplus.io.Path;
 
 import android.content.ContentProviderClient;
 import android.content.ContentResolver;
+import android.content.ContentUris;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
@@ -122,6 +124,7 @@ public class MediaManager
 	private static final int MSG_NOTIFY_CONTENT_CHANGED = 10041;
 	private static final int MSG_REGISTER_MEDIA_CHANGED_CB = 10050;
 	private static final int MSG_UNREGISTER_MEDIA_CHANGED_CB = 10051;
+	private static final int MSG_DELETE_MEDIA = 10060;
 	
 	
 	// Fields.
@@ -139,7 +142,7 @@ public class MediaManager
 	private static final Object m_Lock = new Object();
 	private static final List<MediaChangeCallbackHandle> m_MediaChangeCallbackHandles = new ArrayList<>();
 	private static Handle m_MediaContentChangeCBHandle;
-	private static final Map<Integer, Media> m_MediaTable = new HashMap<>();
+	private static final Map<Long, Media> m_MediaTable = new HashMap<>();
 	private static TempMediaSet m_TempMediaSet;
 	
 	
@@ -241,19 +244,19 @@ public class MediaManager
 		 * @param id Media ID.
 		 * @param media Instance of this media, may be Null.
 		 */
-		void onMediaCreated(int id, Media media);
+		void onMediaCreated(long id, Media media);
 		/**
 		 * Called when media deleted.
 		 * @param id Media ID.
 		 * @param media Instance of this media, may be Null.
 		 */
-		void onMediaDeleted(int id, Media media);
+		void onMediaDeleted(long id, Media media);
 		/**
 		 * Called when media updated.
 		 * @param id Media ID.
 		 * @param media Instance of this media, may be Null.
 		 */
-		void onMediaUpdated(int id, Media media);
+		void onMediaUpdated(long id, Media media);
 	}
 	
 	
@@ -327,7 +330,7 @@ public class MediaManager
 		}
 		
 		// Call onMediaCreated().
-		public void callOnMediaCreated(final int id, final Media media)
+		public void callOnMediaCreated(final long id, final Media media)
 		{
 			if(this.callbackThread != null && this.callbackThread != Thread.currentThread())
 			{
@@ -345,7 +348,7 @@ public class MediaManager
 		}
 		
 		// Call onMediaDeleted().
-		public void callOnMediaDeleted(final int id, final Media media)
+		public void callOnMediaDeleted(final long id, final Media media)
 		{
 			if(this.callbackThread != null && this.callbackThread != Thread.currentThread())
 			{
@@ -363,7 +366,7 @@ public class MediaManager
 		}
 		
 		// Call onMediaUpdated().
-		public void callOnMediaUpdated(final int id, final Media media)
+		public void callOnMediaUpdated(final long id, final Media media)
 		{
 			if(this.callbackThread != null && this.callbackThread != Thread.currentThread())
 			{
@@ -389,6 +392,62 @@ public class MediaManager
 			else
 				unregisterMediaChangeCallback(this);
 		}
+	}
+	
+	
+	// Handle for media deletion.
+	private static final class MediaDeletionHandle extends CallbackHandle<MediaDeletionCallback>
+	{
+		// Fields.
+		public final Media media;
+		
+		// Constructor.
+		public MediaDeletionHandle(Media media, MediaDeletionCallback callback, Handler handler)
+		{
+			super("MediaDeletion", callback, handler);
+			this.media = media;
+		}
+		
+		// Call onDeletionCompleted().
+		public void callOnDeletionCompleted(final boolean success)
+		{
+			if(this.callbackThread != null && this.callbackThread != Thread.currentThread())
+			{
+				this.callbackHandler.post(new Runnable()
+				{
+					@Override
+					public void run()
+					{
+						callback.onDeletionCompleted(media, success);
+					}
+				});
+			}
+			else
+				this.callback.onDeletionCompleted(this.media, success);
+		}
+		
+		// Call onDeletionStarted().
+		public void callOnDeletionStarted()
+		{
+			if(this.callbackThread != null && this.callbackThread != Thread.currentThread())
+			{
+				this.callbackHandler.post(new Runnable()
+				{
+					@Override
+					public void run()
+					{
+						callback.onDeletionStarted(media);
+					}
+				});
+			}
+			else
+				this.callback.onDeletionStarted(this.media);
+		}
+
+		// Close handle.
+		@Override
+		protected void onClose(int flags)
+		{}
 	}
 	
 	
@@ -941,7 +1000,7 @@ public class MediaManager
 						try
 						{
 							if(cursor.moveToNext())
-								media = MediaStoreMedia.create(m_TempMediaSet, cursor, true, m_Handler);
+								media = MediaStoreMedia.create(cursor, m_Handler);
 							else
 								Log.e(TAG, "createTemporaryMedia() - Content not found");
 						}
@@ -1008,6 +1067,104 @@ public class MediaManager
 	}
 	
 	
+	/**
+	 * Delete media.
+	 * @param media Media to delete.
+	 * @param callback Call-back to receive deletion state.
+	 * @param handler Handler to perform call-back.
+	 * @return Handle to media deletion.
+	 */
+	public static Handle deleteMedia(Media media, MediaDeletionCallback callback, Handler handler)
+	{
+		if(media == null)
+		{
+			Log.e(TAG, "deleteMedia() - No media to delete");
+			return null;
+		}
+		MediaDeletionHandle handle = new MediaDeletionHandle(media, callback, handler);
+		startContentThread();
+		Message.obtain(m_ContentThreadHandler, MSG_DELETE_MEDIA, handle).sendToTarget();
+		return handle;
+	}
+	
+	
+	// Delete media (in content thread).
+	private static void deleteMedia(MediaDeletionHandle handle)
+	{
+		// check state
+		if(!Handle.isValid(handle))
+			return;
+		
+		// start deletion
+		handle.callOnDeletionStarted();
+		
+		// delete file directly
+		Uri contentUri = handle.media.getContentUri();
+		if(contentUri == null)
+		{
+			String filePath = handle.media.getFilePath();
+			if(filePath != null)
+			{
+				Log.v(TAG, "deleteMedia() - Delete ", filePath);
+				try
+				{
+					File file = new File(filePath);
+					handle.callOnDeletionCompleted(!file.exists() || file.delete());
+				}
+				catch(Throwable ex)
+				{
+					Log.e(TAG, "deleteMedia() - Fail to delete " + filePath, ex);
+					handle.callOnDeletionCompleted(false);
+				}
+			}
+			else
+			{
+				Log.e(TAG, "deleteMedia() - No content URI and file path to delete");
+				handle.callOnDeletionCompleted(false);
+			}
+			return;
+		}
+		
+		// get media ID
+		long id = ContentUris.parseId(contentUri);
+		if(id < 0)
+		{
+			Log.e(TAG, "deleteMedia() - Invalid content URI : " + contentUri);
+			handle.callOnDeletionCompleted(false);
+			return;
+		}
+		
+		Log.v(TAG, "deleteMedia() - Delete ", contentUri);
+		
+		// delete media
+		accessContentProvider(contentUri, new ContentProviderAccessCallback()
+		{
+			@Override
+			public void onAccessContentProvider(ContentResolver contentResolver, Uri contentUri, ContentProviderClient client) throws RemoteException
+			{
+				client.delete(contentUri, null, null);
+			}
+		});
+		
+		// remove from media table
+		Media removedMedia;
+		synchronized(m_MediaTable)
+		{
+			removedMedia = m_MediaTable.remove(id);
+		}
+		
+		// call-back
+		if(removedMedia != null)
+		{
+			for(int i = m_MediaChangeCallbackHandles.size() - 1 ; i >= 0 ; --i)
+				m_MediaChangeCallbackHandles.get(i).callOnMediaDeleted(id, removedMedia);
+		}
+		
+		// completed
+		handle.callOnDeletionCompleted(true);
+	}
+	
+	
 	// Get Looper for content thread.
 	private static Looper getContentThreadLooper()
 	{
@@ -1027,6 +1184,10 @@ public class MediaManager
 				
 			case MSG_CHECK_CONTENT_CHANGES:
 				checkContentChanges();
+				break;
+				
+			case MSG_DELETE_MEDIA:
+				deleteMedia((MediaDeletionHandle)msg.obj);
 				break;
 				
 			case MSG_NOTIFY_CONTENT_CHANGED:
@@ -1197,7 +1358,26 @@ public class MediaManager
 	}
 	
 	
-	//
+	/**
+	 * Obtain media instance.
+	 * @param cursor Media ID.
+	 * @return Media instance, or Null if instance is not created yet.
+	 */
+	public static Media obtainMedia(long id)
+	{
+		synchronized(m_MediaTable)
+		{
+			return m_MediaTable.get(id);
+		}
+	}
+	
+	
+	/**
+	 * Obtain media instance.
+	 * @param cursor Cursor to read media information.
+	 * @param idColumnIndex Column index of {@link MediaColumns#_ID}, or negative number to find index automatically.
+	 * @return Media instance, or Null if fail to create instance.
+	 */
 	public static Media obtainMedia(Cursor cursor, int idColumnIndex)
 	{
 		// check parameter
@@ -1211,11 +1391,11 @@ public class MediaManager
 		try
 		{
 			// get ID
-			Integer id;
+			Long id;
 			if(idColumnIndex >= 0)
-				id = cursor.getInt(idColumnIndex);
+				id = cursor.getLong(idColumnIndex);
 			else
-				id = CursorUtils.getInt(cursor, MediaColumns._ID, -1);
+				id = CursorUtils.getLong(cursor, MediaColumns._ID, -1);
 			if(id < 0)
 			{
 				Log.e(TAG, "obtainMedia() - No media ID");
@@ -1242,7 +1422,9 @@ public class MediaManager
 				
 				// create new media
 				int mediaCount = m_MediaTable.size();
-				//
+				media = MediaStoreMedia.create(cursor, m_Handler);
+				if(media == null)
+					return null;
 				m_MediaTable.put(id, media);
 				
 				// check whether this is new media or not
@@ -1524,7 +1706,7 @@ public class MediaManager
 				m_MediaTable.clear();
 			else if(!m_MediaTable.isEmpty())
 			{
-				Integer[] idArray = new Integer[m_MediaTable.size()];
+				Long[] idArray = new Long[m_MediaTable.size()];
 				m_MediaTable.keySet().toArray(idArray);
 				for(int i = idArray.length - 1 ; i >= 0 ; --i)
 					m_MediaTable.put(idArray[i], null);
@@ -1617,7 +1799,7 @@ public class MediaManager
 					{
 						while(cursor.moveToNext())
 						{
-							int id = cursor.getInt(0);
+							long id = cursor.getLong(0);
 							m_MediaTable.put(id, null);
 						}
 					}
@@ -1677,10 +1859,10 @@ public class MediaManager
 			public void onAccessContentProvider(ContentResolver contentResolver, Uri contentUri, ContentProviderClient client) throws RemoteException
 			{
 				// copy current IDs
-				HashSet<Integer> currentIDs;
+				HashSet<Long> currentIDs;
 				synchronized(m_MediaTable)
 				{
-					currentIDs = new HashSet<Integer>(m_MediaTable.keySet());
+					currentIDs = new HashSet<Long>(m_MediaTable.keySet());
 				}
 				
 				// synchronize
@@ -1693,7 +1875,7 @@ public class MediaManager
 						int addedCount = 0;
 						while(cursor.moveToNext())
 						{
-							Integer id = cursor.getInt(0);
+							Long id = cursor.getLong(0);
 							if(!currentIDs.remove(id))
 							{
 								++addedCount;
@@ -1708,7 +1890,7 @@ public class MediaManager
 						// remove entries
 						if(!currentIDs.isEmpty())
 						{
-							for(Integer id : currentIDs)
+							for(Long id : currentIDs)
 							{
 								Media media = m_MediaTable.remove(id);
 								for(int i = m_MediaChangeCallbackHandles.size() - 1 ; i >= 0 ; --i)

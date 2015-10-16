@@ -507,6 +507,7 @@ public class OPGalleryActivity extends GalleryActivity
 		// show default media list
 		fragment.set(GridViewFragment.PROP_IS_CAMERA_ROLL, true);
 		fragment.set(GridViewFragment.PROP_MEDIA_LIST, m_DefaultMediaList);
+		fragment.set(GridViewFragment.PROP_MEDIA_SET, m_DefaultMediaSet);
 	}
 	
 	
@@ -568,6 +569,7 @@ public class OPGalleryActivity extends GalleryActivity
 		m_FilmstripContainer.setVisibility(View.GONE);
 		m_FilmstripFragment.backToInitialUIState();
 		m_FilmstripFragment.set(FilmstripFragment.PROP_MEDIA_LIST, null);
+		m_FilmstripFragment.set(FilmstripFragment.PROP_MEDIA_SET, null);
 		this.detachFilmstripFragment();
 	}
 	
@@ -592,6 +594,7 @@ public class OPGalleryActivity extends GalleryActivity
 		m_GridViewFragment.backToInitialUIState();
 		m_GridViewFragment.set(GridViewFragment.PROP_IS_SELECTION_MODE, false);
 		m_GridViewFragment.set(GridViewFragment.PROP_MEDIA_LIST, null);
+		m_GridViewFragment.set(GridViewFragment.PROP_MEDIA_SET, null);
 		this.detachGridViewFragment();
 		if(m_MediaList != null && m_MediaList != m_DefaultMediaList)
 		{
@@ -620,7 +623,18 @@ public class OPGalleryActivity extends GalleryActivity
 	{
 		// check state
 		int index = e.getIndex();
-		MediaList mediaList = (isDefaultGridView ? m_DefaultMediaList : m_MediaList);
+		MediaSet mediaSet;
+		MediaList mediaList;
+		if(isDefaultGridView)
+		{
+			mediaSet = m_DefaultMediaSet;
+			mediaList = m_DefaultMediaList;
+		}
+		else
+		{
+			mediaSet = m_GridViewFragment.get(GridViewFragment.PROP_MEDIA_SET);
+			mediaList = m_MediaList;
+		}
 		if(mediaList == null)
 		{
 			Log.e(TAG, "onMediaClickedInGridView() - No media list");
@@ -646,6 +660,7 @@ public class OPGalleryActivity extends GalleryActivity
 		
 		// show media
 		m_FilmstripFragment.set(FilmstripFragment.PROP_MEDIA_LIST, mediaList);
+		m_FilmstripFragment.set(FilmstripFragment.PROP_MEDIA_SET, mediaSet);
 		m_FilmstripFragment.set(FilmstripFragment.PROP_CURRENT_MEDIA_INDEX, index);
 		if(this.changeMode(Mode.FILMSTRIP))
 			m_FilmstripFragment.backToInitialUIState();
@@ -653,6 +668,7 @@ public class OPGalleryActivity extends GalleryActivity
 		{
 			Log.e(TAG, "onMediaClickedInGridView() - Fail to change mode");
 			m_FilmstripFragment.set(FilmstripFragment.PROP_MEDIA_LIST, null);
+			m_FilmstripFragment.set(FilmstripFragment.PROP_MEDIA_SET, null);
 			this.detachFilmstripFragment();
 		}
 	}
@@ -713,18 +729,19 @@ public class OPGalleryActivity extends GalleryActivity
 			}
 			m_GridViewFragment.set(GridViewFragment.PROP_TITLE, set.get(MediaSet.PROP_NAME));
 			m_GridViewFragment.set(GridViewFragment.PROP_MEDIA_LIST, m_MediaList);
+			m_GridViewFragment.set(GridViewFragment.PROP_MEDIA_SET, set);
 			if(this.changeMode(Mode.GRID_VIEW))
 				m_GridViewFragment.backToInitialUIState();
 			else
 			{
 				Log.e(TAG, "onMediaSetClicked() - Fail to change mode");
 				m_GridViewFragment.set(GridViewFragment.PROP_MEDIA_LIST, null);
+				m_GridViewFragment.set(GridViewFragment.PROP_MEDIA_SET, null);
 				this.detachGridViewFragment();
 			}
 		}
 		else if(m_DefaultGridViewFragment != null)
 		{
-			m_DefaultGridViewFragment.set(GridViewFragment.PROP_MEDIA_LIST, m_MediaList);
 			m_DefaultGridViewFragment.backToInitialUIState();
 			m_EntryViewPager.setCurrentItem(0, true);
 		}
