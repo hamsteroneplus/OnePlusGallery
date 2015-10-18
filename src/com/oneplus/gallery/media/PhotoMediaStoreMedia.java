@@ -7,6 +7,7 @@ import com.oneplus.base.Log;
 import com.oneplus.database.CursorUtils;
 import com.oneplus.gallery.MediaType;
 import com.oneplus.gallery.media.MediaDetails.Key;
+import com.oneplus.gallery.providers.GalleryDatabaseManager.ExtraMediaInfo;
 import com.oneplus.io.Path;
 
 import android.database.Cursor;
@@ -43,9 +44,9 @@ class PhotoMediaStoreMedia extends MediaStoreMedia implements PhotoMedia
 	
 	
 	// Constructor.
-	PhotoMediaStoreMedia(Cursor cursor, Handler handler)
+	PhotoMediaStoreMedia(Cursor cursor, ExtraMediaInfo extraInfo, Handler handler)
 	{
-		super(getContentUri(cursor), cursor, handler);
+		super(getContentUri(cursor), cursor, extraInfo, handler);
 	}
 	
 	

@@ -5,6 +5,7 @@ import java.io.File;
 import com.oneplus.base.Handle;
 import com.oneplus.base.Log;
 import com.oneplus.database.CursorUtils;
+import com.oneplus.gallery.providers.GalleryDatabaseManager.ExtraMediaInfo;
 
 import android.database.Cursor;
 import android.location.Location;
@@ -31,25 +32,6 @@ public abstract class MediaStoreMedia implements Media
 		FileColumns.DATA,
 		FileColumns.SIZE,
 		MediaColumns.MIME_TYPE,
-		MediaColumns.DATE_MODIFIED,
-		ImageColumns.DATE_TAKEN,
-		MediaColumns.WIDTH,
-		MediaColumns.HEIGHT,
-		ImageColumns.LATITUDE,
-		ImageColumns.LONGITUDE,
-		ImageColumns.ORIENTATION,
-		VideoColumns.DURATION,
-	};
-	/**
-	 * Columns to be queried from media store on OnePlus device.
-	 */
-	private static final String[] MEDIA_COLUMNS_ONEPLUS = new String[]{
-		MediaColumns._ID,
-		FileColumns.MEDIA_TYPE,
-		FileColumns.DATA,
-		FileColumns.SIZE,
-		MediaColumns.MIME_TYPE,
-		MediaManager.COLUMN_ONEPLUS_FLAGS,
 		MediaColumns.DATE_MODIFIED,
 		ImageColumns.DATE_TAKEN,
 		MediaColumns.WIDTH,
@@ -134,9 +116,10 @@ public abstract class MediaStoreMedia implements Media
 	 * Initialize new MediaStoreMedia instance.
 	 * @param contentUri Content URI.
 	 * @param cursor Cursor to read data.
+	 * @param extraInfo Extra media info to get extended data.
 	 * @param handler Handler.
 	 */
-	protected MediaStoreMedia(Uri contentUri, Cursor cursor, Handler handler)
+	protected MediaStoreMedia(Uri contentUri, Cursor cursor, ExtraMediaInfo extraInfo, Handler handler)
 	{
 		// check parameter
 		if(handler == null)
@@ -150,7 +133,7 @@ public abstract class MediaStoreMedia implements Media
 		m_MimeType = CursorUtils.getString(cursor, FileColumns.MIME_TYPE);
 		
 		// update
-		this.onUpdate(cursor, true);
+		this.onUpdate(cursor, extraInfo, true);
 	}
 	
 	
@@ -158,18 +141,19 @@ public abstract class MediaStoreMedia implements Media
 	 * Create {@link MediaStoreMedia} instance.
 	 * @param mediaSet {@link MediaSet}.
 	 * @param cursor Cursor to read data.
+	 * @param extraInfo Extra media info to get extended data.
 	 * @param handler Handler.
 	 * @return Create media instance, or Null if fail to create.
 	 */
-	public static MediaStoreMedia create(Cursor cursor, Handler handler)
+	public static MediaStoreMedia create(Cursor cursor, ExtraMediaInfo extraInfo, Handler handler)
 	{
 		// create media by media type
 		switch(CursorUtils.getInt(cursor, FileColumns.MEDIA_TYPE, FileColumns.MEDIA_TYPE_NONE))
 		{
 			case FileColumns.MEDIA_TYPE_IMAGE:
-				return new PhotoMediaStoreMedia(cursor, handler);
+				return new PhotoMediaStoreMedia(cursor, extraInfo, handler);
 			case FileColumns.MEDIA_TYPE_VIDEO:
-				return new VideoMediaStoreMedia(cursor, handler);
+				return new VideoMediaStoreMedia(cursor, extraInfo, handler);
 			case FileColumns.MEDIA_TYPE_NONE:
 				break;
 			default:
@@ -181,9 +165,9 @@ public abstract class MediaStoreMedia implements Media
 		if(mimeType != null)
 		{
 			if(mimeType.startsWith("image/"))
-				return new PhotoMediaStoreMedia(cursor, handler);
+				return new PhotoMediaStoreMedia(cursor, extraInfo, handler);
 			if(mimeType.startsWith("video/"))
-				return new VideoMediaStoreMedia(cursor, handler);
+				return new VideoMediaStoreMedia(cursor, extraInfo, handler);
 		}
 		
 		// cannot check file type
@@ -336,8 +320,6 @@ public abstract class MediaStoreMedia implements Media
 	 */
 	public static String[] getMediaColumns()
 	{
-		if(MediaManager.isOnePlusMediaProvider())
-			return MEDIA_COLUMNS_ONEPLUS;
 		return MEDIA_COLUMNS;
 	}
 	
@@ -398,7 +380,7 @@ public abstract class MediaStoreMedia implements Media
 	 * @param fromConstructor True if method is called from constructor.
 	 * @return True if one or more media information has been changed.
 	 */
-	protected boolean onUpdate(Cursor cursor, boolean fromConstructor)
+	protected boolean onUpdate(Cursor cursor, ExtraMediaInfo extraInfo, boolean fromConstructor)
 	{
 		// get path and type
 		boolean changed = false;
@@ -479,11 +461,14 @@ public abstract class MediaStoreMedia implements Media
 			changed = (prevTime != m_TakenTime);
 		
 		// get favorite
-		int oneplusFlags = CursorUtils.getInt(cursor, MediaManager.COLUMN_ONEPLUS_FLAGS, 0);
-		boolean prevFavorite = m_IsFavorite;
-		m_IsFavorite = ((oneplusFlags & MediaManager.ONEPLUS_FLAG_FAVORITE) != 0);
-		if(!changed && !fromConstructor)
-			changed = (prevFavorite != m_IsFavorite);
+		if(extraInfo != null)
+		{
+			int oneplusFlags = extraInfo.oneplusFlags;
+			boolean prevFavorite = m_IsFavorite;
+			m_IsFavorite = ((oneplusFlags & MediaManager.ONEPLUS_FLAG_FAVORITE) != 0);
+			if(!changed && !fromConstructor)
+				changed = (prevFavorite != m_IsFavorite);
+		}
 		
 		// complete
 		return changed;
@@ -528,8 +513,8 @@ public abstract class MediaStoreMedia implements Media
 	 * @param cursor Cursor to read media information.
 	 * @return True if one or more media information has been changed.
 	 */
-	public boolean update(Cursor cursor)
+	public boolean update(Cursor cursor, ExtraMediaInfo info)
 	{
-		return this.onUpdate(cursor, false);
+		return this.onUpdate(cursor, info, false);
 	}
 }

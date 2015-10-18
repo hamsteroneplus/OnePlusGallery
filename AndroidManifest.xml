@@ -50,6 +50,12 @@
 			</intent-filter>
 		    
 		</activity>
+		
+		<!-- Oneplus gallery provider -->
+		<provider 
+		    android:name=".providers.GalleryMediaProvider"
+		    android:authorities="oneplus.gallery"
+		    android:exported="true" />
 
 	</application>
 

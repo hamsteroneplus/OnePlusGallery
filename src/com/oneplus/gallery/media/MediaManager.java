@@ -20,12 +20,13 @@ import com.oneplus.database.CursorUtils;
 import com.oneplus.gallery.GalleryApplication;
 import com.oneplus.gallery.ListChangeEventArgs;
 import com.oneplus.gallery.media.MediaSet.Type;
+import com.oneplus.gallery.providers.GalleryDatabaseManager;
+import com.oneplus.gallery.providers.GalleryDatabaseManager.ExtraMediaInfo;
 import com.oneplus.io.Path;
 
 import android.content.ContentProviderClient;
 import android.content.ContentResolver;
 import android.content.ContentUris;
-import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Environment;
@@ -1000,7 +1001,7 @@ public class MediaManager
 						try
 						{
 							if(cursor.moveToNext())
-								media = MediaStoreMedia.create(cursor, m_Handler);
+								media = MediaStoreMedia.create(cursor, new ExtraMediaInfo(-1, -1), m_Handler);
 							else
 								Log.e(TAG, "createTemporaryMedia() - Content not found");
 						}
@@ -1402,6 +1403,9 @@ public class MediaManager
 				return null;
 			}
 			
+			// get extra media info
+			ExtraMediaInfo extraInfo = GalleryDatabaseManager.getExtraMediaInfo(id);
+			
 			// obtain media
 			synchronized(m_MediaTable)
 			{
@@ -1411,7 +1415,7 @@ public class MediaManager
 				{
 					if(media instanceof MediaStoreMedia)
 					{
-						if(((MediaStoreMedia)media).update(cursor))
+						if(((MediaStoreMedia)media).update(cursor, extraInfo))
 						{
 							for(int i = m_MediaChangeCallbackHandles.size() - 1 ; i >= 0 ; --i)
 								m_MediaChangeCallbackHandles.get(i).callOnMediaUpdated(id, media);
@@ -1422,7 +1426,7 @@ public class MediaManager
 				
 				// create new media
 				int mediaCount = m_MediaTable.size();
-				media = MediaStoreMedia.create(cursor, m_Handler);
+				media = MediaStoreMedia.create(cursor, extraInfo, m_Handler);
 				if(media == null)
 					return null;
 				m_MediaTable.put(id, media);
@@ -1934,7 +1938,7 @@ public class MediaManager
 	
 	
 	// Update OnePlus flags column.
-	private static boolean updateOnePlusFlagsInMediaStore(Uri contentUri, final int flags, final boolean add)
+	private static boolean updateOnePlusFlagsInMediaStore(Uri contentUri, int flags, boolean add)
 	{
 		// check state
 		if(contentUri == null)
@@ -1942,71 +1946,48 @@ public class MediaManager
 			Log.e(TAG, "updateOnePlusFlagsInMediaStore() - No content URI to set");
 			return false;
 		}
-		if(!m_IsOnePlusMediaProvider)
+//		if(!m_IsOnePlusMediaProvider)
+//		{
+//			Log.e(TAG, "updateOnePlusFlagsInMediaStore() - Not OnePlus media provider");
+//			return false;
+//		}
+		
+		// get id & extra media info
+		long id = ContentUris.parseId(contentUri);
+		ExtraMediaInfo extraMediaInfo = GalleryDatabaseManager.getExtraMediaInfo(id);
+		
+		// if there isn't mapped extra media info, creates new one.
+		// Else, update it.
+		boolean success = false;
+		if(extraMediaInfo == null)
 		{
-			Log.e(TAG, "updateOnePlusFlagsInMediaStore() - Not OnePlus media provider");
-			return false;
+			if(GalleryDatabaseManager.addExtraMediaInfo(new ExtraMediaInfo(id, flags)) > -1)
+				success = true;
+		}
+		else
+		{
+			// check flags
+			int currentFlags = extraMediaInfo.oneplusFlags;
+			int newFlags;
+			if(add)
+				newFlags = (currentFlags | flags);
+			else
+				newFlags = (currentFlags & ~flags);
+			if(currentFlags == newFlags)
+				return true;
+			
+			// update flags
+			extraMediaInfo.oneplusFlags = newFlags;
+			if(GalleryDatabaseManager.updateExtraMediaInfo(extraMediaInfo) > 0)
+				success = true;
 		}
 		
-		// set favorite
-		Handle handle = accessContentProvider(contentUri, new ContentProviderAccessCallback()
-		{
-			@Override
-			public void onAccessContentProvider(ContentResolver contentResolver, Uri contentUri, ContentProviderClient client) throws RemoteException
-			{
-				// get current flags
-				Cursor cursor = client.query(contentUri, ONEPLUS_FLAGS_COLUMNS , null, null, null);
-				int currentFlags;
-				if(cursor != null)
-				{
-					try
-					{
-						if(cursor.getCount() == 1)
-						{
-							cursor.moveToNext();
-							currentFlags = CursorUtils.getInt(cursor, COLUMN_ONEPLUS_FLAGS, 0);
-						}
-						else
-						{
-							Log.e(TAG, "updateOnePlusFlagsInMediaStore() - Not an unique content URI");
-							return;
-						}
-					}
-					catch(Throwable ex)
-					{
-						Log.e(TAG, "updateOnePlusFlagsInMediaStore() - Fail to query current flags", ex);
-						return;
-					}
-					finally
-					{
-						cursor.close();
-					}
-				}
-				else
-				{
-					Log.e(TAG, "updateOnePlusFlagsInMediaStore() - Fail to query current flags");
-					return;
-				}
-				
-				// check flags
-				int newFlags;
-				if(add)
-					newFlags = (currentFlags | flags);
-				else
-					newFlags = (currentFlags & ~flags);
-				if(currentFlags == newFlags)
-					return;
-				
-				// update flags
-				ContentValues values = new ContentValues(1);
-				values.put(COLUMN_ONEPLUS_FLAGS, newFlags);
-				if(client.update(contentUri, values, null, null) > 0)
-					Message.obtain(m_ContentThreadHandler, MSG_NOTIFY_CONTENT_CHANGED, contentUri).sendToTarget();
-			}
-		});
+		// notify target
+		if(success)
+			Message.obtain(m_ContentThreadHandler, MSG_NOTIFY_CONTENT_CHANGED, contentUri).sendToTarget();
 		
 		// complete
-		return Handle.isValid(handle);
+		return success;
 	}
 	
 	
