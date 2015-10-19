@@ -1316,6 +1316,7 @@ public class FilmstripFragment extends GalleryFragment
 			// cancel decoding high-resolution bitmap
 			Media media = m_MediaList.get(position);
 			this.cancelDecodingHighResolutionImage();
+			view.setImageDrawable(null);
 			
 			// show thumbnail image
 			FilmstripItem filmstripItem = m_FilmstripItems.get(position);
