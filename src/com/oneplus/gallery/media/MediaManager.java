@@ -126,6 +126,7 @@ public class MediaManager
 	private static final int MSG_REGISTER_MEDIA_CHANGED_CB = 10050;
 	private static final int MSG_UNREGISTER_MEDIA_CHANGED_CB = 10051;
 	private static final int MSG_DELETE_MEDIA = 10060;
+	private static final int MSG_UPDATE_ONEPLUS_FLAGS = 10070;
 	
 	
 	// Fields.
@@ -811,14 +812,15 @@ public class MediaManager
 	
 	
 	/**
-	 * Add OnePlus flags to media store. 
+	 * Add OnePlus flags to media extra info. 
 	 * @param contentUri Content URI to update.
 	 * @param flags New flags to add.
 	 * @return True if update successfully.
 	 */
-	public static boolean addOnePlusFlagsToMediaStore(Uri contentUri, final int flags)
+	public static boolean addOnePlusFlags(Uri contentUri, final int flags)
 	{
-		return updateOnePlusFlagsInMediaStore(contentUri, flags, true);
+		Message msg = Message.obtain(m_ContentThreadHandler, MSG_UPDATE_ONEPLUS_FLAGS, new Object[] {contentUri, flags, true});
+		return m_ContentThreadHandler.sendMessage(msg);
 	}
 	
 	
@@ -1221,6 +1223,11 @@ public class MediaManager
 				
 			case MSG_UNREGISTER_MEDIA_CHANGED_CB:
 				unregisterMediaChangeCallback((MediaChangeCallbackHandle)msg.obj);
+				break;
+				
+			case MSG_UPDATE_ONEPLUS_FLAGS:
+				Object[] objs = (Object[])msg.obj;
+				updateOnePlusFlags((Uri)objs[0], (Integer)objs[1], (Boolean)objs[2]);
 				break;
 		}
 	}
@@ -1732,14 +1739,15 @@ public class MediaManager
 	
 	
 	/**
-	 * Remove OnePlus flags from media store. 
+	 * Remove OnePlus flags from media extra info. 
 	 * @param contentUri Content URI to update.
 	 * @param flags Flags to remove.
 	 * @return True if update successfully.
 	 */
-	public static boolean removeOnePlusFlagsFromMediaStore(Uri contentUri, final int flags)
+	public static boolean removeOnePlusFlags(Uri contentUri, final int flags)
 	{
-		return updateOnePlusFlagsInMediaStore(contentUri, flags, false);
+		Message msg = Message.obtain(m_ContentThreadHandler, MSG_UPDATE_ONEPLUS_FLAGS, new Object[]{contentUri, flags, false});
+		return m_ContentThreadHandler.sendMessage(msg);
 	}
 	
 	
@@ -1756,7 +1764,8 @@ public class MediaManager
 			Log.e(TAG, "setFavorite() - No media to set");
 			return false;
 		}
-		return updateOnePlusFlagsInMediaStore(media.getContentUri(), ONEPLUS_FLAG_FAVORITE, isFavorite);
+		Message msg = Message.obtain(m_ContentThreadHandler, MSG_UPDATE_ONEPLUS_FLAGS, new Object[]{media.getContentUri(), ONEPLUS_FLAG_FAVORITE, isFavorite});
+		return m_ContentThreadHandler.sendMessage(msg);
 	}
 	
 	
@@ -1768,7 +1777,8 @@ public class MediaManager
 	 */
 	public static boolean setFavorite(Uri contentUri, boolean isFavorite)
 	{
-		return updateOnePlusFlagsInMediaStore(contentUri, ONEPLUS_FLAG_FAVORITE, isFavorite);
+		Message msg = Message.obtain(m_ContentThreadHandler, MSG_UPDATE_ONEPLUS_FLAGS, new Object[]{contentUri, ONEPLUS_FLAG_FAVORITE, isFavorite});
+		return m_ContentThreadHandler.sendMessage(msg);
 	}
 	
 	
@@ -1938,19 +1948,16 @@ public class MediaManager
 	
 	
 	// Update OnePlus flags column.
-	private static boolean updateOnePlusFlagsInMediaStore(Uri contentUri, int flags, boolean add)
+	private static boolean updateOnePlusFlags(Uri contentUri, int flags, boolean add)
 	{
 		// check state
 		if(contentUri == null)
 		{
-			Log.e(TAG, "updateOnePlusFlagsInMediaStore() - No content URI to set");
+			Log.e(TAG, "updateOnePlusFlags() - No content URI to set");
 			return false;
 		}
-//		if(!m_IsOnePlusMediaProvider)
-//		{
-//			Log.e(TAG, "updateOnePlusFlagsInMediaStore() - Not OnePlus media provider");
-//			return false;
-//		}
+		
+		Log.v(TAG, "updateOnePlusFlags() - Uri: ", contentUri, ", flags: ", flags, ", add: ", add);
 		
 		// get id & extra media info
 		long id = ContentUris.parseId(contentUri);
@@ -1961,7 +1968,8 @@ public class MediaManager
 		boolean success = false;
 		if(extraMediaInfo == null)
 		{
-			if(GalleryDatabaseManager.addExtraMediaInfo(new ExtraMediaInfo(id, flags)) > -1)
+			extraMediaInfo = new ExtraMediaInfo(id, flags);
+			if(GalleryDatabaseManager.addExtraMediaInfo(extraMediaInfo) > -1)
 				success = true;
 		}
 		else
@@ -1982,10 +1990,34 @@ public class MediaManager
 				success = true;
 		}
 		
-		// notify target
+		// if success, update media
 		if(success)
-			Message.obtain(m_ContentThreadHandler, MSG_NOTIFY_CONTENT_CHANGED, contentUri).sendToTarget();
-		
+		{
+			synchronized(m_MediaTable)
+			{
+				// use current media
+				Media media = m_MediaTable.get(id);
+				if(media != null)
+				{
+					if(media instanceof MediaStoreMedia)
+					{
+						if(((MediaStoreMedia)media).update(null, extraMediaInfo))
+						{
+							Log.v(TAG, "updateOnePlusFlags() - Update success");
+							for(int i = m_MediaChangeCallbackHandles.size() - 1 ; i >= 0 ; --i)
+								m_MediaChangeCallbackHandles.get(i).callOnMediaUpdated(id, media);
+						}
+						else
+							Log.v(TAG, "updateOnePlusFlags() - Update failed");
+					}
+				}
+				else
+					Log.w(TAG, "updateOnePlusFlags() - Media is null");
+			}
+		}
+		else
+			Log.w(TAG, "updateOnePlusFlags() - No need to update");
+			
 		// complete
 		return success;
 	}

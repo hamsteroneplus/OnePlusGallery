@@ -864,7 +864,7 @@ public class FilmstripFragment extends GalleryFragment
 		m_FilmstripView.setScrollListener(new FilmstripView.ScrollListener()
 		{
 			@Override
-			public void onItemSelected(int position)
+			public void onCurrentItemChanged(int prevPosition, int position)
 			{
 				FilmstripFragment.this.setCurrentMediaIndexProp(position, false);
 			}

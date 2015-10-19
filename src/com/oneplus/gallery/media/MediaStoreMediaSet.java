@@ -47,6 +47,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	private Handle m_MediaChangeCallbackHandle;
 	private volatile Handle m_MediaCountRefreshHandle;
 	private final Set<Long> m_MediaIdTable = new HashSet<>();
+	private Handle m_MediaManagerActivatedHandle;
 	private HandleSet m_MediaStoreContentChangedCBHandles;
 	private final Type m_Type;
 	private String m_QueryCondition;
@@ -455,6 +456,10 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 			else if(candMediaList == null)
 				m_ActiveMediaLists.remove(i);
 		}
+		
+		// close media manager handle
+		if(m_ActiveMediaLists.isEmpty())
+			m_MediaManagerActivatedHandle = Handle.close(m_MediaManagerActivatedHandle);
 	}
 	
 	
@@ -539,6 +544,10 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 			m_ActiveMediaLists = new ArrayList<>();
 		m_ActiveMediaLists.add(new WeakReference<MediaListImpl>(mediaList));
 		Log.v(TAG, "openMediaList() - Active media list count : ", m_ActiveMediaLists.size());
+		
+		// activate media manager
+		Handle.close(m_MediaManagerActivatedHandle);
+		m_MediaManagerActivatedHandle = MediaManager.activate();
 		
 		// start updating media list
 		MediaManager.accessContentProvider(CONTENT_URI_FILE, new MediaManager.ContentProviderAccessCallback()

@@ -23,7 +23,7 @@ import android.provider.MediaStore.MediaColumns;
 public class GalleryDatabaseManager 
 {
 	// Constants
-	private static final int VERSION_DATABASE = 4;
+	private static final int VERSION_DATABASE = 6;
 	private static final String TAG = GalleryDatabaseManager.class.getSimpleName();
 	private static final boolean DEBUG_LOG = true;
 	private static final Object SYNC_OBJ = new Object();
@@ -574,10 +574,9 @@ public class GalleryDatabaseManager
 		if(DEBUG_LOG)
 			Log.v(TAG, "updateDatabase() - From: ", fromVersion, ", to: ", toVersion);
 
-		if(fromVersion < 3)
-		{
-			db.execSQL("DROP TABLE IF EXISTS files");
-		}	
+		db.execSQL("DROP TABLE IF EXISTS media");
+		db.execSQL("DROP TABLE IF EXISTS album");
+		db.execSQL("DROP TABLE IF EXISTS album_media");
 		
 		// create latest tables
 		db.execSQL(SQL_CREATE_TABLE_MEDIA);

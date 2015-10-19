@@ -382,85 +382,89 @@ public abstract class MediaStoreMedia implements Media
 	 */
 	protected boolean onUpdate(Cursor cursor, ExtraMediaInfo extraInfo, boolean fromConstructor)
 	{
-		// get path and type
+		// get info from cursor
 		boolean changed = false;
-		String prevFilePath = m_FilePath;
-		m_FilePath = CursorUtils.getString(cursor, MediaColumns.DATA);
-		changed = (!fromConstructor && !TextUtils.equals(prevFilePath, m_FilePath));
-		
-		// get file size
-		File file = null;
-		long prevFileSize = m_FileSize;
-		m_FileSize = CursorUtils.getLong(cursor, FileColumns.SIZE, 0L);
-		if(m_FileSize <= 0 && m_FilePath != null)
+		if(cursor != null)
 		{
-			try
+			// get path and type
+			String prevFilePath = m_FilePath;
+			m_FilePath = CursorUtils.getString(cursor, MediaColumns.DATA);
+			changed = (!fromConstructor && !TextUtils.equals(prevFilePath, m_FilePath));
+			
+			// get file size
+			File file = null;
+			long prevFileSize = m_FileSize;
+			m_FileSize = CursorUtils.getLong(cursor, FileColumns.SIZE, 0L);
+			if(m_FileSize <= 0 && m_FilePath != null)
 			{
-				file = new File(m_FilePath);
-				m_FileSize = file.length();
-			}
-			catch(Throwable ex)
-			{}
-		}
-		if(!changed && !fromConstructor)
-			changed = (prevFileSize != m_FileSize);
-		
-		// get modified time
-		long prevTime = m_LastModifiedTime;
-		m_LastModifiedTime = CursorUtils.getLong(cursor, MediaColumns.DATE_MODIFIED, 0L);
-		if(m_LastModifiedTime > 0)
-			m_LastModifiedTime *= 1000;
-		else if(m_FilePath != null)
-		{
-			try
-			{
-				if(file == null)
+				try
+				{
 					file = new File(m_FilePath);
-				m_LastModifiedTime = file.lastModified();
+					m_FileSize = file.length();
+				}
+				catch(Throwable ex)
+				{}
 			}
-			catch(Throwable ex)
-			{}
-		}
-		if(!changed && !fromConstructor)
-			changed = (prevTime != m_LastModifiedTime);
-		
-		// get size
-		int prevWidth = m_Size[0];
-		int prevHeight = m_Size[1];
-		this.setupSize(cursor, m_Size);
-		if(!changed && !fromConstructor)
-			changed = (prevWidth != m_Size[0] || prevHeight != m_Size[1]);
-		
-		// get location
-		Location prevLocation = m_Location;
-		double lat = CursorUtils.getDouble(cursor, ImageColumns.LATITUDE, 0);
-		double lng = CursorUtils.getDouble(cursor, ImageColumns.LONGITUDE, 0);
-		if(lat != 0 && lng != 0)
-		{
-			m_Location = new Location("");
-			m_Location.setLatitude(lat);
-			m_Location.setLongitude(lng);
-		}
-		if(!changed && !fromConstructor)
-		{
-			if(prevLocation != null)
+			if(!changed && !fromConstructor)
+				changed = (prevFileSize != m_FileSize);
+			
+			// get modified time
+			long prevTime = m_LastModifiedTime;
+			m_LastModifiedTime = CursorUtils.getLong(cursor, MediaColumns.DATE_MODIFIED, 0L);
+			if(m_LastModifiedTime > 0)
+				m_LastModifiedTime *= 1000;
+			else if(m_FilePath != null)
 			{
-				if(m_Location != null)
-					changed = (prevLocation.getLatitude() != m_Location.getLatitude() || prevLocation.getLongitude() != m_Location.getLongitude());
-				else
+				try
+				{
+					if(file == null)
+						file = new File(m_FilePath);
+					m_LastModifiedTime = file.lastModified();
+				}
+				catch(Throwable ex)
+				{}
+			}
+			if(!changed && !fromConstructor)
+				changed = (prevTime != m_LastModifiedTime);
+			
+			// get size
+			int prevWidth = m_Size[0];
+			int prevHeight = m_Size[1];
+			this.setupSize(cursor, m_Size);
+			if(!changed && !fromConstructor)
+				changed = (prevWidth != m_Size[0] || prevHeight != m_Size[1]);
+			
+			// get location
+			Location prevLocation = m_Location;
+			double lat = CursorUtils.getDouble(cursor, ImageColumns.LATITUDE, 0);
+			double lng = CursorUtils.getDouble(cursor, ImageColumns.LONGITUDE, 0);
+			if(lat != 0 && lng != 0)
+			{
+				m_Location = new Location("");
+				m_Location.setLatitude(lat);
+				m_Location.setLongitude(lng);
+			}
+			if(!changed && !fromConstructor)
+			{
+				if(prevLocation != null)
+				{
+					if(m_Location != null)
+						changed = (prevLocation.getLatitude() != m_Location.getLatitude() || prevLocation.getLongitude() != m_Location.getLongitude());
+					else
+						changed = true;
+				}
+				else if(m_Location != null)
 					changed = true;
 			}
-			else if(m_Location != null)
-				changed = true;
+			
+			// get taken time
+			prevTime = m_TakenTime;
+			m_TakenTime = this.setupTakenTime(cursor);
+			if(!changed && !fromConstructor)
+				changed = (prevTime != m_TakenTime);
 		}
-		
-		// get taken time
-		prevTime = m_TakenTime;
-		m_TakenTime = this.setupTakenTime(cursor);
-		if(!changed && !fromConstructor)
-			changed = (prevTime != m_TakenTime);
-		
-		// get favorite
+
+		// get info from media extra info
 		if(extraInfo != null)
 		{
 			int oneplusFlags = extraInfo.oneplusFlags;
