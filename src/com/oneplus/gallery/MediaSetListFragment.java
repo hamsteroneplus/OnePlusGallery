@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.LinkedList;
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
@@ -227,8 +228,6 @@ public class MediaSetListFragment extends GalleryFragment
 	// Schedule cover decoding.
 	private void decodeMediaSetCovers()
 	{
-		Log.v(TAG, "decodeMediaSetCovers() - start");
-		
 		if(m_CoverImageCache == null)
 		{
 			Log.v(TAG, "decodeMediaSetCovers() - cache in not ready yet.");
@@ -246,8 +245,6 @@ public class MediaSetListFragment extends GalleryFragment
 			}
 			createMediaListCoverImageFromQueue();
 		}
-		
-		Log.v(TAG, "decodeMediaSetCovers() - end");
 	}
 	
 	private void initializeCoverImageCache(Context context)
@@ -337,8 +334,6 @@ public class MediaSetListFragment extends GalleryFragment
 	// Called when media count changed.
 	private void onMediaCountChanged(MediaSet mediaSet, PropertyChangeEventArgs<Integer> e)
 	{	
-		//Log.v(TAG, "onMediaCountChanged() - e.getOldValue() is "+e.getOldValue() + " , new value "+e.getNewValue());
-		
 		m_MediaSetDecodeQueue.add(mediaSet);
 		createMediaListCoverImageFromQueue();
 		
@@ -448,6 +443,9 @@ public class MediaSetListFragment extends GalleryFragment
 				set(PROP_IS_SELECTION_MODE, false);					
 			}
 		});
+		
+		// remove useless cover image info in preference
+		CoverImageInfo.removeUselessCoverImageInfo(m_Preference, m_MediaSetList);
 		
 		// decode mediaSetCover image
 		this.decodeMediaSetCovers();
@@ -603,7 +601,7 @@ public class MediaSetListFragment extends GalleryFragment
 		else
 			m_SelectedMediaSet.add(mediaSet);
 		
-		// leave selection mode is nothing is selected
+		// leave selection mode if nothing is selected
 		if(m_SelectedMediaSet.isEmpty())
 			set(PROP_IS_SELECTION_MODE, false);	
 		else
@@ -678,10 +676,7 @@ public class MediaSetListFragment extends GalleryFragment
 			Bitmap coverImage = m_CoverImageCache.get(CoverImageInfo.getMediaSetImageKey(mediaSet), null, 0);
 			
 			if(coverImage != null)
-			{
-				//Log.w(TAG, "getView() - coverImage is "+coverImage.hashCode());
 				viewInfo.coverImage.setImageBitmap(coverImage);
-			}
 			else
 				viewInfo.coverImage.setImageDrawable(null);
 			
@@ -702,8 +697,6 @@ public class MediaSetListFragment extends GalleryFragment
 	
 	private void decodeSingleCoverImage(final MediaSet mediaSet, MediaList mediaList)
 	{
-		//Log.v(TAG, "decodeSingleCoverImage() - start");
-		
 		if(mediaList == null || mediaList.isEmpty())
 		{
 			Log.v(TAG, "decodeSingleCoverImage() - mediaList is not ready");
@@ -741,20 +734,17 @@ public class MediaSetListFragment extends GalleryFragment
 		
 		m_MediaSetDecodingHandles.put(CoverImageInfo.getMediaSetImageKey(mediaSet), mediaSetDecodingHandleList);
 		
-		//Log.v(TAG, "decodeSingleCoverImage() - end");
 	}
 	
 	private void decodeGridCoverImage(int targetGridCount, final int gridPerRow,  final MediaSet mediaSet, MediaList mediaList)
 	{
-		//Log.v(TAG, "decodeGridCoverImage() - start");
-		
 		if(mediaList == null || mediaList.size() < targetGridCount)
 		{
 			Log.v(TAG, "decodeGridCoverImage() - mediaList is not ready");
 			return;
 		}
 		
-		// TODO: stop handle which is decoding the same mediaSet
+		// stop handle which is decoding the same mediaSet
 		ArrayList<Handle> mediaSetDecodingHandleList = m_MediaSetDecodingHandles.get(CoverImageInfo.getMediaSetImageKey(mediaSet));
 		if(mediaSetDecodingHandleList != null)
 		{
@@ -787,8 +777,6 @@ public class MediaSetListFragment extends GalleryFragment
 				@Override
 				public void onThumbnailImageDecoded(Handle handle, Media media, Bitmap thumb)
 				{
-					//Log.v(TAG, "onThumbnailImageDecoded() - mediaList.get("+index+")");
-					
 					if(thumb == null)
 					{
 						Log.w(TAG, "onThumbnailImageDecoded() - thumb is null");
@@ -815,13 +803,10 @@ public class MediaSetListFragment extends GalleryFragment
 					}	
 					canvas.drawBitmap(thumb, new Rect(bitmapRectLeft, bitmapRectTop, bitmapRectLeft+shortSide, bitmapRectTop+shortSide), new Rect(rectLeft, rectTop, rectLeft+gridSize, rectTop+gridSize), null);
 					
-					//Log.w(TAG, "onThumbnailImageDecoded() - gridCover is "+gridCover.hashCode());
-					
 					// update bitmap table
 					m_CoverImageCache.add(CoverImageInfo.getMediaSetImageKey(mediaSet), gridCover);
 					
 					// notify data changed
-					//Log.w(TAG, "onThumbnailImageDecoded() - notifyDataSetChanged");
 					if(m_MediaSetListAdapter != null)
 						m_MediaSetListAdapter.notifyDataSetChanged();
 					
@@ -835,7 +820,6 @@ public class MediaSetListFragment extends GalleryFragment
 		}
 		m_MediaSetDecodingHandles.put(CoverImageInfo.getMediaSetImageKey(mediaSet), mediaSetDecodingHandleList);
 		
-		//Log.v(TAG, "decodeGridCoverImage() - end");
 	}
 	
 	private void createMediaListCoverImageFromQueue()
@@ -908,8 +892,6 @@ public class MediaSetListFragment extends GalleryFragment
 			@Override
 			public void onEventReceived(EventSource source, EventKey<ListChangeEventArgs> key, ListChangeEventArgs e) {
 				
-				//Log.v(TAG, "onEventReceived() - e.getEndIndex() is "+e.getEndIndex());
-				
 				// try to decode image when all images are ready
 				if(e.getEndIndex() == targetGridCount-1)
 				{
@@ -920,8 +902,7 @@ public class MediaSetListFragment extends GalleryFragment
 							
 							@Override
 							public void onCacheImageLoaded(Bitmap cachedImage) {				
-								//Log.v(TAG, "onCacheImageLoaded() -  cachedImage is "+cachedImage);
-								
+
 								if(cachedImage == null)
 								{
 									// there is no cache image, need to decode image
@@ -978,6 +959,7 @@ public class MediaSetListFragment extends GalleryFragment
 	
 	private static final class CoverImageInfo
 	{
+		private static final int THRESHOLD_TO_REMOVE_USELESS_COVER_IMAGE_INFO = 10;
 		
 		private static String getMediaListImagesHashValueString(MediaList mediaList)
 		{
@@ -995,29 +977,49 @@ public class MediaSetListFragment extends GalleryFragment
 			return result.toString();
 		}
 		
-		//MediaList version
 		public static boolean isInCache(SharedPreferences preference, String imageKey, MediaList mediaList)
 		{
 			String hashCode = preference.getString(imageKey, "");
-			
-//			Log.v("CoverImageInfo", "isInCache() - imageKey : "+imageKey);
-//			Log.v("CoverImageInfo", "isInCache() - hashCode in prefenerce  "+hashCode);
-//			Log.v("CoverImageInfo", "isInCache() - mediaList : "+getMediaListImagesHashValueString(mediaList));
-//			Log.v("CoverImageInfo", "isInCache() - result is  : "+hashCode.equals(getMediaListImagesHashValueString(mediaList)));
-			
+
 			if(TextUtils.isEmpty(hashCode))
 				return false;
 			
 			return hashCode.equals(getMediaListImagesHashValueString(mediaList));
 		}
 		
-		
-		//MediaList version
 		public static void updateCoverImageInfo(SharedPreferences preference, String imageKey, MediaList mediaList)
 		{
 			preference.edit().putString(imageKey, getMediaListImagesHashValueString(mediaList)).commit();
-		}
+		}	
 		
+		public static void removeUselessCoverImageInfo(SharedPreferences preference, MediaSetList mediaSetList)
+		{
+			if(preference == null || mediaSetList == null)
+				return;
+			
+			Map<String, ?> preferenceKeys = preference.getAll();
+
+			if(Math.abs(preferenceKeys.size() - mediaSetList.size()) <= THRESHOLD_TO_REMOVE_USELESS_COVER_IMAGE_INFO)
+				return;
+
+			for (Map.Entry<String, ?> entry : preferenceKeys.entrySet()) {
+				//Log.v("CoverImageInfo", entry.getKey() + ": " + entry.getValue().toString());
+				
+				boolean isUseless = true;
+				
+				for(MediaSet mediaSet : mediaSetList)
+				{
+					if(entry.getKey().equals(getMediaSetImageKey(mediaSet)))
+					{
+						isUseless = false;
+						break;
+					}		
+				}
+				
+				if(isUseless)
+					preference.edit().remove(entry.getKey()).commit();						
+			}
+		}
 
 		public static String getMediaSetImageKey(MediaSet mediaSet)
 		{
