@@ -998,6 +998,9 @@ public class MediaSetListFragment extends GalleryFragment
 				return;
 			
 			Map<String, ?> preferenceKeys = preference.getAll();
+			
+			if(preferenceKeys == null)
+				return;
 
 			if(Math.abs(preferenceKeys.size() - mediaSetList.size()) <= THRESHOLD_TO_REMOVE_USELESS_COVER_IMAGE_INFO)
 				return;
