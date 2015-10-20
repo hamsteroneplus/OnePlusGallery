@@ -38,6 +38,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.SystemClock;
+import android.view.HapticFeedbackConstants;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.MotionEvent;
@@ -61,11 +62,13 @@ public class GridViewFragment extends GalleryFragment {
 
 	// constant
 	private static int PRE_DECODE_BITMAP_COUNTS = 27;
-	
+	private static int MULTISELECT_GESTURE_THRESHOLD = 300;
+	private static int MULTISELECT_AUTOSCROLL_THRESHOLD_FORWARD = 1500;
+	private static int MULTISELECT_AUTOSCROLL_THRESHOLD_BACKWARD = 180;
 	
 	// Private fields
+	private boolean m_test = false;
 	private int m_AnchorPosition = GridView.INVALID_POSITION; // Keep the very first selected item position
-	boolean m_MultiSelectToggleOn = false;
 	private View m_EmptyMediaView;
 	private GridView m_GridView;
 	private GridViewItemAdapter m_GridViewItemAdapter;
@@ -611,6 +614,10 @@ public class GridViewFragment extends GalleryFragment {
 	{
 		if(key == PROP_MEDIA_LIST)
 			return (TValue)m_MediaList;
+		if(key == PROP_IS_SELECTION_MODE)
+			return (TValue)(Boolean)m_IsSelectionMode;
+		if(key == PROP_IS_CAMERA_ROLL)
+			return (TValue)(Boolean)m_IsCameraRoll;
 		return super.get(key);
 	}
 	
@@ -711,11 +718,12 @@ public class GridViewFragment extends GalleryFragment {
 		Log.d(TAG, "onCreateView");
 		View view = inflater.inflate(R.layout.fragment_gridview, container, false);
 		
+		if(m_GridViewItemAdapter == null)
+			m_GridViewItemAdapter = new GridViewItemAdapter(this.getActivity());
+
 		// GridView7
 		m_GridView = (GridView) view.findViewById(R.id.gridview);
 		m_GridView.setNumColumns(m_GridviewColumns);
-		if(m_GridViewItemAdapter == null)
-			m_GridViewItemAdapter = new GridViewItemAdapter(this.getActivity());
 		m_GridView.setSaveInstanceStateEnabled(false);
 		if(m_LastGridViewPosition >= 0)
 		{
@@ -726,32 +734,28 @@ public class GridViewFragment extends GalleryFragment {
 		m_GridView.setOnItemClickListener(new OnItemClickListener() {
 			@Override
 			public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-				Log.d(TAG, "onItemClick position:" + position);
-				if(m_IsSelectionMode) {
+				if(m_IsSelectionMode)
 					onSingleItemSelected(position, view);
-				}else {
+				else 
 					onSingleItemClicked(position, view);
-				}
+				
 			}
 	    });	
 		m_GridView.setOnItemLongClickListener(new OnItemLongClickListener() {
 			@Override
 			public boolean onItemLongClick(AdapterView<?> parent, View view, int position, long id) {
 				// Position 0 is not valid photo item.
-				if(m_IsSelectionMode || (m_IsCameraRoll && position == 0)) 
+				if((get(PROP_IS_SELECTION_MODE) ||get(PROP_IS_CAMERA_ROLL) && position == 0)) 
 					return false;
-				Log.d(TAG, "gridview onItemLongClick event item position:" + position);
+				
+				Log.d(TAG, "Gridview onItemLongClick item position:" + position);
 				m_Toolbar.getMenu().setGroupVisible(R.id.selectModeActionGroup, true);
 				m_Toolbar.setNavigationIcon(R.drawable.button_cancel);
 				m_Toolbar.setVisibility(View.VISIBLE);
-				m_TouchedPosition = position;
 				m_AnchorPosition = position;
-				
+				m_TouchedPosition = position;
 				GridViewFragment.this.set(PROP_IS_SELECTION_MODE, true);
-				Media media = (Media) m_GridViewItemAdapter.getItem(position);
-				Log.d(TAG, "onItemLongClick media:" + media.getFilePath());
 				onSingleItemSelected(position, view);
-				
 				return true;
 			}
 		});
@@ -759,106 +763,133 @@ public class GridViewFragment extends GalleryFragment {
 			int previousPosition = -1;
 			int downx = -1;
 			int downy = -1;
-			// to know if this is a scroll gesture or multi-selection gesutre
-			long downElapseTime;
-//			boolean multiSelectToggleOn = false;
+			long downElapseTime;// to know if this is a scroll gesture or multi-selection gesutre
+			boolean multiSelectToggleOn = false;
+			boolean vibrated = false;
+			
 			@Override
 			public boolean onTouch(View view, MotionEvent event) {
-				
 				// Don't process touch event if not in selection mode
 				if(!m_IsSelectionMode)
 					return false;
 				
 				int action = event.getActionMasked();
 				switch (action) {
-				case MotionEvent.ACTION_DOWN:
-					Log.d(TAG, "onTouchListener ACTION_DOWN ");
-					downElapseTime  = SystemClock.elapsedRealtime();
-					downx = (int)event.getX();
-					downy = (int)event.getY();
-					m_TouchedPosition = ((GridView) view).pointToPosition(downx, downy);
-					break;
-				case MotionEvent.ACTION_MOVE:
-					Log.d(TAG, "onTouchListener ACTION_MOVE ");
-					long actionTimeDiff = SystemClock.elapsedRealtime() - downElapseTime;
-					// if time diff < 200, we consider this gesture is a scroll action
-					if(actionTimeDiff < 200) {
-						return false;
-					}
-					int mx = (int)event.getX();
-					int my = (int)event.getY();
-					if(downx == -1 && downy == -1) {
-						Log.w(TAG, "onTouchListener ACTION_MOVE downx == -1 && downy == -1");
-					}else {
-						int deltaX = downx > mx ? downx - mx : mx - downx;
-						int deltaY = downy > my ? downy - my : my - downy;
-						if(deltaX > 10 || deltaY > 10) {
-							if(m_MultiSelectToggleOn == false)
-								break;;
-						}
-					}
-					int movingPosition = ((GridView) view).pointToPosition(mx, my);
-					// finger remains in the same position for more than 200ms 
-					// consider this gesture is a multi-select action
-					// so set multiselectoggleOn=true
-					if( movingPosition == m_TouchedPosition) {
-						if(m_MultiSelectToggleOn == false) {
-							m_MultiSelectToggleOn = true;
-						}else {
-							// already in selection mode, and anchorpostion is invalid
-							// means another multi-select action is about to trigger
-							if(m_AnchorPosition == GridView.INVALID_POSITION)
-								m_AnchorPosition = m_TouchedPosition;
-						}
-					}
-					
-					if(movingPosition == GridView.INVALID_POSITION) {
+					case MotionEvent.ACTION_DOWN:
+						Log.d(TAG, "onTouchListener ACTION_DOWN ");
+						downElapseTime  = SystemClock.elapsedRealtime();
+						downx = (int)event.getX();
+						downy = (int)event.getY();
+						m_TouchedPosition = ((GridView) view).pointToPosition(downx, downy);
 						break;
-					}
-					if(m_MultiSelectToggleOn && movingPosition != previousPosition) {
-						multipleSelect(action, (GridView) view, movingPosition);
-						previousPosition = movingPosition;
-					}
-					
-					break;
-				case MotionEvent.ACTION_UP:
-					Log.d(TAG, "onTouchListener ACTION_UP ");
-					// multi-select action is done, but not yet leave selection mode
-					// merge tempMedialist to selectionmedialist
-					if(m_MultiSelectToggleOn) {
-						if(!m_TempMeidaList.isEmpty()) {
-							for(Media media: m_TempMeidaList) {
-								m_SelectionMeidaList.add(media);
+						
+					case MotionEvent.ACTION_MOVE:
+						Log.d(TAG, "onTouchListener ACTION_MOVE ");
+						long actionTimeDiff = SystemClock.elapsedRealtime() - downElapseTime;
+						if(actionTimeDiff < MULTISELECT_GESTURE_THRESHOLD) {
+							return false;
+						}
+						
+						int mx = (int)event.getX();
+						int my = (int)event.getY();
+						int deltaX = 0;
+						int deltaY = 0;
+						if(downx == -1 && downy == -1) {
+							Log.w(TAG, "onTouchListener ACTION_MOVE downx == -1 && downy == -1");
+						}else {
+							deltaX = downx > mx ? downx - mx : mx - downx;
+							deltaY = downy > my ? downy - my : my - downy;
+							if(deltaX > 10 || deltaY > 10) {
+								if(multiSelectToggleOn == false) {
+									m_TouchedPosition = GridView.INVALID_POSITION;
+									break;
+								}
 							}
 						}
-						m_TempMeidaList.clear();	
-					}
+						
+						int movingPosition = ((GridView) view).pointToPosition(mx, my);
+						// finger remains in the same position for more than 200ms 
+						// consider this gesture is a multi-select action
+						// so set multiselectoggleOn=true
+						if( movingPosition == m_TouchedPosition) {
+							if(!multiSelectToggleOn) {
+								multiSelectToggleOn = true;
+							}else {
+								// already in selection mode, and anchorpostion is invalid
+								// means another multi-select action is about to trigger
+								if(m_AnchorPosition == GridView.INVALID_POSITION)
+									m_AnchorPosition = m_TouchedPosition;
+							}
+						}
+						
+						if(multiSelectToggleOn && movingPosition != previousPosition) {
+							multipleSelect(action, (GridView) view, movingPosition);
+							previousPosition = movingPosition;
+							
+							
+							if(!vibrated && (downx != -1 && downy != -1)) {
+								m_GridView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+								vibrated = true;
+							}
+						}
+						
+						if(deltaY > 10 || (downx == -1 && downy == -1)) {
+							if(my > MULTISELECT_AUTOSCROLL_THRESHOLD_FORWARD) {
+								if( my > MULTISELECT_AUTOSCROLL_THRESHOLD_FORWARD + 125) {
+									GridViewFragment.this.m_GridView.scrollListBy(10);
+								}
+								GridViewFragment.this.m_GridView.scrollListBy(5);
+							}
+							else if( my < MULTISELECT_AUTOSCROLL_THRESHOLD_BACKWARD) {
+								if( my < MULTISELECT_AUTOSCROLL_THRESHOLD_BACKWARD - 125) {
+									GridViewFragment.this.m_GridView.scrollListBy(-10);
+								}
+								GridViewFragment.this.m_GridView.scrollListBy(-5);
+							}
+						}
+						break;
+						
+					case MotionEvent.ACTION_CANCEL:
+					case MotionEvent.ACTION_UP:
+						Log.d(TAG, "onTouchListener ACTION_UP ");
+						// multi-select action is done, but not yet leave selection mode
+						// merge tempMedialist to selectionmedialist
+						if(multiSelectToggleOn) {
+							if(!m_TempMeidaList.isEmpty()) {
+								for(Media media: m_TempMeidaList) {
+									m_SelectionMeidaList.add(media);
+								}
+							}
+							m_TempMeidaList.clear();	
+						}
+						
+						
+						m_AnchorPosition = GridView.INVALID_POSITION;
+						previousPosition = -1;
+						downElapseTime = 0;
+						downx = -1;
+						downy = -1;
+						vibrated = false;
+						
+						if(m_TouchedPosition == GridView.INVALID_POSITION) {
+							multiSelectToggleOn = false;
+							return true;
+						}
+						m_TouchedPosition= GridView.INVALID_POSITION;
+						
+						// return true when multiSelectToggleOn, otherwise this gesture would be considered as a click event
+						// and gridview.onItemClickListener will be called which is not what we want.
+						if(multiSelectToggleOn) {
+							multiSelectToggleOn = false;
+							return true;
+						}
+						break;
 					
-					
-					m_AnchorPosition = GridView.INVALID_POSITION;
-					m_TouchedPosition= GridView.INVALID_POSITION;
-					previousPosition = -1;
-					downElapseTime = 0;
-					downx = -1;
-					downy = -1;
-					/* TODO 
-					if(y > 1250) {
-						Log.e(TAG, "gridview scroll 15 px");
-						gridview.smoothScrollByOffset (15);
-					}
-					*/
-					
-					// return true when multiSelectToggleOn, otherwise this gesture would be considered as a click event
-					// and gridview.onItemClickListener will be called which is not what we want.
-					if(m_MultiSelectToggleOn) {
-						m_MultiSelectToggleOn = false;
-						return true;
-					}
-					break;
-				default:
-					break;
+					default:
+						break;
 				}
-				if(m_MultiSelectToggleOn)
+				
+				if(multiSelectToggleOn)
 					return true;
 				else
 					return false;
