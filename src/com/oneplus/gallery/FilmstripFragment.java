@@ -409,6 +409,7 @@ public class FilmstripFragment extends GalleryFragment
 		if(m_HighResBitmapDrawable != null)
 		{
 			m_HighResBitmapDrawable.setVisible(false, false);
+			m_HighResBitmapDrawable.release();
 			m_HighResBitmapDrawable = null;
 		}
 	}
@@ -613,6 +614,24 @@ public class FilmstripFragment extends GalleryFragment
 			return drawable;
 		}
 		return null;
+	}
+	
+	
+	// Decode high resolution image.
+	private void decodeHighResolutionImage(FilmstripItem filmstripItem)
+	{
+		if(filmstripItem == null)
+			return;
+		Media media = filmstripItem.getMedia();
+		if(m_HighResBitmapDrawable == null && media != null)
+		{
+			Bitmap thumb = BITMAP_POOL_MEDIUM_RESOLUTION.getCachedBitmap(media.getFilePath());
+			if(thumb == null)
+				thumb = ThumbnailImageManager.getCachedSmallThumbnailImage(media);
+			m_HighResBitmapDrawable = new ProgressiveBitmapDrawable(media.getFilePath(), Bitmap.Config.ARGB_8888, thumb);
+		}
+		filmstripItem.setImageDecodeState(ImageDecodeState.LARGE_IMAGE_DECODED);
+		filmstripItem.setImageDrawable(m_HighResBitmapDrawable);
 	}
 	
 	
@@ -1036,6 +1055,7 @@ public class FilmstripFragment extends GalleryFragment
 	
 	
 	// Call when medium resolution image decoded
+	@SuppressWarnings("incomplete-switch")
 	private void onMediumResImageDecoded(Handle handle, String filePath, Bitmap bitmap)
 	{
 		// check state
@@ -1067,10 +1087,15 @@ public class FilmstripFragment extends GalleryFragment
 			FilmstripItem filmstripItem = (FilmstripItem)obj;
 			if(filmstripItem != null && filmstripItem.getMedia() != null && filePath.equals(filmstripItem.getMedia().getFilePath()))
 			{
-				if(filmstripItem.getImageDecodeState() == ImageDecodeState.NONE)
-					this.cancelDecodingLowResolutionImage(filmstripItem.getMedia());
-				filmstripItem.setImageDecodeState(ImageDecodeState.THUMB_DECODED);
-				filmstripItem.setImageDrawable(this.createDrawableForDisplay(bitmap));
+				switch(filmstripItem.getImageDecodeState())
+				{
+					case NONE:
+						this.cancelDecodingLowResolutionImage(filmstripItem.getMedia());
+					case SMALL_THUMB_DECODED:
+						filmstripItem.setImageDecodeState(ImageDecodeState.THUMB_DECODED);
+						filmstripItem.setImageDrawable(this.createDrawableForDisplay(bitmap));
+						break;
+				}
 				if(ENABLE_DECODE_LOG)
 					Log.v(TAG, "onMediumResImageDecoded() - Update medium-resolution bitmap : ", filePath);
 				isItemFound = true;
@@ -1298,15 +1323,8 @@ public class FilmstripFragment extends GalleryFragment
 		if(oldType == ScaleImageView.BoundsType.FIT_SHORT_SIDE)
 		{
 			// load high-resolution bitmap
-			Media media = m_MediaList.get(position);
-			if(m_HighResBitmapDrawable == null)
-			{
-				Bitmap thumb = BITMAP_POOL_MEDIUM_RESOLUTION.getCachedBitmap(media.getFilePath());
-				if(thumb == null)
-					thumb = ThumbnailImageManager.getCachedSmallThumbnailImage(media);
-				m_HighResBitmapDrawable = new ProgressiveBitmapDrawable(media.getFilePath(), Bitmap.Config.ARGB_8888, thumb);
-			}
-			view.setImageDrawable(m_HighResBitmapDrawable);
+			FilmstripItem filmstripItem = m_FilmstripItems.get(position);
+			this.decodeHighResolutionImage(filmstripItem);
 			
 			// reset over scale state
 			m_IsOverScaledDown = false;
@@ -1433,6 +1451,18 @@ public class FilmstripFragment extends GalleryFragment
 		// activate thumbnail image manager
 		if(!Handle.isValid(m_ThumbManagerActivateHandle))
 			m_ThumbManagerActivateHandle = ThumbnailImageManager.activate();
+		
+		// show image
+		if(m_CurrentMediaIndex >= 0)
+		{
+			FilmstripItem filmstripItem = m_FilmstripItems.get(m_CurrentMediaIndex);
+			if(filmstripItem != null)
+			{
+				this.checkImageDecoding(m_CurrentMediaIndex);
+				if(filmstripItem.getImageDecodeState() == ImageDecodeState.LARGE_IMAGE_DECODED)
+					this.decodeHighResolutionImage(filmstripItem);
+			}
+		}
 	}
 	
 	
