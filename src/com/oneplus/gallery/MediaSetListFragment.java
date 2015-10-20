@@ -9,7 +9,6 @@ import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.Handler;
 import android.text.TextUtils;
-import android.util.SparseArray;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
@@ -63,6 +62,7 @@ public class MediaSetListFragment extends GalleryFragment
 	private static final long DISK_CACHE_SIZE = 200 * 1024 * 1024;
 	private static final String COVER_IMAGE_CACHE_NAME = "MediaSetCoverImage";
 	private static final String CAMERA_ROLL_COVER_IMAGE_KEY = "ThankYou9527";
+	private static final int SINGLE_COVER_IMAGE_SIZE = 1080;
 	
 	// static fields
 	private static HybridBitmapLruCache<String> m_CoverImageCache;
@@ -76,6 +76,7 @@ public class MediaSetListFragment extends GalleryFragment
 	private ListView m_MediaSetListView;
 	private MediaSetList m_MediaSetList;
 	private LinkedList<MediaSet> m_MediaSetDecodeQueue = new LinkedList<>();
+	private ArrayList<MediaSet> m_DecodingMediaSets = new ArrayList<>();
 	private SharedPreferences m_Preference;
 	private ArrayList<MediaSet> m_SelectedMediaSet = new ArrayList<MediaSet>();
 	private Handle m_ThumbManagerActivateHandle;
@@ -236,7 +237,7 @@ public class MediaSetListFragment extends GalleryFragment
 		
 		if(m_MediaSetList != null)
 		{
-			for(int i = m_MediaSetList.size() - 1 ; i >= 0 ; --i)
+			for(int i = 0 ; i < m_MediaSetList.size() ; i++)
 			{		
 				MediaSet mediaSet = m_MediaSetList.get(i);		
 				
@@ -471,6 +472,9 @@ public class MediaSetListFragment extends GalleryFragment
 			}
 			m_MediaSetDecodingHandles.clear();
 		}
+		
+		if(m_DecodingMediaSets != null)
+			m_DecodingMediaSets.clear();
 	}
 
 
@@ -661,14 +665,6 @@ public class MediaSetListFragment extends GalleryFragment
 			
 			MediaSet mediaSet = (MediaSet)getItem(position);		
 			
-			// adjust the priority of showing mediaSet
-			if(m_MediaSetDecodeQueue.contains(mediaSet))
-			{
-				m_MediaSetDecodeQueue.remove(mediaSet);
-				m_MediaSetDecodeQueue.addFirst(mediaSet);
-				createMediaListCoverImageFromQueue();
-			}
-			
 			viewInfo.titleText.setText(String.valueOf(mediaSet.get(MediaSet.PROP_NAME)));
 			Integer mediaCount = mediaSet.get(MediaSet.PROP_MEDIA_COUNT);
 			viewInfo.sizeTextView.setText(mediaCount != null ? String.valueOf(mediaCount) : "");
@@ -676,9 +672,39 @@ public class MediaSetListFragment extends GalleryFragment
 			Bitmap coverImage = m_CoverImageCache.get(CoverImageInfo.getMediaSetImageKey(mediaSet), null, 0);
 			
 			if(coverImage != null)
+			{
+				//Log.v(TAG, "getView() - coverImage for "+CoverImageInfo.getMediaSetImageKey(mediaSet));
 				viewInfo.coverImage.setImageBitmap(coverImage);
+			}
 			else
+			{
+				//Log.v(TAG, "getView() - coverImage is null for "+CoverImageInfo.getMediaSetImageKey(mediaSet));
 				viewInfo.coverImage.setImageDrawable(null);
+				
+				// adjust the priority of showing mediaSet
+				if(m_MediaSetDecodeQueue.contains(mediaSet))
+				{
+					//Log.v(TAG, "getView() - in decode queue, move to first");
+					
+					m_MediaSetDecodeQueue.remove(mediaSet);
+					m_MediaSetDecodeQueue.addFirst(mediaSet);
+					
+					createMediaListCoverImageFromQueue(true, true);
+				}
+				else if(!m_DecodingMediaSets.contains(mediaSet))
+				{
+					
+					//Log.v(TAG, "getView() - not in decode queue / decoding list , add to first");
+					
+					m_MediaSetDecodeQueue.addFirst(mediaSet);
+					
+					createMediaListCoverImageFromQueue(true, true);
+				}				
+				else
+				{
+					//Log.v(TAG, "getView() - in decoding list, wait");
+				}
+			}
 			
 			if(get(PROP_IS_SELECTION_MODE))
 			{
@@ -695,7 +721,7 @@ public class MediaSetListFragment extends GalleryFragment
 		
 	}
 	
-	private void decodeSingleCoverImage(final MediaSet mediaSet, MediaList mediaList)
+	private void decodeSingleCoverImage(final MediaSet mediaSet, MediaList mediaList, boolean isUrgent)
 	{
 		if(mediaList == null || mediaList.isEmpty())
 		{
@@ -714,10 +740,13 @@ public class MediaSetListFragment extends GalleryFragment
 		else
 			mediaSetDecodingHandleList =  new ArrayList<Handle>();
 		
-		Handle handle = BitmapPool.DEFAULT_THUMBNAIL.decode(mediaList.get(0).getFilePath(), 512, 512, 0, new BitmapPool.Callback() {
+		Handle handle = BitmapPool.DEFAULT_THUMBNAIL.decode(mediaList.get(0).getFilePath(), SINGLE_COVER_IMAGE_SIZE, SINGLE_COVER_IMAGE_SIZE, isUrgent ? BitmapPool.FLAG_URGENT : 0 , new BitmapPool.Callback() {
 			@Override
-			public void onBitmapDecoded(Handle handle, String filePath, Bitmap bitmap) {
-		
+			public void onBitmapDecoded(Handle handle, String filePath, Bitmap bitmap) {	
+				
+				// remove from decoding set
+				m_DecodingMediaSets.remove(mediaSet);
+				
 				// update bitmap table
 				m_CoverImageCache.add(CoverImageInfo.getMediaSetImageKey(mediaSet), bitmap);		
 				
@@ -736,7 +765,7 @@ public class MediaSetListFragment extends GalleryFragment
 		
 	}
 	
-	private void decodeGridCoverImage(int targetGridCount, final int gridPerRow,  final MediaSet mediaSet, MediaList mediaList)
+	private void decodeGridCoverImage(int targetGridCount, final int gridPerRow,  final MediaSet mediaSet, MediaList mediaList, boolean isUrgent)
 	{
 		if(mediaList == null || mediaList.size() < targetGridCount)
 		{
@@ -763,8 +792,9 @@ public class MediaSetListFragment extends GalleryFragment
 		final int gridSize = (int)Math.sqrt( (coverWidth * coverHeight) / targetGridCount);
 		
 		Bitmap bitmapInCache = m_CoverImageCache.get(CoverImageInfo.getMediaSetImageKey(mediaSet), null, 0);
-		
-		final Bitmap gridCover = (bitmapInCache != null && bitmapInCache.getWidth() >= coverWidth) ? bitmapInCache.copy(Bitmap.Config.RGB_565, true) : Bitmap.createBitmap(coverWidth, coverHeight, Bitmap.Config.RGB_565);
+			
+		boolean isGridCoverSizeCache = (bitmapInCache != null && bitmapInCache.getWidth() == coverWidth && bitmapInCache.getHeight() == coverHeight);
+		final Bitmap gridCover = isGridCoverSizeCache ? bitmapInCache.copy(Bitmap.Config.RGB_565, true) : Bitmap.createBitmap(coverWidth, coverHeight, Bitmap.Config.RGB_565);
 		final Canvas canvas = new Canvas(gridCover);
 		
 		for(int i=0; i<targetGridCount; i++)
@@ -772,7 +802,11 @@ public class MediaSetListFragment extends GalleryFragment
 			
 			final int index = i;
 	
-			Handle handle = ThumbnailImageManager.decodeSmallThumbnailImage(mediaList.get(i), ThumbnailImageManager.FLAG_ASYNC, new ThumbnailImageManager.DecodingCallback()
+			int flag = ThumbnailImageManager.FLAG_ASYNC;
+			if(isUrgent)
+				flag = flag | ThumbnailImageManager.FLAG_URGENT;
+			
+			Handle handle = ThumbnailImageManager.decodeSmallThumbnailImage(mediaList.get(i), flag, new ThumbnailImageManager.DecodingCallback()
 			{
 				@Override
 				public void onThumbnailImageDecoded(Handle handle, Media media, Bitmap thumb)
@@ -803,6 +837,9 @@ public class MediaSetListFragment extends GalleryFragment
 					}	
 					canvas.drawBitmap(thumb, new Rect(bitmapRectLeft, bitmapRectTop, bitmapRectLeft+shortSide, bitmapRectTop+shortSide), new Rect(rectLeft, rectTop, rectLeft+gridSize, rectTop+gridSize), null);
 					
+					// remove from decoding set
+					m_DecodingMediaSets.remove(mediaSet);
+					
 					// update bitmap table
 					m_CoverImageCache.add(CoverImageInfo.getMediaSetImageKey(mediaSet), gridCover);
 					
@@ -824,20 +861,26 @@ public class MediaSetListFragment extends GalleryFragment
 	
 	private void createMediaListCoverImageFromQueue()
 	{
+		createMediaListCoverImageFromQueue(false, false);
+	}
+	
+	private void createMediaListCoverImageFromQueue(boolean needToNotifyAdapter, boolean isUrgent)
+	{
 		if(m_MediaSetDecodeQueue.isEmpty())
 		{
 			//Log.w(TAG, "createMediaListCoverImageFromQueue() - m_MediaSetDecodeQueue is empty");
 			return;
 		}
-		
-		createMediaListCoverImage(m_MediaSetDecodeQueue.poll());	
-	}
+		m_DecodingMediaSets.add(m_MediaSetDecodeQueue.peek());
+		createMediaListCoverImage(m_MediaSetDecodeQueue.poll(), needToNotifyAdapter, isUrgent);	
+	}	
 	
-	private void createMediaListCoverImage(final MediaSet mediaSet)
+	private void createMediaListCoverImage(final MediaSet mediaSet, final boolean needToNotifyAdapter, final boolean isUrgent)
 	{
 		if(mediaSet == null)
 		{
 			Log.w(TAG, "createMediaListCoverImage() - mediaSet is null");
+			m_DecodingMediaSets.remove(mediaSet);
 			createMediaListCoverImageFromQueue();
 			return;
 		}
@@ -847,6 +890,7 @@ public class MediaSetListFragment extends GalleryFragment
 		if(mediaSetSize == null)
 		{
 			Log.w(TAG, "createMediaListCoverImage() - mediaSetSize is null");
+			m_DecodingMediaSets.remove(mediaSet);
 			createMediaListCoverImageFromQueue();
 			return;
 		}
@@ -907,12 +951,18 @@ public class MediaSetListFragment extends GalleryFragment
 								{
 									// there is no cache image, need to decode image
 									if(targetGridCount == 1)
-										decodeSingleCoverImage(mediaSet, mediaList);
+										decodeSingleCoverImage(mediaSet, mediaList, isUrgent);
 									else
-										decodeGridCoverImage(targetGridCount, gridPerRow, mediaSet, mediaList);	
+										decodeGridCoverImage(targetGridCount, gridPerRow, mediaSet, mediaList, isUrgent);	
 								}
 								else
-								{
+								{								
+									if(needToNotifyAdapter && m_MediaSetListAdapter != null)
+										m_MediaSetListAdapter.notifyDataSetChanged();
+									
+									// remove from decoding set
+									m_DecodingMediaSets.remove(mediaSet);
+									
 									// decode next media set
 									createMediaListCoverImageFromQueue();
 								}
@@ -932,9 +982,9 @@ public class MediaSetListFragment extends GalleryFragment
 						
 						// decode image
 						if(targetGridCount == 1)
-							decodeSingleCoverImage(mediaSet, mediaList);
+							decodeSingleCoverImage(mediaSet, mediaList, isUrgent);
 						else
-							decodeGridCoverImage(targetGridCount, gridPerRow, mediaSet, mediaList);	
+							decodeGridCoverImage(targetGridCount, gridPerRow, mediaSet, mediaList, isUrgent);	
 						
 						// release media list
 						mediaList.release();
