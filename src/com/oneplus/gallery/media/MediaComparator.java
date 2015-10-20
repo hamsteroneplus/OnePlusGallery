@@ -13,7 +13,7 @@ public abstract class MediaComparator implements Comparator<Media>
 	/**
 	 * Comparator by taken time.
 	 */
-	public static final MediaComparator TAKEN_TIME = new MediaComparator(ImageColumns.DATE_TAKEN + " DESC ," + MediaColumns.DATA + " ASC")
+	public static final MediaComparator TAKEN_TIME = new MediaComparator(ImageColumns.DATE_TAKEN + " DESC ," + MediaColumns.DATA + " DESC")
 	{
 		@Override
 		public int compare(Media lhs, Media rhs)
@@ -31,11 +31,11 @@ public abstract class MediaComparator implements Comparator<Media>
 			if(pathL != null)
 			{
 				if(pathR != null)
-					return pathL.compareTo(pathR);
-				return -1;
+					return -pathL.compareTo(pathR);
+				return 1;
 			}
 			else if(pathR != null)
-				return 1;
+				return -1;
 			return 0;
 		}
 	};
