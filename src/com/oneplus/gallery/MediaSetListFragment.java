@@ -51,6 +51,7 @@ import com.oneplus.gallery.media.MediaSet;
 import com.oneplus.gallery.media.MediaSetList;
 import com.oneplus.gallery.media.ThumbnailImageManager;
 import com.oneplus.media.BitmapPool;
+import com.oneplus.media.CenterCroppedBitmapPool;
 
 /**
  * Fragment to display media set list.
@@ -62,11 +63,11 @@ public class MediaSetListFragment extends GalleryFragment
 	private static final long DISK_CACHE_SIZE = 200 * 1024 * 1024;
 	private static final String COVER_IMAGE_CACHE_NAME = "MediaSetCoverImage";
 	private static final String CAMERA_ROLL_COVER_IMAGE_KEY = "ThankYou9527";
-	private static final int SINGLE_COVER_IMAGE_SIZE = 1080;
 	
 	// static fields
 	private static HybridBitmapLruCache<String> m_CoverImageCache;
 	private static volatile Executor m_CacheImageLoaderExecutor;
+	private static BitmapPool m_CenterCropBitmapPool = new CenterCroppedBitmapPool("MediaSetListFragmentCenterCropBitmapPool", 32 << 20, Bitmap.Config.RGB_565, 4, BitmapPool.FLAG_NO_EMBEDDED_THUMB);
 	
 	// Fields
 	private Activity m_Activity;
@@ -739,8 +740,16 @@ public class MediaSetListFragment extends GalleryFragment
 		}
 		else
 			mediaSetDecodingHandleList =  new ArrayList<Handle>();
+			
+		// create singleCoverImage
+		final int coverWidth = m_Activity.getResources().getDisplayMetrics().widthPixels;
+		final int coverHeight = m_Activity.getResources().getDimensionPixelSize(R.dimen.media_set_list_item_cover_image_height);
 		
-		Handle handle = BitmapPool.DEFAULT_THUMBNAIL.decode(mediaList.get(0).getFilePath(), SINGLE_COVER_IMAGE_SIZE, SINGLE_COVER_IMAGE_SIZE, isUrgent ? BitmapPool.FLAG_URGENT : 0 , new BitmapPool.Callback() {
+		int flag = BitmapPool.FLAG_ASYNC;
+		if(isUrgent)
+			flag = flag | BitmapPool.FLAG_URGENT;
+		
+		Handle handle = m_CenterCropBitmapPool.decode(mediaList.get(0).getFilePath(), coverWidth, coverHeight, flag, new BitmapPool.Callback() {
 			@Override
 			public void onBitmapDecoded(Handle handle, String filePath, Bitmap bitmap) {	
 				
@@ -757,8 +766,7 @@ public class MediaSetListFragment extends GalleryFragment
 				// decode next media set
 				createMediaListCoverImageFromQueue();
 			}
-			
-		}, getHandler());		
+		}, getHandler());			
 		mediaSetDecodingHandleList.add(handle);
 		
 		m_MediaSetDecodingHandles.put(CoverImageInfo.getMediaSetImageKey(mediaSet), mediaSetDecodingHandleList);
@@ -791,10 +799,11 @@ public class MediaSetListFragment extends GalleryFragment
 		
 		final int gridSize = (int)Math.sqrt( (coverWidth * coverHeight) / targetGridCount);
 		
-		Bitmap bitmapInCache = m_CoverImageCache.get(CoverImageInfo.getMediaSetImageKey(mediaSet), null, 0);
+//		Bitmap bitmapInCache = m_CoverImageCache.get(CoverImageInfo.getMediaSetImageKey(mediaSet), null, 0);
 			
-		boolean isGridCoverSizeCache = (bitmapInCache != null && bitmapInCache.getWidth() == coverWidth && bitmapInCache.getHeight() == coverHeight);
-		final Bitmap gridCover = isGridCoverSizeCache ? bitmapInCache.copy(Bitmap.Config.RGB_565, true) : Bitmap.createBitmap(coverWidth, coverHeight, Bitmap.Config.RGB_565);
+//		boolean isGridCoverSizeCache = (bitmapInCache != null && bitmapInCache.getWidth() == coverWidth && bitmapInCache.getHeight() == coverHeight);
+//		final Bitmap gridCover = isGridCoverSizeCache ? bitmapInCache.copy(Bitmap.Config.RGB_565, true) : Bitmap.createBitmap(coverWidth, coverHeight, Bitmap.Config.RGB_565);
+		final Bitmap gridCover = Bitmap.createBitmap(coverWidth, coverHeight, Bitmap.Config.RGB_565);
 		final Canvas canvas = new Canvas(gridCover);
 		
 		for(int i=0; i<targetGridCount; i++)
