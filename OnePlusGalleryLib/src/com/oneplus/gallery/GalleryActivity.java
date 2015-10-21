@@ -13,7 +13,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.util.SparseArray;
 
-import com.oneplus.base.BaseActivity;
+import com.oneplus.base.ComponentOwnerActivity;
 import com.oneplus.base.Handle;
 import com.oneplus.base.Log;
 import com.oneplus.base.PropertyChangeEventArgs;
@@ -25,7 +25,7 @@ import com.oneplus.base.ScreenSize;
 /**
  * Base class for activity in Gallery.
  */
-public abstract class GalleryActivity extends BaseActivity
+public abstract class GalleryActivity extends ComponentOwnerActivity
 {
 	/**
 	 * Read-only property to get screen size.
@@ -256,7 +256,7 @@ public abstract class GalleryActivity extends BaseActivity
 			else
 			{
 				Log.w(TAG, "onCreate() - Create new Gallery");
-				m_Gallery = new Gallery();
+				m_Gallery = GalleryApplication.current().createGallery();
 				m_ActivityResultHandles = new SparseArray<>();
 			}
 		}

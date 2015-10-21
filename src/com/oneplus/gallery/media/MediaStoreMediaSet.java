@@ -16,11 +16,13 @@ import android.os.RemoteException;
 import android.provider.MediaStore.Files;
 import android.provider.MediaStore.Files.FileColumns;
 import android.provider.MediaStore.MediaColumns;
+
 import com.oneplus.base.Handle;
 import com.oneplus.base.HandleSet;
 import com.oneplus.base.HandlerBaseObject;
 import com.oneplus.base.HandlerUtils;
 import com.oneplus.base.Log;
+import com.oneplus.gallery.GalleryApplication;
 
 /**
  * Media set based-on media store.
@@ -47,6 +49,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	private Handle m_MediaChangeCallbackHandle;
 	private volatile Handle m_MediaCountRefreshHandle;
 	private final Set<Long> m_MediaIdTable = new HashSet<>();
+	private final OPMediaManager m_MediaManager;
 	private Handle m_MediaManagerActivatedHandle;
 	private HandleSet m_MediaStoreContentChangedCBHandles;
 	private final Type m_Type;
@@ -73,20 +76,6 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 		public void onMediaUpdated(long id, Media media)
 		{
 			MediaStoreMediaSet.this.onMediaUpdated(id, media);
-		}
-	};
-	private final MediaManager.ActiveStateCallback m_MediaManagerActiveStateCB = new MediaManager.ActiveStateCallback()
-	{
-		@Override
-		public void onDeactivated()
-		{
-			onMediaManagerDeactivated();
-		}
-		
-		@Override
-		public void onActivated()
-		{
-			onMediaManagerActivated();
 		}
 	};
 	
@@ -204,8 +193,8 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 		if(type == null)
 			throw new IllegalArgumentException("No type specified.");
 		m_Type = type;
-		MediaManager.addActiveStateCallback(m_MediaManagerActiveStateCB);
-		m_MediaChangeCallbackHandle = MediaManager.registerMediaChangeCallback(m_MediaChangeCallback, this.getHandler());
+		m_MediaManager = GalleryApplication.current().findComponent(OPMediaManager.class);
+		m_MediaChangeCallbackHandle = m_MediaManager.registerMediaChangeCallback(m_MediaChangeCallback, this.getHandler());
 	}
 	
 	
@@ -238,7 +227,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 		final MediaSetDeletionHandle handle = new MediaSetDeletionHandle(callback, handler);
 		
 		// delete asynchronously
-		MediaManager.accessContentProvider(CONTENT_URI_FILE, new MediaManager.ContentProviderAccessCallback()
+		m_MediaManager.accessContentProvider(CONTENT_URI_FILE, new MediaManager.ContentProviderAccessCallback()
 		{
 			@Override
 			public void onAccessContentProvider(ContentResolver contentResolver, Uri contentUri, ContentProviderClient client) throws RemoteException
@@ -298,7 +287,17 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 		}
 		
 		// delete
-		return MediaManager.deleteMedia(media, callback, handler);
+		return m_MediaManager.deleteMedia(media, callback, handler);
+	}
+	
+	
+	/**
+	 * Get media manager.
+	 * @return Media manager.
+	 */
+	protected final OPMediaManager getMediaManager()
+	{
+		return m_MediaManager;
 	}
 
 	
@@ -364,7 +363,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	protected void onDeleted()
 	{
 		// notify MediaManager
-		MediaManager.notifyMediaSetDeleted(MediaStoreMediaSet.this);
+		m_MediaManager.notifyMediaSetDeleted(MediaStoreMediaSet.this);
 		
 		// release all media lists
 		if(m_ActiveMediaLists != null && !m_ActiveMediaLists.isEmpty())
@@ -506,17 +505,16 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 		m_MediaCountRefreshHandle = Handle.close(m_MediaCountRefreshHandle);
 		
 		// unregister content change call-back
-		MediaManager.postToContentThread(new Runnable()
+		m_MediaManager.postToContentThread(new Runnable()
 		{
 			@Override
 			public void run()
 			{
 				m_MediaStoreContentChangedCBHandles = Handle.close(m_MediaStoreContentChangedCBHandles);
 			}
-		});
+		}, 0);
 		
 		// remove call-back
-		MediaManager.removeActiveStateCallback(m_MediaManagerActiveStateCB);
 		m_MediaChangeCallbackHandle = Handle.close(m_MediaChangeCallbackHandle);
 		
 		// clear media ID table
@@ -547,10 +545,10 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 		
 		// activate media manager
 		Handle.close(m_MediaManagerActivatedHandle);
-		m_MediaManagerActivatedHandle = MediaManager.activate();
+		m_MediaManagerActivatedHandle = m_MediaManager.activate();
 		
 		// start updating media list
-		MediaManager.accessContentProvider(CONTENT_URI_FILE, new MediaManager.ContentProviderAccessCallback()
+		m_MediaManager.accessContentProvider(CONTENT_URI_FILE, new MediaManager.ContentProviderAccessCallback()
 		{
 			@Override
 			public void onAccessContentProvider(ContentResolver contentResolver, Uri contentUri, ContentProviderClient client) throws RemoteException
@@ -567,7 +565,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 					{
 						while(cursor.moveToNext())
 						{
-							Media media = MediaManager.obtainMedia(cursor, 0);
+							Media media = m_MediaManager.obtainMedia(cursor, 0);
 							if(media == null)
 								continue;
 							if(mediaReportThreshold == 1)
@@ -615,7 +613,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 	{
 		final HashSet<Uri> srcContentUris = new HashSet<>();
 		mediaList.getAllContentUris(srcContentUris);
-		MediaManager.accessContentProvider(CONTENT_URI_FILE, new MediaManager.ContentProviderAccessCallback()
+		m_MediaManager.accessContentProvider(CONTENT_URI_FILE, new MediaManager.ContentProviderAccessCallback()
 		{
 			@Override
 			public void onAccessContentProvider(ContentResolver contentResolver, Uri contentUri, ContentProviderClient client) throws RemoteException
@@ -635,7 +633,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 							Uri uri = MediaStoreMedia.getContentUri(cursor);
 							if(uri == null || srcContentUris.remove(uri))
 								continue;
-							Media media = MediaManager.obtainMedia(cursor, 0);
+							Media media = m_MediaManager.obtainMedia(cursor, 0);
 							if(media != null)
 								HandlerUtils.sendMessage(MediaStoreMediaSet.this, MSG_ADD_MEDIA_TO_MEDIA_LIST, new Object[]{ mediaList, media });
 						}
@@ -710,7 +708,7 @@ public abstract class MediaStoreMediaSet extends HandlerBaseObject implements Me
 		
 		// update
 		final HashSet<Long> currentIdTable = new HashSet<Long>(m_MediaIdTable);
-		MediaManager.accessContentProvider(CONTENT_URI_FILE, new MediaManager.ContentProviderAccessCallback()
+		m_MediaManager.accessContentProvider(CONTENT_URI_FILE, new MediaManager.ContentProviderAccessCallback()
 		{
 			@Override
 			public void onAccessContentProvider(ContentResolver contentResolver, Uri contentUri, ContentProviderClient client) throws RemoteException

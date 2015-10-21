@@ -57,7 +57,7 @@ public class CameraRollMediaSet extends MediaStoreMediaSet
 	protected void onDeleted() {
 		
 		// notify MediaManager
-		MediaManager.notifyMediaSetDeleted(CameraRollMediaSet.this);
+		this.getMediaManager().notifyMediaSetDeleted(CameraRollMediaSet.this);
 		
 		// reset media count
 		setReadOnly(PROP_MEDIA_COUNT, 0);

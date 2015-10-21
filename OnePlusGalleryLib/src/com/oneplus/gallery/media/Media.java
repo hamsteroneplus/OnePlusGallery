@@ -6,7 +6,6 @@ import android.os.Handler;
 
 import com.oneplus.base.Handle;
 import com.oneplus.base.HandlerObject;
-import com.oneplus.gallery.MediaType;
 
 /**
  * Interface to represent a media item.

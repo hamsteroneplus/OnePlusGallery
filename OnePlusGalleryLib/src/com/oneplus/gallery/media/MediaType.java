@@ -1,4 +1,4 @@
-package com.oneplus.gallery;
+package com.oneplus.gallery.media;
 
 /**
  * Media type.

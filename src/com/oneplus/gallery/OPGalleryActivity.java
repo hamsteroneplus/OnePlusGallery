@@ -83,6 +83,7 @@ public class OPGalleryActivity extends GalleryActivity
 	private boolean m_IsGridViewFragmentAdded;
 	private boolean m_IsInstanceStateSaved;
 	private MediaList m_MediaList;
+	private MediaManager m_MediaManager;
 	private Handle m_MediaManagerActivateHandle;
 	private MediaSetList m_MediaSetList;
 	private MediaSetListFragment m_MediaSetListFragment;
@@ -418,6 +419,9 @@ public class OPGalleryActivity extends GalleryActivity
 		
 		// start thread monitor
 		ThreadMonitor.startMonitorCurrentThread();
+		
+		// get media manager
+		m_MediaManager = GalleryApplication.current().findComponent(MediaManager.class);
 
 		// setup media set list
 		this.setupMediaSetList();
@@ -828,7 +832,7 @@ public class OPGalleryActivity extends GalleryActivity
 		
 		// activate media manager
 		if(!Handle.isValid(m_MediaManagerActivateHandle))
-			m_MediaManagerActivateHandle = MediaManager.activate();
+			m_MediaManagerActivateHandle = m_MediaManager.activate();
 	}
 	
 	
@@ -1042,7 +1046,7 @@ public class OPGalleryActivity extends GalleryActivity
 		else
 		{
 			Log.v(TAG, "setupMediaSetList() - Create new list");
-			m_SharedMediaSetList = MediaManager.createMediaSetList();
+			m_SharedMediaSetList = m_MediaManager.createMediaSetList();
 		}
 		m_MediaSetList = m_SharedMediaSetList;
 		++m_SharedMediaSetListRefCount;

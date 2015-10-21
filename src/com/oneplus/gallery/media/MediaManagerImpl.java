@@ -14,8 +14,10 @@ import java.util.Map;
 import com.oneplus.base.Handle;
 import com.oneplus.base.HandleSet;
 import com.oneplus.base.HandlerBaseObject;
+import com.oneplus.base.HandlerUtils;
 import com.oneplus.base.ListHandlerBaseObject;
 import com.oneplus.base.Log;
+import com.oneplus.base.component.BasicComponent;
 import com.oneplus.database.CursorUtils;
 import com.oneplus.gallery.GalleryApplication;
 import com.oneplus.gallery.ListChangeEventArgs;
@@ -45,46 +47,9 @@ import android.provider.MediaStore.Files.FileColumns;
 /**
  * Media manager.
  */
-public class MediaManager
+public class MediaManagerImpl extends BasicComponent implements OPMediaManager
 {
-	/**
-	 * Media store column name of OnePlus flags.
-	 */
-	public static final String COLUMN_ONEPLUS_FLAGS = "oneplus_flags";
-	
-	
-	/**
-	 * Flag for {@link #COLUMN_ONEPLUS_FLAGS} : Selfie media.
-	 */
-	public static final int ONEPLUS_FLAG_SELFIE = 0x1;
-	/**
-	 * Flag for {@link #COLUMN_ONEPLUS_FLAGS} : Panorama photo.
-	 */
-	public static final int ONEPLUS_FLAG_PANORAMA = 0x2;
-	/**
-	 * Flag for {@link #COLUMN_ONEPLUS_FLAGS} : Slow-motion video.
-	 */
-	public static final int ONEPLUS_FLAG_SLOW_MOTION = 0x4;
-	/**
-	 * Flag for {@link #COLUMN_ONEPLUS_FLAGS} : Time-lapse video.
-	 */
-	public static final int ONEPLUS_FLAG_TIME_LAPSE = 0x8;
-	/**
-	 * Flag for {@link #COLUMN_ONEPLUS_FLAGS} : Favorite.
-	 */
-	public static final int ONEPLUS_FLAG_FAVORITE = 0x10;
-	/**
-	 * Flag for {@link #COLUMN_ONEPLUS_FLAGS} : Cover photo.
-	 */
-	public static final int ONEPLUSP_FLAG_COVER = 0x10000;
-	/**
-	 * Flag for {@link #COLUMN_ONEPLUS_FLAGS} : Burst photo set.
-	 */
-	public static final int ONEPLUS_FLAG_BURST = 0x20000;
-	
-	
 	// Constants.
-	private static final String TAG = "MediaManager";
 	private static final Uri CONTENT_URI_FILE = Files.getContentUri("external");
 	private static final Uri CONTENT_URI_IMAGE = Images.Media.EXTERNAL_CONTENT_URI;
 	private static final Uri CONTENT_URI_VIDEO = Video.Media.EXTERNAL_CONTENT_URI;
@@ -95,9 +60,6 @@ public class MediaManager
 	};
 	private static final String[] MEDIA_ID_COLUMNS = new String[]{
 		MediaColumns._ID,
-	};
-	private static final String[] ONEPLUS_FLAGS_COLUMNS = new String[]{
-		COLUMN_ONEPLUS_FLAGS,
 	};
 	private static final String DIR_QUERY_CONDITION = 
 			"(" 
@@ -110,6 +72,10 @@ public class MediaManager
 			FileColumns.MEDIA_TYPE + "=" + FileColumns.MEDIA_TYPE_IMAGE
 			+ " OR " + FileColumns.MEDIA_TYPE + "=" + FileColumns.MEDIA_TYPE_VIDEO
 	;
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	private static final List<Class<?>> SYSTEM_MEDIA_SET_PRIORITIES = (List)Arrays.asList(
+		CameraRollMediaSet.class
+	);
 	private static final long INTERVAL_CHECK_CONTENT_CHANGES = 2000;
 	private static final long DURATION_RELEASE_MEDIA_TABLE_DELAY = 3000;
 	private static final int MSG_ACCESS_CONTENT_PROVIDER = 10000;
@@ -130,26 +96,23 @@ public class MediaManager
 	
 	
 	// Fields.
-	private static final List<Handle> m_ActivateHandles = new ArrayList<>();
-	private static final List<ActiveStateCallback> m_ActiveStateCallbacks = new ArrayList<>();
-	private static final List<WeakReference<MediaSetListImpl>> m_ActiveMediaSetLists = new ArrayList<>();
-	private static CameraRollMediaSet m_CameraRollMediaSet;
-	private static HashMap<Uri, ContentObserver> m_ContentObservers;
-	private static ContentResolver m_ContentResolver;
-	private static volatile HandlerThread m_ContentThread;
-	private static volatile Handler m_ContentThreadHandler;
-	private static final HashMap<Integer, DirectoryMediaSet> m_DirectoryMediaSets = new HashMap<>();
-	private static volatile Handler m_Handler;
-	private static volatile boolean m_IsOnePlusMediaProvider;
-	private static final Object m_Lock = new Object();
-	private static final List<MediaChangeCallbackHandle> m_MediaChangeCallbackHandles = new ArrayList<>();
-	private static Handle m_MediaContentChangeCBHandle;
-	private static final Map<Long, Media> m_MediaTable = new HashMap<>();
-	private static TempMediaSet m_TempMediaSet;
+	private final List<Handle> m_ActivateHandles = new ArrayList<>();
+	private final List<WeakReference<MediaSetListImpl>> m_ActiveMediaSetLists = new ArrayList<>();
+	private CameraRollMediaSet m_CameraRollMediaSet;
+	private HashMap<Uri, ContentObserver> m_ContentObservers;
+	private ContentResolver m_ContentResolver;
+	private volatile HandlerThread m_ContentThread;
+	private volatile Handler m_ContentThreadHandler;
+	private final HashMap<Integer, DirectoryMediaSet> m_DirectoryMediaSets = new HashMap<>();
+	private final Object m_Lock = new Object();
+	private final List<MediaChangeCallbackHandle> m_MediaChangeCallbackHandles = new ArrayList<>();
+	private Handle m_MediaContentChangeCBHandle;
+	private final Map<Long, Media> m_MediaTable = new HashMap<>();
+	private TempMediaSet m_TempMediaSet;
 	
 	
 	// Call-backs.
-	private static final ContentChangeCallback m_MediaContentChangeCB = new ContentChangeCallback()
+	private final ContentChangeCallback m_MediaContentChangeCB = new ContentChangeCallback()
 	{
 		@Override
 		public void onContentChanged(Uri contentUri)
@@ -160,125 +123,14 @@ public class MediaManager
 			{
 				if(!m_ContentThreadHandler.hasMessages(MSG_SYNC_MEDIA_TABLE))
 					m_ContentThreadHandler.sendEmptyMessage(MSG_SYNC_MEDIA_TABLE);
-				m_Handler.sendEmptyMessage(MSG_REFRESH_MEDIA_SET_LISTS);
+				HandlerUtils.sendMessage(MediaManagerImpl.this, MSG_REFRESH_MEDIA_SET_LISTS);
 			}
 		}
 	};
 	
 	
-	// Runnables.
-	private static final Runnable m_CheckOPMediaProviderRunnable = new Runnable()
-	{
-		@Override
-		public void run()
-		{
-			checkOnePlusMediaProvider();
-		}
-	};
-	
-	
-	/**
-	 * Call-back to access content provider.
-	 */
-	public interface ContentProviderAccessCallback
-	{
-		/**
-		 * Called when ready to access content provider.
-		 * @param contentResolver Content resolver.
-		 * @param client Content provider client.
-		 */
-		void onAccessContentProvider(ContentResolver contentResolver, Uri contentUri, ContentProviderClient client) throws RemoteException;
-	}
-	
-	
-	/**
-	 * Call-back interface for media manager active state change.
-	 */
-	public interface ActiveStateCallback
-	{
-		/**
-		 * Called if media manager is activated.
-		 */
-		void onActivated();
-		
-		/**
-		 * Called if media manager is deactivated.
-		 */
-		void onDeactivated();
-	}
-	
-	
-	/**
-	 * Call-back interface for content change.
-	 */
-	public interface ContentChangeCallback
-	{
-		/**
-		 * Called when content changed.
-		 * @param contentUri Changed content URI.
-		 */
-		void onContentChanged(Uri contentUri);
-	}
-	
-	
-	/**
-	 * Call-back interface for media creation.
-	 */
-	public interface MediaCreationCallback
-	{
-		/**
-		 * Called when creation completed.
-		 * @param handle Handle returned from {@link MediaManager#createTemporaryMedia(Uri)}.
-		 * @param contentUri Content URI of media.
-		 * @param media Created media, or Null if creation failed.
-		 */
-		void onCreationCompleted(Handle handle, Uri contentUri, Media media);
-	}
-	
-	
-	/**
-	 * Call-back interface for media change.
-	 */
-	public interface MediaChangeCallback
-	{
-		/**
-		 * Called when media created.
-		 * @param id Media ID.
-		 * @param media Instance of this media, may be Null.
-		 */
-		void onMediaCreated(long id, Media media);
-		/**
-		 * Called when media deleted.
-		 * @param id Media ID.
-		 * @param media Instance of this media, may be Null.
-		 */
-		void onMediaDeleted(long id, Media media);
-		/**
-		 * Called when media updated.
-		 * @param id Media ID.
-		 * @param media Instance of this media, may be Null.
-		 */
-		void onMediaUpdated(long id, Media media);
-	}
-	
-	
-	/**
-	 * {@link Handler} runs on content thread.
-	 */
-	public static abstract class ContentThreadHandler extends Handler
-	{
-		/**
-		 * Initialize new ContentThreadHandler instance.
-		 */
-		protected ContentThreadHandler()
-		{
-			super(getContentThreadLooper());
-		}
-	}
-	
-	
 	// Handle for content provider access.
-	private static final class ContentProviderAccessHandle extends Handle
+	private final class ContentProviderAccessHandle extends Handle
 	{
 		public final ContentProviderAccessCallback callback;
 		public final Uri contentUri;
@@ -323,7 +175,7 @@ public class MediaManager
 	
 	
 	// Handle for media change call-back.
-	private static final class MediaChangeCallbackHandle extends CallbackHandle<MediaChangeCallback>
+	private final class MediaChangeCallbackHandle extends CallbackHandle<MediaChangeCallback>
 	{
 		// Constructor.
 		public MediaChangeCallbackHandle(MediaChangeCallback callback, Handler handler)
@@ -454,7 +306,7 @@ public class MediaManager
 	
 	
 	// Handle for content changed call-back.
-	private static final class ContentChangeCallbackHandle extends Handle
+	private final class ContentChangeCallbackHandle extends Handle
 	{
 		private static final int MSG_CONTENT_CHANGED = 10000;
 		public final Uri contentUri;
@@ -510,7 +362,7 @@ public class MediaManager
 	
 	
 	// Content observer.
-	private static final class ContentObserver extends android.database.ContentObserver
+	private final class ContentObserver extends android.database.ContentObserver
 	{
 		public final List<ContentChangeCallbackHandle> callbackHandles = new ArrayList<>();
 		public final Uri contentUri;
@@ -543,20 +395,16 @@ public class MediaManager
 		public void onChange(boolean selfChange, Uri uri)
 		{
 			this.lastChangedTime = SystemClock.elapsedRealtime();
-			if(isActive() && !m_ContentThreadHandler.hasMessages(MSG_CHECK_CONTENT_CHANGES))
+			if(get(PROP_IS_ACTIVE) && !m_ContentThreadHandler.hasMessages(MSG_CHECK_CONTENT_CHANGES))
 				m_ContentThreadHandler.sendEmptyMessageDelayed(MSG_CHECK_CONTENT_CHANGES, INTERVAL_CHECK_CONTENT_CHANGES);
 		}
 	}
 	
 	
 	// Media set list implementation.
-	private static final class MediaSetListImpl extends ListHandlerBaseObject<MediaSet> implements MediaSetList, Comparator<MediaSet>
+	private final class MediaSetListImpl extends ListHandlerBaseObject<MediaSet> implements MediaSetList, Comparator<MediaSet>
 	{
 		// Fields.
-		@SuppressWarnings({ "unchecked", "rawtypes" })
-		private static final List<Class<?>> SYSTEM_MEDIA_SET_PRIORITIES = (List)Arrays.asList(
-			CameraRollMediaSet.class
-		);
 		private final List<MediaSet> m_List = new ArrayList<>();
 		
 		// Add media set.
@@ -692,8 +540,10 @@ public class MediaManager
 	
 	
 	// Constructor.
-	private MediaManager()
-	{}
+	MediaManagerImpl(GalleryApplication application)
+	{
+		super("Media manager", application, true);
+	}
 	
 	
 	/**
@@ -702,7 +552,8 @@ public class MediaManager
 	 * @param callback Call-back to access content provider.
 	 * @return Handle to this operation.
 	 */
-	public static Handle accessContentProvider(Uri contentUri, ContentProviderAccessCallback callback)
+	@Override
+	public Handle accessContentProvider(Uri contentUri, ContentProviderAccessCallback callback)
 	{
 		if(contentUri == null)
 		{
@@ -729,7 +580,7 @@ public class MediaManager
 	
 	
 	// Access content provider (in content thread).
-	private static void accessContentProvider(ContentProviderAccessHandle handle)
+	private void accessContentProvider(ContentProviderAccessHandle handle)
 	{
 		ContentProviderClient client = null;
 		try
@@ -756,7 +607,8 @@ public class MediaManager
 	 * Activate media manager.
 	 * @return Handle to activation.
 	 */
-	public static Handle activate()
+	@Override
+	public Handle activate()
 	{
 		// check state
 		verifyAccess();
@@ -777,37 +629,25 @@ public class MediaManager
 		{
 			Log.w(TAG, "activate()");
 			
-			// call-back
-			for(int i = m_ActiveStateCallbacks.size() - 1 ; i >= 0 ; --i)
-				m_ActiveStateCallbacks.get(i).onActivated();
-			
 			// activate
 			startContentThread();
-			m_ContentThreadHandler.post(m_CheckOPMediaProviderRunnable);
 			m_ContentThreadHandler.removeMessages(MSG_RELEASE_MEDIA_TABLE);
 			m_ContentThreadHandler.sendEmptyMessage(MSG_SETUP_MEDIA_TABLE);
 			m_ContentThreadHandler.sendEmptyMessage(MSG_CHECK_CONTENT_CHANGES);
 			
 			// register content change call-back
 			HandleSet handles = new HandleSet();
-			handles.addHandle(registerContentChangedCallback(CONTENT_URI_IMAGE, m_MediaContentChangeCB, m_Handler));
-			handles.addHandle(registerContentChangedCallback(CONTENT_URI_VIDEO, m_MediaContentChangeCB, m_Handler));
+			Handler handler = this.getHandler();
+			handles.addHandle(registerContentChangedCallback(CONTENT_URI_IMAGE, m_MediaContentChangeCB, handler));
+			handles.addHandle(registerContentChangedCallback(CONTENT_URI_VIDEO, m_MediaContentChangeCB, handler));
 			m_MediaContentChangeCBHandle = handles;
+			
+			// update property
+			this.setReadOnly(PROP_IS_ACTIVE, true);
 		}
 		
 		// complete
 		return handle;
-	}
-	
-	
-	/**
-	 * Add {@link ActiveStateCallback}.
-	 * @param callback Call-back to add.
-	 */
-	public static void addActiveStateCallback(ActiveStateCallback callback)
-	{
-		verifyAccess();
-		m_ActiveStateCallbacks.add(callback);
 	}
 	
 	
@@ -817,7 +657,8 @@ public class MediaManager
 	 * @param flags New flags to add.
 	 * @return True if update successfully.
 	 */
-	public static boolean addOnePlusFlags(Uri contentUri, final int flags)
+	@Override
+	public boolean addOnePlusFlags(Uri contentUri, final int flags)
 	{
 		Message msg = Message.obtain(m_ContentThreadHandler, MSG_UPDATE_ONEPLUS_FLAGS, new Object[] {contentUri, flags, true});
 		return m_ContentThreadHandler.sendMessage(msg);
@@ -825,7 +666,7 @@ public class MediaManager
 	
 	
 	// Cancel content provider access.
-	private static void cancelContentProviderAccess(ContentProviderAccessHandle handle)
+	private void cancelContentProviderAccess(ContentProviderAccessHandle handle)
 	{
 		if(m_ContentThreadHandler != null)
 			m_ContentThreadHandler.removeMessages(MSG_ACCESS_CONTENT_PROVIDER, handle);
@@ -833,10 +674,10 @@ public class MediaManager
 	
 	
 	// Check all content changes (in content thread).
-	private static void checkContentChanges()
+	private void checkContentChanges()
 	{
 		// check state
-		if(m_ContentObservers.isEmpty() || !isActive())
+		if(m_ContentObservers.isEmpty() || !get(PROP_IS_ACTIVE))
 			return;
 		
 		// check changes
@@ -848,55 +689,12 @@ public class MediaManager
 	}
 	
 	
-	// Check whether default media provider is OnePlus media provider or not.
-	private static void checkOnePlusMediaProvider()
-	{
-		if(m_IsOnePlusMediaProvider)
-		{
-			Log.w(TAG, "checkOnePlusMediaProvider()");
-			return;
-		}
-		try
-		{
-			ContentProviderClient client = GalleryApplication.current().getContentResolver().acquireUnstableContentProviderClient(CONTENT_URI_IMAGE);
-			Cursor cursor = null;
-			if(client != null)
-			{
-				try
-				{
-					cursor = client.query(CONTENT_URI_IMAGE, new String[]{ COLUMN_ONEPLUS_FLAGS }, null, null, null);
-					if(cursor != null)
-					{
-						m_IsOnePlusMediaProvider = true;
-						// create favorite media set
-					}
-				}
-				catch(Throwable ex)
-				{}
-				finally
-				{
-					if(cursor != null)
-						cursor.close();
-					client.release();
-				}
-			}
-			if(m_IsOnePlusMediaProvider)
-				Log.w(TAG, "checkOnePlusMediaProvider()");
-			else
-				Log.w(TAG, "checkOnePlusMediaProvider() - Not OnePlus media provider");
-		}
-		catch(Throwable ex)
-		{
-			Log.e(TAG, "checkOnePlusMediaProvider() - Fail to check", ex);
-		}
-	}
-	
-	
 	/**
 	 * Create new media set list.
 	 * @return Media set list.
 	 */
-	public static MediaSetList createMediaSetList()
+	@Override
+	public MediaSetList createMediaSetList()
 	{
 		// check state
 		verifyAccess();
@@ -910,8 +708,9 @@ public class MediaManager
 		if(m_ActiveMediaSetLists.size() == 1)
 		{
 			HandleSet handles = new HandleSet();
-			handles.addHandle(registerContentChangedCallback(CONTENT_URI_IMAGE, m_MediaContentChangeCB, m_Handler));
-			handles.addHandle(registerContentChangedCallback(CONTENT_URI_VIDEO, m_MediaContentChangeCB, m_Handler));
+			Handler handler = this.getHandler();
+			handles.addHandle(registerContentChangedCallback(CONTENT_URI_IMAGE, m_MediaContentChangeCB, handler));
+			handles.addHandle(registerContentChangedCallback(CONTENT_URI_VIDEO, m_MediaContentChangeCB, handler));
 			m_MediaContentChangeCBHandle = handles;
 		}
 		
@@ -935,7 +734,8 @@ public class MediaManager
 	 * @param callback Call-back to received created media.
 	 * @return Handle to media creation.
 	 */
-	public static Handle createTemporaryMedia(final Uri contentUri, final MediaCreationCallback callback)
+	@Override
+	public Handle createTemporaryMedia(final Uri contentUri, final MediaCreationCallback callback)
 	{
 		// check parameter
 		verifyAccess();
@@ -1003,7 +803,7 @@ public class MediaManager
 						try
 						{
 							if(cursor.moveToNext())
-								media = MediaStoreMedia.create(cursor, new ExtraMediaInfo(-1, -1), m_Handler);
+								media = MediaStoreMedia.create(cursor, new ExtraMediaInfo(-1, -1), getHandler());
 							else
 								Log.e(TAG, "createTemporaryMedia() - Content not found");
 						}
@@ -1020,7 +820,7 @@ public class MediaManager
 					Log.e(TAG, "createTemporaryMedia() - Fail to create", ex);
 				}
 				final Media result = media;
-				m_Handler.post(new Runnable()
+				getHandler().post(new Runnable()
 				{
 					@Override
 					public void run()
@@ -1043,7 +843,7 @@ public class MediaManager
 	
 	
 	// Deactivate media manager.
-	private static void deactivate(Handle handle)
+	private void deactivate(Handle handle)
 	{
 		// check state
 		verifyAccess();
@@ -1054,10 +854,6 @@ public class MediaManager
 		
 		Log.w(TAG, "deactivate()");
 		
-		// call-back
-		for(int i = m_ActiveStateCallbacks.size() - 1 ; i >= 0 ; --i)
-			m_ActiveStateCallbacks.get(i).onDeactivated();
-		
 		// stop checking content changes
 		if(m_ContentThreadHandler != null)
 			m_ContentThreadHandler.removeMessages(MSG_CHECK_CONTENT_CHANGES);
@@ -1067,6 +863,9 @@ public class MediaManager
 		
 		// release media table later
 		m_ContentThreadHandler.sendEmptyMessageDelayed(MSG_RELEASE_MEDIA_TABLE, DURATION_RELEASE_MEDIA_TABLE_DELAY);
+		
+		// update property
+		this.setReadOnly(PROP_IS_ACTIVE, false);
 	}
 	
 	
@@ -1077,7 +876,8 @@ public class MediaManager
 	 * @param handler Handler to perform call-back.
 	 * @return Handle to media deletion.
 	 */
-	public static Handle deleteMedia(Media media, MediaDeletionCallback callback, Handler handler)
+	@Override
+	public Handle deleteMedia(Media media, MediaDeletionCallback callback, Handler handler)
 	{
 		if(media == null)
 		{
@@ -1092,7 +892,7 @@ public class MediaManager
 	
 	
 	// Delete media (in content thread).
-	private static void deleteMedia(MediaDeletionHandle handle)
+	private void deleteMedia(MediaDeletionHandle handle)
 	{
 		// check state
 		if(!Handle.isValid(handle))
@@ -1169,7 +969,7 @@ public class MediaManager
 	
 	
 	// Get Looper for content thread.
-	private static Looper getContentThreadLooper()
+	private Looper getContentThreadLooper()
 	{
 		startContentThread();
 		return m_ContentThreadHandler.getLooper();
@@ -1177,7 +977,7 @@ public class MediaManager
 	
 	
 	// Handle content thread message.
-	private static void handleContentThreadMessage(Message msg)
+	private void handleContentThreadMessage(Message msg)
 	{
 		switch(msg.what)
 		{
@@ -1234,7 +1034,8 @@ public class MediaManager
 	
 	
 	// Handle main thread message.
-	private static void handleMessage(Message msg)
+	@Override
+	protected void handleMessage(Message msg)
 	{
 		switch(msg.what)
 		{
@@ -1249,37 +1050,11 @@ public class MediaManager
 			case MSG_REFRESH_MEDIA_SET_LISTS:
 				refreshMediaSetLists();
 				break;
+				
+			default:
+				super.handleMessage(msg);
+				break;
 		}
-	}
-	
-	
-	/**
-	 * Initialize media manager in current thread.
-	 */
-	public static synchronized void initialize()
-	{
-		if(m_Handler != null)
-			throw new IllegalStateException("Already initialized.");
-		m_Handler = new Handler()
-		{
-			@Override
-			public void handleMessage(Message msg)
-			{
-				MediaManager.handleMessage(msg);
-			}
-		};
-		startContentThread();
-		m_ContentThreadHandler.post(m_CheckOPMediaProviderRunnable);
-	}
-	
-	
-	/**
-	 * Check media manager active state.
-	 * @return True is media manager is active.
-	 */
-	public static boolean isActive()
-	{
-		return !m_ActivateHandles.isEmpty();
 	}
 	
 	
@@ -1287,19 +1062,10 @@ public class MediaManager
 	 * Check whether current thread is content thread or not.
 	 * @return True if current thread is content thread.
 	 */
-	public static boolean isContentThread()
+	@Override
+	public boolean isContentThread()
 	{
 		return (Thread.currentThread() == m_ContentThread);
-	}
-	
-	
-	/**
-	 * Check whether default media provider is OnePlus media provider or not.
-	 * @return True if media provider is OnePlus media provider.
-	 */
-	public static boolean isOnePlusMediaProvider()
-	{
-		return m_IsOnePlusMediaProvider;
 	}
 	
 	
@@ -1307,7 +1073,7 @@ public class MediaManager
 	 * Notify content changed directly.
 	 * @param contentUri Content URI.
 	 */
-	public static void notifyContentChanged(Uri contentUri)
+	public void notifyContentChanged(Uri contentUri)
 	{
 		if(contentUri == null)
 		{
@@ -1328,7 +1094,7 @@ public class MediaManager
 	
 	
 	// Notify content change (in content thread).
-	private static void notifyContentChangedDirectly(Uri contentUri)
+	private void notifyContentChangedDirectly(Uri contentUri)
 	{
 		String uriString = contentUri.toString();
 		for(ContentObserver observer : m_ContentObservers.values())
@@ -1343,7 +1109,8 @@ public class MediaManager
 	
 	
 	// Called when media set is deleted 
-	public static void notifyMediaSetDeleted(MediaSet mediaSet)
+	@Override
+	public void notifyMediaSetDeleted(MediaSet mediaSet)
 	{
 		if(mediaSet == null)
 		{
@@ -1371,7 +1138,8 @@ public class MediaManager
 	 * @param cursor Media ID.
 	 * @return Media instance, or Null if instance is not created yet.
 	 */
-	public static Media obtainMedia(long id)
+	@Override
+	public Media obtainMedia(long id)
 	{
 		synchronized(m_MediaTable)
 		{
@@ -1386,7 +1154,8 @@ public class MediaManager
 	 * @param idColumnIndex Column index of {@link MediaColumns#_ID}, or negative number to find index automatically.
 	 * @return Media instance, or Null if fail to create instance.
 	 */
-	public static Media obtainMedia(Cursor cursor, int idColumnIndex)
+	@Override
+	public Media obtainMedia(Cursor cursor, int idColumnIndex)
 	{
 		// check parameter
 		if(cursor == null)
@@ -1433,7 +1202,7 @@ public class MediaManager
 				
 				// create new media
 				int mediaCount = m_MediaTable.size();
-				media = MediaStoreMedia.create(cursor, extraInfo, m_Handler);
+				media = MediaStoreMedia.create(cursor, extraInfo, getHandler());
 				if(media == null)
 					return null;
 				m_MediaTable.put(id, media);
@@ -1458,7 +1227,7 @@ public class MediaManager
 	
 	
 	// Called when new directory media set created. (in main thread)
-	private static void onDirectoryMediaSetCreated(int id, String path)
+	private void onDirectoryMediaSetCreated(int id, String path)
 	{
 		if(m_ActiveMediaSetLists.isEmpty() || m_DirectoryMediaSets.containsKey(id))
 			return;
@@ -1476,7 +1245,7 @@ public class MediaManager
 	
 	
 	// Called when directory media set deleted. (in main thread)
-	private static void onDirectoryMediaSetDeleted(int id)
+	private void onDirectoryMediaSetDeleted(int id)
 	{
 		DirectoryMediaSet set = m_DirectoryMediaSets.get(id);
 		if(set == null)
@@ -1493,8 +1262,21 @@ public class MediaManager
 		set.release();
 	}
 	
+	
+	// Initialize.
+	@Override
+	protected void onInitialize()
+	{
+		// call super
+		super.onInitialize();
+		
+		// start content thread
+		this.startContentThread();
+	}
+	
+	
 	// Called when media set list released. (in main thread)
-	private static void onMediaSetListReleased(MediaSetListImpl list)
+	private void onMediaSetListReleased(MediaSetListImpl list)
 	{
 		for(int i = m_ActiveMediaSetLists.size() - 1 ; i >= 0 ; --i)
 		{
@@ -1531,7 +1313,7 @@ public class MediaManager
 	 * @param r Action to run.
 	 * @return True if action posted to content thread successfully.
 	 */
-	public static boolean postToContentThread(Runnable r)
+	public boolean postToContentThread(Runnable r)
 	{
 		return postToContentThread(r, 0);
 	}
@@ -1543,7 +1325,8 @@ public class MediaManager
 	 * @param delayMillis Delay time in milliseconds.
 	 * @return True if action posted to content thread successfully.
 	 */
-	public static boolean postToContentThread(Runnable r, long delayMillis)
+	@Override
+	public boolean postToContentThread(Runnable r, long delayMillis)
 	{
 		startContentThread();
 		if(delayMillis <= 0)
@@ -1553,7 +1336,7 @@ public class MediaManager
 	
 	
 	// Refresh directory media sets. (in main thread)
-	private static void refreshDirectoryMediaSets()
+	private void refreshDirectoryMediaSets()
 	{
 		// get current directory ID
 		final HashSet<Integer> dirIdTable;
@@ -1582,12 +1365,12 @@ public class MediaManager
 							if(dirIdTable.remove(id) || !newDirIdTable.add(id))
 								continue;
 							String path = Path.getDirectoryPath(cursor.getString(1));
-							Message.obtain(m_Handler, MSG_DIR_MEDIA_SET_CREATED, id, 0, path).sendToTarget();
+							Message.obtain(getHandler(), MSG_DIR_MEDIA_SET_CREATED, id, 0, path).sendToTarget();
 						}
 						
 						// remove media sets
 						for(int id : dirIdTable)
-							Message.obtain(m_Handler, MSG_DIR_MEDIA_SET_DELETED, id, 0).sendToTarget();
+							Message.obtain(getHandler(), MSG_DIR_MEDIA_SET_DELETED, id, 0).sendToTarget();
 					}
 					finally
 					{
@@ -1600,7 +1383,7 @@ public class MediaManager
 	
 	
 	// Refresh media set lists (in main thread).
-	private static void refreshMediaSetLists()
+	private void refreshMediaSetLists()
 	{
 		// check state
 		if(m_ActiveMediaSetLists.isEmpty())
@@ -1619,7 +1402,7 @@ public class MediaManager
 	 * @param callback Call-back.
 	 * @return Handle to registered call-back.
 	 */
-	public static Handle registerContentChangedCallback(Uri contentUri, ContentChangeCallback callback)
+	public Handle registerContentChangedCallback(Uri contentUri, ContentChangeCallback callback)
 	{
 		return registerContentChangedCallback(contentUri, callback, null);
 	}
@@ -1632,7 +1415,7 @@ public class MediaManager
 	 * @param handler Handler to perform call-back.
 	 * @return Handle to registered call-back.
 	 */
-	public static Handle registerContentChangedCallback(Uri contentUri, ContentChangeCallback callback, Handler handler)
+	public Handle registerContentChangedCallback(Uri contentUri, ContentChangeCallback callback, Handler handler)
 	{
 		if(contentUri == null)
 		{
@@ -1657,7 +1440,7 @@ public class MediaManager
 	
 	
 	// Register content change call-back (in content thread).
-	private static void registerContentChangedCallback(ContentChangeCallbackHandle handle)
+	private void registerContentChangedCallback(ContentChangeCallbackHandle handle)
 	{
 		if(m_ContentObservers == null)
 			m_ContentObservers = new HashMap<>();
@@ -1681,7 +1464,8 @@ public class MediaManager
 	 * @param handler Handler to perform call-back.
 	 * @return Handle to call-back.
 	 */
-	public static Handle registerMediaChangeCallback(MediaChangeCallback callback, Handler handler)
+	@Override
+	public Handle registerMediaChangeCallback(MediaChangeCallback callback, Handler handler)
 	{
 		if(callback == null)
 		{
@@ -1701,14 +1485,14 @@ public class MediaManager
 	
 	
 	// Register media change call-back (in content thread).
-	private static void registerMediaChangeCallback(MediaChangeCallbackHandle handle)
+	private void registerMediaChangeCallback(MediaChangeCallbackHandle handle)
 	{
 		m_MediaChangeCallbackHandles.add(handle);
 	}
 	
 	
 	// Release media table (in content thread).
-	private static void releaseMediaTable(boolean clearId)
+	private void releaseMediaTable(boolean clearId)
 	{
 		Log.w(TAG, "releaseMediaTable() - Clear ID : " + clearId);
 		synchronized(m_MediaTable)
@@ -1728,43 +1512,14 @@ public class MediaManager
 	
 	
 	/**
-	 * Remove {@link ActiveStateCallback}.
-	 * @param callback Call-back to remove.
-	 */
-	public static void removeActiveStateCallback(ActiveStateCallback callback)
-	{
-		verifyAccess();
-		m_ActiveStateCallbacks.remove(callback);
-	}
-	
-	
-	/**
 	 * Remove OnePlus flags from media extra info. 
 	 * @param contentUri Content URI to update.
 	 * @param flags Flags to remove.
 	 * @return True if update successfully.
 	 */
-	public static boolean removeOnePlusFlags(Uri contentUri, final int flags)
+	public boolean removeOnePlusFlags(Uri contentUri, final int flags)
 	{
 		Message msg = Message.obtain(m_ContentThreadHandler, MSG_UPDATE_ONEPLUS_FLAGS, new Object[]{contentUri, flags, false});
-		return m_ContentThreadHandler.sendMessage(msg);
-	}
-	
-	
-	/**
-	 * Change favorite state for specific media.
-	 * @param media Media to set favorite state.
-	 * @param isFavorite True to set as favorite media, False otherwise.
-	 * @return True if update successfully.
-	 */
-	public static boolean setFavorite(Media media, boolean isFavorite)
-	{
-		if(media == null)
-		{
-			Log.e(TAG, "setFavorite() - No media to set");
-			return false;
-		}
-		Message msg = Message.obtain(m_ContentThreadHandler, MSG_UPDATE_ONEPLUS_FLAGS, new Object[]{media.getContentUri(), ONEPLUS_FLAG_FAVORITE, isFavorite});
 		return m_ContentThreadHandler.sendMessage(msg);
 	}
 	
@@ -1775,7 +1530,8 @@ public class MediaManager
 	 * @param isFavorite True to set as favorite media, False otherwise.
 	 * @return True if update successfully.
 	 */
-	public static boolean setFavorite(Uri contentUri, boolean isFavorite)
+	@Override
+	public boolean setFavorite(Uri contentUri, boolean isFavorite)
 	{
 		Message msg = Message.obtain(m_ContentThreadHandler, MSG_UPDATE_ONEPLUS_FLAGS, new Object[]{contentUri, ONEPLUS_FLAG_FAVORITE, isFavorite});
 		return m_ContentThreadHandler.sendMessage(msg);
@@ -1783,7 +1539,7 @@ public class MediaManager
 	
 	
 	// Setup media table (in content thread).
-	private static void setupMediaTable()
+	private void setupMediaTable()
 	{
 		// check state
 		synchronized(m_MediaTable)
@@ -1838,7 +1594,7 @@ public class MediaManager
 	
 	
 	// Start content thread.
-	private static void startContentThread()
+	private void startContentThread()
 	{
 		if(m_ContentThreadHandler != null)
 			return;
@@ -1864,7 +1620,7 @@ public class MediaManager
 	
 	
 	// Synchronize media table with media provider (in content thread).
-	private static void syncMediaTable()
+	private void syncMediaTable()
 	{
 		long time = SystemClock.elapsedRealtime();
 		accessContentProvider(CONTENT_URI_FILE, new ContentProviderAccessCallback()
@@ -1927,7 +1683,7 @@ public class MediaManager
 	
 	
 	// Unregister content change call-back (in content thread)
-	private static void unregisterContentChangedCallback(ContentChangeCallbackHandle handle)
+	private void unregisterContentChangedCallback(ContentChangeCallbackHandle handle)
 	{
 		if(m_ContentObservers == null)
 			return;
@@ -1941,14 +1697,14 @@ public class MediaManager
 	
 	
 	// Unregister media change call-back (in content thread).
-	private static void unregisterMediaChangeCallback(MediaChangeCallbackHandle handle)
+	private void unregisterMediaChangeCallback(MediaChangeCallbackHandle handle)
 	{
 		m_MediaChangeCallbackHandles.remove(handle);
 	}
 	
 	
 	// Update OnePlus flags column.
-	private static boolean updateOnePlusFlags(Uri contentUri, int flags, boolean add)
+	private boolean updateOnePlusFlags(Uri contentUri, int flags, boolean add)
 	{
 		// check state
 		if(contentUri == null)
@@ -2020,13 +1776,5 @@ public class MediaManager
 			
 		// complete
 		return success;
-	}
-	
-	
-	// Check current thread.
-	private static void verifyAccess()
-	{
-		if(!GalleryApplication.current().isDependencyThread())
-			throw new RuntimeException("Not in main thread.");
 	}
 }

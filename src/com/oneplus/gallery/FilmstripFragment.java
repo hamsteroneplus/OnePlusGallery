@@ -41,8 +41,8 @@ import com.oneplus.base.ScreenSize;
 import com.oneplus.drawable.ProgressiveBitmapDrawable;
 import com.oneplus.gallery.media.Media;
 import com.oneplus.gallery.media.MediaList;
-import com.oneplus.gallery.media.MediaManager;
 import com.oneplus.gallery.media.MediaSet;
+import com.oneplus.gallery.media.OPMediaManager;
 import com.oneplus.gallery.media.PhotoMedia;
 import com.oneplus.gallery.media.ThumbnailImageManager;
 import com.oneplus.gallery.media.VideoMedia;
@@ -599,8 +599,9 @@ public class FilmstripFragment extends GalleryFragment
 			return;
 
 		// set favorite state
+		OPMediaManager mediaManager = GalleryApplication.current().findComponent(OPMediaManager.class);
 		Media media = m_MediaList.get(position);
-		MediaManager.setFavorite(media, isCollected);
+		mediaManager.setFavorite(media.getContentUri(), isCollected);
 	}
 	
 	
@@ -1728,9 +1729,15 @@ public class FilmstripFragment extends GalleryFragment
 		if(!validatePosition(position) || !this.isAttachedToGallery())
 			return;
 
+		// check activity
+		GalleryActivity activity = this.getGalleryActivity();
+		if(activity == null)
+			return;
+		
 		// show media details
 		Media media = m_MediaList.get(position);
-		this.getGallery().showMediaDetails(media);
+		MediaDetailsDialog dialog = new MediaDetailsDialog(activity, media);
+		dialog.show();
 	}
 	
 	

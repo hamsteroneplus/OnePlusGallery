@@ -469,7 +469,7 @@ public abstract class MediaStoreMedia implements Media
 		{
 			int oneplusFlags = extraInfo.oneplusFlags;
 			boolean prevFavorite = m_IsFavorite;
-			m_IsFavorite = ((oneplusFlags & MediaManager.ONEPLUS_FLAG_FAVORITE) != 0);
+			m_IsFavorite = ((oneplusFlags & OPMediaManager.ONEPLUS_FLAG_FAVORITE) != 0);
 			if(!changed && !fromConstructor)
 				changed = (prevFavorite != m_IsFavorite);
 		}

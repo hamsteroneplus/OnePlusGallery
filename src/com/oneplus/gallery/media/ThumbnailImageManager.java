@@ -22,7 +22,6 @@ import com.oneplus.base.Ref;
 import com.oneplus.cache.Cache;
 import com.oneplus.cache.HybridBitmapLruCache;
 import com.oneplus.gallery.GalleryApplication;
-import com.oneplus.gallery.MediaType;
 import com.oneplus.gallery.R;
 import com.oneplus.gallery.cache.CacheManager;
 import com.oneplus.gallery.cache.ImageCacheKey;

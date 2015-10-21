@@ -5,7 +5,6 @@ import java.util.Map;
 
 import com.oneplus.base.Log;
 import com.oneplus.database.CursorUtils;
-import com.oneplus.gallery.MediaType;
 import com.oneplus.gallery.media.MediaDetails.Key;
 import com.oneplus.gallery.providers.GalleryDatabaseManager.ExtraMediaInfo;
 import com.oneplus.io.Path;

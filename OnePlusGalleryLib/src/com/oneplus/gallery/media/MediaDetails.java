@@ -1,7 +1,5 @@
 package com.oneplus.gallery.media;
 
-import android.location.Location;
-
 /**
  * Detailed media information.
  */

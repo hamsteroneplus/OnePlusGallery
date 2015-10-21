@@ -1,7 +1,6 @@
 package com.oneplus.gallery.media;
 
 import com.oneplus.database.CursorUtils;
-import com.oneplus.gallery.MediaType;
 import com.oneplus.gallery.providers.GalleryDatabaseManager.ExtraMediaInfo;
 
 import android.database.Cursor;

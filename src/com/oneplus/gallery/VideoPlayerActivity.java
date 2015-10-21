@@ -12,7 +12,7 @@ import com.oneplus.base.PropertyKey;
 import com.oneplus.base.PropertySource;
 import com.oneplus.base.ScreenSize;
 import com.oneplus.gallery.media.Media;
-import com.oneplus.gallery.media.MediaManager;
+import com.oneplus.gallery.media.OPMediaManager;
 
 import android.content.Intent;
 import android.media.MediaPlayer;
@@ -197,7 +197,8 @@ public class VideoPlayerActivity extends GalleryActivity
 		Log.v(TAG, "onCreate() - Uri: ", m_VideoUri);
 		
 		// create media
-		MediaManager.createTemporaryMedia(m_VideoUri, new MediaManager.MediaCreationCallback()
+		OPMediaManager mediaManager = GalleryApplication.current().findComponent(OPMediaManager.class);
+		mediaManager.createTemporaryMedia(m_VideoUri, new OPMediaManager.MediaCreationCallback()
 		{	
 			@Override
 			public void onCreationCompleted(Handle handle, Uri contentUri, Media media)
@@ -721,7 +722,7 @@ public class VideoPlayerActivity extends GalleryActivity
 		this.pause();
 		
 		// show details
-		this.getGallery().showMediaDetails(m_Media);
+		new MediaDetailsDialog(this, m_Media).show();
 	}
 	
 	

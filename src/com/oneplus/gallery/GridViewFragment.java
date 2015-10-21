@@ -128,7 +128,6 @@ public class GridViewFragment extends GalleryFragment {
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public static final EventKey<ListItemEventArgs<Media>> EVENT_MEDIA_CLICKED = new EventKey<ListItemEventArgs<Media>>("MediaClicked", (Class)ListItemEventArgs.class, GridViewFragment.class);
 	
-	
 	// Adapter view holder
 	private class GridViewItemHolder {
 		public int position;
