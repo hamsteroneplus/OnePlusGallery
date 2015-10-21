@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android" >
+
+    <item
+        android:id="@+id/flimsrtip_toolbar_menu_item_details"
+        android:icon="@drawable/button_about"
+        android:title=""
+        android:showAsAction="always" />
+
+</menu>

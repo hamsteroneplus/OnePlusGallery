@@ -9,35 +9,14 @@
         android:layout_height="match_parent" />
     
     <!-- Header -->
-    <RelativeLayout
+    <Toolbar
         android:id="@+id/filmstrip_header_container"
         android:layout_width="match_parent"
         android:layout_height="?android:attr/actionBarSize"
-        android:gravity="center_vertical"
+        android:layout_alignParentTop="true"
         android:background="@android:color/transparent"
-        android:visibility="gone" >
-        
-        <ImageButton
-            android:id="@+id/filmstrip_header_button_back"
-            android:layout_width="?android:attr/actionBarSize"
-            android:layout_height="?android:attr/actionBarSize"
-            android:layout_marginStart="@dimen/filmstrip_header_item_margin"
-            android:layout_alignParentStart="true"
-            android:padding="@dimen/filmstrip_header_item_padding"
-            android:background="@drawable/ripple"
-            android:src="@drawable/button_previous" />
-        
-        <ImageButton
-            android:id="@+id/filmstrip_header_button_details"
-            android:layout_width="?android:attr/actionBarSize"
-            android:layout_height="?android:attr/actionBarSize"
-            android:layout_marginEnd="@dimen/filmstrip_header_item_margin"
-            android:layout_alignParentEnd="true"
-            android:padding="@dimen/filmstrip_header_item_padding"
-            android:background="@drawable/ripple"
-            android:src="@drawable/button_about" />
-        
-    </RelativeLayout>
+        android:visibility="gone"
+        style="@style/Widget.ActionBar" />
     
     <!-- Footer -->
     <LinearLayout

@@ -19,11 +19,13 @@ import android.os.Message;
 import android.util.Size;
 import android.util.SparseArray;
 import android.view.LayoutInflater;
+import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.RelativeLayout;
+import android.widget.Toolbar;
 
 import com.oneplus.base.EventHandler;
 import com.oneplus.base.EventKey;
@@ -85,11 +87,9 @@ public class FilmstripFragment extends GalleryFragment
 
 	
 	// Fields
-	private View m_BackButton;
 	private View m_CollectButton;
 	private int m_CurrentMediaIndex;
 	private View m_DeleteButton;
-	private View m_DetailsButton;
 	private final Drawable m_DummyThumbDrawable = new ColorDrawable(Color.argb(255, 80, 80, 80));
 	private View m_EditorButton;
 	private View m_EditorButtonContainer;
@@ -121,7 +121,7 @@ public class FilmstripFragment extends GalleryFragment
 	private FilmstripState m_FilmstripState = FilmstripState.BACKGROUND;
 	private FilmstripView m_FilmstripView;
 	private View m_FooterContainer;
-	private View m_HeaderContainer;
+	private Toolbar m_HeaderContainer;
 	private ProgressiveBitmapDrawable m_HighResBitmapDrawable;
 	private boolean m_IsActionEditSupported;
 	private boolean m_IsInstanceStateSaved;
@@ -917,23 +917,24 @@ public class FilmstripFragment extends GalleryFragment
 			
 		
 		// header
-		m_HeaderContainer = view.findViewById(R.id.filmstrip_header_container);
-		m_BackButton = view.findViewById(R.id.filmstrip_header_button_back);
-		m_BackButton.setOnClickListener(new View.OnClickListener()
-		{		
+		m_HeaderContainer = (Toolbar)view.findViewById(R.id.filmstrip_header_container);
+		m_HeaderContainer.inflateMenu(R.menu.filmstrip_toolbar_menu);
+		m_HeaderContainer.setNavigationIcon(R.drawable.button_previous);
+		m_HeaderContainer.setOnMenuItemClickListener(new Toolbar.OnMenuItemClickListener()
+		{	
+			@Override
+			public boolean onMenuItemClick(MenuItem item)
+			{
+				FilmstripFragment.this.showPageDetails(m_FilmstripView.getCurrentItem());
+				return true;
+			}
+		});
+		m_HeaderContainer.setNavigationOnClickListener(new View.OnClickListener()
+		{	
 			@Override
 			public void onClick(View v)
 			{
 				FilmstripFragment.this.closeFragment();
-			}
-		});
-		m_DetailsButton = view.findViewById(R.id.filmstrip_header_button_details);
-		m_DetailsButton.setOnClickListener(new View.OnClickListener()
-		{		
-			@Override
-			public void onClick(View v)
-			{
-				FilmstripFragment.this.showPageDetails(m_FilmstripView.getCurrentItem());
 			}
 		});
 		
