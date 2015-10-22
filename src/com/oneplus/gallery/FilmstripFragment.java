@@ -167,6 +167,7 @@ public class FilmstripFragment extends GalleryFragment
 	private Queue<BitmapDecodeInfo> m_ReusedBitmapDecodeInfos = new ArrayDeque<>();
 	private float m_ScaleFactor;
 	private View m_ShareButton;
+	private ThumbnailImageManager m_ThumbManager;
 	private Handle m_ThumbManagerActivateHandle;
 	private ViewVisibilityState m_ToolbarVisibilityState = ViewVisibilityState.INVISIBLE;
 	
@@ -627,8 +628,8 @@ public class FilmstripFragment extends GalleryFragment
 		if(m_HighResBitmapDrawable == null && media != null)
 		{
 			Bitmap thumb = BITMAP_POOL_MEDIUM_RESOLUTION.getCachedBitmap(media.getFilePath());
-			if(thumb == null)
-				thumb = ThumbnailImageManager.getCachedSmallThumbnailImage(media);
+			if(thumb == null && m_ThumbManager != null)
+				thumb = m_ThumbManager.getCachedSmallThumbnailImage(media);
 			m_HighResBitmapDrawable = new ProgressiveBitmapDrawable(media.getFilePath(), Bitmap.Config.ARGB_8888, thumb);
 		}
 		filmstripItem.setImageDecodeState(ImageDecodeState.LARGE_IMAGE_DECODED);
@@ -653,7 +654,8 @@ public class FilmstripFragment extends GalleryFragment
 				decodeInfo.filePath = filePath;
 				m_LowResBitmapDecodeInfos.add(decodeInfo);
 			}
-			decodeInfo.decodeHandle = ThumbnailImageManager.decodeSmallThumbnailImage(media, ThumbnailImageManager.FLAG_URGENT, m_LowResBitmapDecodeCallback, this.getHandler());
+			if(m_ThumbManager != null)
+				decodeInfo.decodeHandle = m_ThumbManager.decodeSmallThumbnailImage(media, ThumbnailImageManager.FLAG_URGENT, m_LowResBitmapDecodeCallback, this.getHandler());
 			
 			if(ENABLE_DECODE_LOG)
 				Log.v(TAG, "decodeLowResolutionImage() - Start decoding low-resolution bitmap : ", filePath);
@@ -678,7 +680,7 @@ public class FilmstripFragment extends GalleryFragment
 				decodeInfo.filePath = filePath;
 				m_MediumResBitmapDecodeInfos.add(decodeInfo);
 			}
-			decodeInfo.decodeHandle = BITMAP_POOL_MEDIUM_RESOLUTION.decode(media.getFilePath(), 1920, 1920, BitmapPool.FLAG_URGENT, m_MediumResBitmapDecodeCallback, this.getHandler());
+			decodeInfo.decodeHandle = BITMAP_POOL_MEDIUM_RESOLUTION.decode(media.getFilePath(), 1280, 1280, BitmapPool.FLAG_URGENT, m_MediumResBitmapDecodeCallback, this.getHandler());
 			
 			if(ENABLE_DECODE_LOG)
 				Log.v(TAG, "decodeMediumResolutionImage() - Start decoding medium-resolution bitmap : ", filePath);
@@ -790,6 +792,18 @@ public class FilmstripFragment extends GalleryFragment
 			Log.v(TAG, "hideToolbarDelay()");
 			HandlerUtils.sendMessage(this, MSG_HIDE_TOOL_BAR, true, DELAY_HIDE_TOOL_BAR_TIME_MILLIS);
 		}
+	}
+	
+	
+	// Called when attaching to gallery.
+	@Override
+	protected void onAttachToGallery(Gallery gallery)
+	{
+		// call super
+		super.onAttachToGallery(gallery);
+		
+		// find components
+		m_ThumbManager = GalleryApplication.current().findComponent(ThumbnailImageManager.class);
 	}
 	
 	
@@ -1451,8 +1465,8 @@ public class FilmstripFragment extends GalleryFragment
 		super.onStart();
 		
 		// activate thumbnail image manager
-		if(!Handle.isValid(m_ThumbManagerActivateHandle))
-			m_ThumbManagerActivateHandle = ThumbnailImageManager.activate();
+		if(!Handle.isValid(m_ThumbManagerActivateHandle) && m_ThumbManager != null)
+			m_ThumbManagerActivateHandle = m_ThumbManager.activate(0);
 		
 		// show image
 		if(m_CurrentMediaIndex >= 0)

@@ -80,6 +80,7 @@ public class MediaSetListFragment extends GalleryFragment
 	private ArrayList<MediaSet> m_DecodingMediaSets = new ArrayList<>();
 	private SharedPreferences m_Preference;
 	private ArrayList<MediaSet> m_SelectedMediaSet = new ArrayList<MediaSet>();
+	private ThumbnailImageManager m_ThumbManager;
 	private Handle m_ThumbManagerActivateHandle;
 	private Toolbar m_Toolbar;
 	private final PropertyChangedCallback<Integer> m_MediaCountChangedCallback = new PropertyChangedCallback<Integer>()
@@ -272,6 +273,9 @@ public class MediaSetListFragment extends GalleryFragment
 	{
 		// call super
 		super.onAttachToGallery(gallery);
+		
+		// find components
+		m_ThumbManager = GalleryApplication.current().findComponent(ThumbnailImageManager.class);
 		
 		// add call-backs.
 		gallery.addCallback(Gallery.PROP_IS_NAVIGATION_BAR_VISIBLE, new PropertyChangedCallback<Boolean>()
@@ -517,8 +521,8 @@ public class MediaSetListFragment extends GalleryFragment
 		super.onStart();
 		
 		// activate thumbnail image manager
-		if(!Handle.isValid(m_ThumbManagerActivateHandle))
-			m_ThumbManagerActivateHandle = ThumbnailImageManager.activate();
+		if(!Handle.isValid(m_ThumbManagerActivateHandle) && m_ThumbManager != null)
+			m_ThumbManagerActivateHandle = m_ThumbManager.activate(0);
 	}
 	
 	// Called when stoped.
@@ -815,53 +819,56 @@ public class MediaSetListFragment extends GalleryFragment
 			if(isUrgent)
 				flag = flag | ThumbnailImageManager.FLAG_URGENT;
 			
-			Handle handle = ThumbnailImageManager.decodeSmallThumbnailImage(mediaList.get(i), flag, new ThumbnailImageManager.DecodingCallback()
+			if(m_ThumbManager != null)
 			{
-				@Override
-				public void onThumbnailImageDecoded(Handle handle, Media media, Bitmap thumb)
+				Handle handle = m_ThumbManager.decodeSmallThumbnailImage(mediaList.get(i), flag, new ThumbnailImageManager.DecodingCallback()
 				{
-					if(thumb == null)
+					@Override
+					public void onThumbnailImageDecoded(Handle handle, Media media, Bitmap thumb)
 					{
-						Log.w(TAG, "onThumbnailImageDecoded() - thumb is null");
-						return;
-					}	
-					
-					// gridCoverImageRect
-					int rectLeft = (index * gridSize) % coverWidth;
-					int rectTop = (index / gridPerRow) * gridSize;
-					
-					// Bitmap Rect
-					int bitmapRectLeft = 0;
-					int bitmapRectTop = 0;
-					int shortSide = 0;
-					if(thumb.getHeight() >= thumb.getWidth())
-					{
-						shortSide = thumb.getWidth();
-						bitmapRectTop = (thumb.getHeight() - thumb.getWidth())/2;
+						if(thumb == null)
+						{
+							Log.w(TAG, "onThumbnailImageDecoded() - thumb is null");
+							return;
+						}	
+						
+						// gridCoverImageRect
+						int rectLeft = (index * gridSize) % coverWidth;
+						int rectTop = (index / gridPerRow) * gridSize;
+						
+						// Bitmap Rect
+						int bitmapRectLeft = 0;
+						int bitmapRectTop = 0;
+						int shortSide = 0;
+						if(thumb.getHeight() >= thumb.getWidth())
+						{
+							shortSide = thumb.getWidth();
+							bitmapRectTop = (thumb.getHeight() - thumb.getWidth())/2;
+						}
+						else
+						{
+							shortSide = thumb.getHeight();
+							bitmapRectLeft = (thumb.getWidth() - thumb.getHeight())/2;
+						}	
+						canvas.drawBitmap(thumb, new Rect(bitmapRectLeft, bitmapRectTop, bitmapRectLeft+shortSide, bitmapRectTop+shortSide), new Rect(rectLeft, rectTop, rectLeft+gridSize, rectTop+gridSize), null);
+						
+						// remove from decoding set
+						m_DecodingMediaSets.remove(mediaSet);
+						
+						// update bitmap table
+						m_CoverImageCache.add(CoverImageInfo.getMediaSetImageKey(mediaSet), gridCover);
+						
+						// notify data changed
+						if(m_MediaSetListAdapter != null)
+							m_MediaSetListAdapter.notifyDataSetChanged();
+						
+						// decode next media set
+						createMediaListCoverImageFromQueue();
+						
 					}
-					else
-					{
-						shortSide = thumb.getHeight();
-						bitmapRectLeft = (thumb.getWidth() - thumb.getHeight())/2;
-					}	
-					canvas.drawBitmap(thumb, new Rect(bitmapRectLeft, bitmapRectTop, bitmapRectLeft+shortSide, bitmapRectTop+shortSide), new Rect(rectLeft, rectTop, rectLeft+gridSize, rectTop+gridSize), null);
-					
-					// remove from decoding set
-					m_DecodingMediaSets.remove(mediaSet);
-					
-					// update bitmap table
-					m_CoverImageCache.add(CoverImageInfo.getMediaSetImageKey(mediaSet), gridCover);
-					
-					// notify data changed
-					if(m_MediaSetListAdapter != null)
-						m_MediaSetListAdapter.notifyDataSetChanged();
-					
-					// decode next media set
-					createMediaListCoverImageFromQueue();
-					
-				}
-			}, getHandler());
-			mediaSetDecodingHandleList.add(handle);	
+				}, getHandler());
+				mediaSetDecodingHandleList.add(handle);	
+			}
 			
 		}
 		m_MediaSetDecodingHandles.put(CoverImageInfo.getMediaSetImageKey(mediaSet), mediaSetDecodingHandleList);

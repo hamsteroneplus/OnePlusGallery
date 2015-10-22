@@ -84,6 +84,7 @@ public class GridViewFragment extends GalleryFragment {
 	private PreDecodeBitmapRunnable m_PreDecodeBitmapRunnable;
 	private List<Media> m_SelectionMeidaList = new ArrayList<>();
 	private List<Media> m_TempMeidaList = new ArrayList<>();
+	private ThumbnailImageManager m_ThumbManager;
 	private Handle m_ThumbManagerActivateHandle;
 	private Toolbar m_Toolbar;
 	private String m_ToolbarTitle = null;
@@ -185,7 +186,7 @@ public class GridViewFragment extends GalleryFragment {
 	}
 	
 	
-	private static class PreDecodeBitmapRunnable implements Runnable {
+	private class PreDecodeBitmapRunnable implements Runnable {
 		
 		private final WeakReference<GridViewFragment> m_ActivityRef;
 		private HashSet<Handle> m_HandleSet = new HashSet<>();
@@ -220,18 +221,20 @@ public class GridViewFragment extends GalleryFragment {
 				final int visibleFirstposition = m_ActivityRef.get().m_GridView.getFirstVisiblePosition();
 				final Handler handler = m_ActivityRef.get().getHandler();
 				// visibleLastPosition could be -1
-				for(int i = visibleLastposition; i >= 0 && i < (visibleLastposition + PRE_DECODE_BITMAP_COUNTS) && i < medialist.size() ; ++i) {
-					Media media = medialist.get(i);
-					Handle handle = ThumbnailImageManager.decodeSmallThumbnailImage(media, preDecodeCallback, handler);
-					m_HandleSet.add(handle);
+				if(m_ThumbManager != null)
+				{
+					for(int i = visibleLastposition; i >= 0 && i < (visibleLastposition + PRE_DECODE_BITMAP_COUNTS) && i < medialist.size() ; ++i) {
+						Media media = medialist.get(i);
+						Handle handle = m_ThumbManager.decodeSmallThumbnailImage(media, 0, preDecodeCallback, handler);
+						m_HandleSet.add(handle);
+					}
+					
+					for(int i = visibleFirstposition; i > (visibleFirstposition - PRE_DECODE_BITMAP_COUNTS) && i >= 0; --i) {
+						Media media = medialist.get(i);
+						Handle handle = m_ThumbManager.decodeSmallThumbnailImage(media, 0, preDecodeCallback, handler);
+						m_HandleSet.add(handle);
+					}
 				}
-				
-				for(int i = visibleFirstposition; i > (visibleFirstposition - PRE_DECODE_BITMAP_COUNTS) && i >= 0; --i) {
-					Media media = medialist.get(i);
-					Handle handle = ThumbnailImageManager.decodeSmallThumbnailImage(media, preDecodeCallback, handler);
-					m_HandleSet.add(handle);
-				}
-				
 			}
 		}
 		
@@ -706,8 +709,8 @@ public class GridViewFragment extends GalleryFragment {
 		}
 		
 		// activate thumbnail image manager
-		if(!Handle.isValid(m_ThumbManagerActivateHandle))
-			m_ThumbManagerActivateHandle = ThumbnailImageManager.activate();
+		if(!Handle.isValid(m_ThumbManagerActivateHandle) && m_ThumbManager != null)
+			m_ThumbManagerActivateHandle = m_ThumbManager.activate(0);
 	} 
 
 
@@ -1124,6 +1127,18 @@ public class GridViewFragment extends GalleryFragment {
 		Log.d(TAG, "onAttach");
 		m_GridviewColumns = this.getResources().getInteger(R.integer.griview_columns);
 	}
+	
+	
+	// Called when attaching to gallery.
+	@Override
+	protected void onAttachToGallery(Gallery gallery)
+	{
+		// call super
+		super.onAttachToGallery(gallery);
+		
+		// find components
+		m_ThumbManager = GalleryApplication.current().findComponent(ThumbnailImageManager.class);
+	}
 
 	
 	@Override
@@ -1269,7 +1284,8 @@ public class GridViewFragment extends GalleryFragment {
 						int mediaType = (media instanceof VideoMedia ? BitmapPool.MEDIA_TYPE_VIDEO : BitmapPool.MEDIA_TYPE_PHOTO);
 						holder.lowResolutionThumbDecodeHandle = m_SmallBitmapPool.decode(getActivity(), holder.contentUri, mediaType, m_GridviewItemWidth, m_GridviewItemHeight, BitmapPool.FLAG_URGENT/*|BitmapPool.FLAG_ASYNC*/, holder.lowResolutionThumbDecodeCallback, GridViewFragment.this.getHandler());
 					}
-					holder.highResolutionThumbDecodeHandle = ThumbnailImageManager.decodeSmallThumbnailImage(media, ThumbnailImageManager.FLAG_URGENT, holder.hightResolutionThumbDecodeCallback, GridViewFragment.this.getHandler());
+					if(m_ThumbManager != null)
+						holder.highResolutionThumbDecodeHandle = m_ThumbManager.decodeSmallThumbnailImage(media, ThumbnailImageManager.FLAG_URGENT, holder.hightResolutionThumbDecodeCallback, GridViewFragment.this.getHandler());
 					m_LowResolutionDecodeHandleMap.put(filePath, holder.lowResolutionThumbDecodeHandle);
 					m_HighResolutionDecodeHandleMap.put(media, holder.highResolutionThumbDecodeHandle);
 					

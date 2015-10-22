@@ -19,6 +19,7 @@ import android.os.SystemClock;
 import com.oneplus.base.Handle;
 import com.oneplus.base.Log;
 import com.oneplus.base.Ref;
+import com.oneplus.base.component.BasicComponent;
 import com.oneplus.cache.Cache;
 import com.oneplus.cache.HybridBitmapLruCache;
 import com.oneplus.gallery.GalleryApplication;
@@ -30,7 +31,7 @@ import com.oneplus.media.BitmapPool;
 /**
  * Thumbnail image manager.
  */
-public final class ThumbnailImageManager
+final class ThumbnailImageManagerImpl extends BasicComponent implements ThumbnailImageManager
 {
 	// Constants.
 	private static final String TAG = "ThumbnailImageManager";
@@ -42,33 +43,21 @@ public final class ThumbnailImageManager
 	private static final long DURATION_MAX_CLEAR_INVALID_THUMBS = 1000;
 	
 	
-	/**
-	 * Perform operation asynchronously.
-	 */
-	public static final int FLAG_ASYNC = 0x1;
-	/**
-	 * Decoding with highest priority.
-	 */
-	public static final int FLAG_URGENT = 0x2;
-	
-	
 	// Fields.
-	private static final List<Handle> m_ActivationHandles = new ArrayList<>();
-	private static Handle m_CacheManagerActivateHandle;
-	private static final Queue<DecodingTask> m_FreeDecodingTasks = new ArrayDeque<>(MAX_FREE_DECODING_TASKS);
-	private static volatile boolean m_IsInitialized;
-	private static final Object m_Lock = new Object();
-	private static volatile Thread m_MainThread;
-	private static volatile Executor m_SmallThumbDecodeExecutor;
-	private static volatile BitmapPool m_SmallThumbDecoder;
-	private static volatile LinkedList<DecodingTask> m_SmallThumbDecodeQueue;
-	private static volatile int m_SmallThumbSize;
-	private static volatile Executor m_ThumbDecodeExecutor;
-	private static volatile BitmapPool m_ThumbPool;
+	private final List<Handle> m_ActivationHandles = new ArrayList<>();
+	private Handle m_CacheManagerActivateHandle;
+	private final Queue<DecodingTask> m_FreeDecodingTasks = new ArrayDeque<>(MAX_FREE_DECODING_TASKS);
+	private final Object m_Lock = new Object();
+	private volatile Executor m_SmallThumbDecodeExecutor;
+	private volatile BitmapPool m_SmallThumbDecoder;
+	private volatile LinkedList<DecodingTask> m_SmallThumbDecodeQueue;
+	private volatile int m_SmallThumbSize;
+	private volatile Executor m_ThumbDecodeExecutor;
+	private volatile BitmapPool m_ThumbPool;
 	
 	
 	// Runnables.
-	private static final Runnable m_ClearInvalidThumbsRunnable = new Runnable()
+	private final Runnable m_ClearInvalidThumbsRunnable = new Runnable()
 	{
 		@Override
 		public void run()
@@ -76,7 +65,7 @@ public final class ThumbnailImageManager
 			clearInvalidThumbnailImages();
 		}
 	};
-	private static final Runnable m_ClearInvalidThumbsDelayedRunnable = new Runnable()
+	private final Runnable m_ClearInvalidThumbsDelayedRunnable = new Runnable()
 	{
 		@Override
 		public void run()
@@ -85,7 +74,7 @@ public final class ThumbnailImageManager
 				m_SmallThumbDecodeExecutor.execute(m_ClearInvalidThumbsRunnable);
 		}
 	};
-	private static final Runnable m_DecodeSmallThumbRunnable = new Runnable()
+	private final Runnable m_DecodeSmallThumbRunnable = new Runnable()
 	{
 		@Override
 		public void run()
@@ -101,23 +90,8 @@ public final class ThumbnailImageManager
 	};
 	
 	
-	/**
-	 * Thumbnail image decode call-back interface.
-	 */
-	public interface DecodingCallback
-	{
-		/**
-		 * Called when thumbnail image decoded.
-		 * @param handle Handle returned from decode*ThumbnailImage methods.
-		 * @param media Media.
-		 * @param thumb Decoded thumbnail image, or Null if fail to decode.
-		 */
-		void onThumbnailImageDecoded(Handle handle, Media media, Bitmap thumb);
-	}
-	
-	
 	// Handle for thumbnail image decoding.
-	private static final class DecodingHandle extends Handle
+	private final class DecodingHandle extends Handle
 	{
 		// Fields.
 		private final DecodingTask decodingTask;
@@ -144,7 +118,7 @@ public final class ThumbnailImageManager
 	
 	
 	// Thumbnail image decoding task.
-	private static final class DecodingTask implements Runnable
+	private final class DecodingTask implements Runnable
 	{
 		// Fields.
 		public volatile BitmapPool bitmapDecoder;
@@ -284,18 +258,23 @@ public final class ThumbnailImageManager
 	
 	
 	// Constructor.
-	private ThumbnailImageManager()
-	{}
+	ThumbnailImageManagerImpl(GalleryApplication application)
+	{
+		super("Thumbnail image manager", application, true);
+	}
 	
 	
 	/**
 	 * Activate thumbnail image manager.
 	 * @return Handle to activation.
 	 */
-	public static Handle activate()
+	@Override
+	public Handle activate(int flags)
 	{
 		// check state
-		verifyState();
+		this.verifyAccess();
+		if(!this.isRunningOrInitializing(true))
+			return null;
 		
 		// create handle
 		Handle handle = new Handle("ActivateThumbImageManager")
@@ -308,7 +287,10 @@ public final class ThumbnailImageManager
 		};
 		m_ActivationHandles.add(handle);
 		if(m_ActivationHandles.size() == 1)
+		{
 			Log.v(TAG, "activate()");
+			this.setReadOnly(PROP_IS_ACTIVE, true);
+		}
 		
 		// activate cache manager
 		if(!Handle.isValid(m_CacheManagerActivateHandle))
@@ -323,7 +305,7 @@ public final class ThumbnailImageManager
 	
 	
 	// Clear invalid thumbnail images in cache.
-	private static void clearInvalidThumbnailImages()
+	private void clearInvalidThumbnailImages()
 	{
 		// get cache
 		Cache<ImageCacheKey, Bitmap> cache = CacheManager.getSmallThumbnailImageCache();
@@ -374,10 +356,10 @@ public final class ThumbnailImageManager
 	
 	
 	// Deactivate.
-	private static void deactivate(Handle handle)
+	private void deactivate(Handle handle)
 	{
 		// check thread
-		verifyThread();
+		this.verifyAccess();
 		
 		// remove handle
 		if(!m_ActivationHandles.remove(handle) || !m_ActivationHandles.isEmpty())
@@ -390,6 +372,9 @@ public final class ThumbnailImageManager
 		
 		// clear invalid thumbnail images
 		GalleryApplication.current().getHandler().postDelayed(m_ClearInvalidThumbsDelayedRunnable, DURATION_CLEAR_INVALID_THUMBS_DELAY);
+		
+		// update property
+		this.setReadOnly(PROP_IS_ACTIVE, false);
 	}
 	
 	
@@ -405,7 +390,7 @@ public final class ThumbnailImageManager
 	 * @param handler {@link Handler} to perform call-back.
 	 * @return Handle to thumbnail image decoding.
 	 */
-	public static Handle decodeSmallThumbnailImage(Media media, DecodingCallback callback, Handler handler)
+	public Handle decodeSmallThumbnailImage(Media media, DecodingCallback callback, Handler handler)
 	{
 		return decodeSmallThumbnailImage(media, 0, callback, handler);
 	}
@@ -423,7 +408,8 @@ public final class ThumbnailImageManager
 	 * @param handler {@link Handler} to perform call-back.
 	 * @return Handle to thumbnail image decoding.
 	 */
-	public static Handle decodeSmallThumbnailImage(Media media, int flags, DecodingCallback callback, Handler handler)
+	@Override
+	public Handle decodeSmallThumbnailImage(Media media, int flags, DecodingCallback callback, Handler handler)
 	{
 		// check parameter
 		if(media == null)
@@ -480,26 +466,12 @@ public final class ThumbnailImageManager
 	}
 	
 	
-	/**
-	 * Deinitialize thumbnail image manager.
-	 */
-	public static void deinitialize()
+	// Decode thumbnail image.
+	@Override
+	public Handle decodeThumbnailImage(Media media, int flags, DecodingCallback callback, Handler handler)
 	{
-		synchronized(m_Lock)
-		{
-			// check state
-			if(!m_IsInitialized)
-				return;
-			
-			Log.v(TAG, "deinitialize()");
-			
-			// deactivate
-			m_ActivationHandles.clear();
-			m_CacheManagerActivateHandle = Handle.close(m_CacheManagerActivateHandle);
-			
-			// update state
-			m_IsInitialized = false;
-		}
+		Log.e(TAG, "decodeThumbnailImage() - Not implemented");
+		return null;
 	}
 	
 	
@@ -508,7 +480,7 @@ public final class ThumbnailImageManager
 	 * @param media Media.
 	 * @return Small thumbnail image, or Null if there is no cached image in memory.
 	 */
-	public static Bitmap getCachedSmallThumbnailImage(Media media)
+	public Bitmap getCachedSmallThumbnailImage(Media media)
 	{
 		if(media == null)
 			return null;
@@ -519,42 +491,17 @@ public final class ThumbnailImageManager
 	}
 	
 	
-	/**
-	 * Initialize thumbnail image manager in current thread.
-	 */
-	public static void initialize()
+	// Get cached thumbnail image.
+	@Override
+	public Bitmap getCachedThumbnailImage(Media media)
 	{
-		synchronized(m_Lock)
-		{
-			// check state
-			if(m_IsInitialized)
-				return;
-			
-			Log.v(TAG, "initialize()");
-			
-			// check thread
-			m_MainThread = Thread.currentThread();
-			
-			// create bitmap pools
-			m_SmallThumbDecoder = new BitmapPool("SmallThumbDecoder", (1 << 10), Bitmap.Config.ARGB_8888, 3, 0);
-			m_ThumbPool = new BitmapPool("ThumbPool", THUMB_POOL_CAPACITY, IDLE_POOL_CAPACITY, Bitmap.Config.ARGB_8888, 2, 0);
-			
-			// get dimensions
-			Resources res = GalleryApplication.current().getResources();
-			m_SmallThumbSize = res.getDimensionPixelSize(R.dimen.thumbnail_image_manager_thumb_size_small);
-			
-			// create executor
-			m_SmallThumbDecodeExecutor = Executors.newFixedThreadPool(4);
-			m_ThumbDecodeExecutor = Executors.newFixedThreadPool(4);
-			
-			// update state
-			m_IsInitialized = true;
-		}
+		// TODO Auto-generated method stub
+		return null;
 	}
 	
 	
 	// Obtain a decoding task.
-	private static DecodingTask obtainDecodingTask()
+	private DecodingTask obtainDecodingTask()
 	{
 		synchronized(m_Lock)
 		{
@@ -567,7 +514,7 @@ public final class ThumbnailImageManager
 	
 	
 	// Called when decoding task completed.
-	private static void onDecodingTaskCompleted(DecodingTask task)
+	private void onDecodingTaskCompleted(DecodingTask task)
 	{
 		synchronized(m_Lock)
 		{
@@ -585,19 +532,37 @@ public final class ThumbnailImageManager
 	}
 	
 	
-	// Check thread and initialization state.
-	private static void verifyState()
+	// Deinitialize.
+	@Override
+	protected void onDeinitialize()
 	{
-		if(!m_IsInitialized)
-			throw new RuntimeException("Thumbnail image manager is not initialized.");
-		verifyThread();
+		// deactivate
+		m_ActivationHandles.clear();
+		m_CacheManagerActivateHandle = Handle.close(m_CacheManagerActivateHandle);
+		this.setReadOnly(PROP_IS_ACTIVE, false);
+		
+		// call super
+		super.onDeinitialize();
 	}
 	
 	
-	// Check thread.
-	private static void verifyThread()
+	// Initialize.
+	@Override
+	protected void onInitialize()
 	{
-		if(m_MainThread != Thread.currentThread())
-			throw new RuntimeException("Access from another thread.");
+		// call super
+		super.onInitialize();
+		
+		// create bitmap pools
+		m_SmallThumbDecoder = new BitmapPool("SmallThumbDecoder", (1 << 10), Bitmap.Config.ARGB_8888, 3, 0);
+		m_ThumbPool = new BitmapPool("ThumbPool", THUMB_POOL_CAPACITY, IDLE_POOL_CAPACITY, Bitmap.Config.ARGB_8888, 2, 0);
+		
+		// get dimensions
+		Resources res = GalleryApplication.current().getResources();
+		m_SmallThumbSize = res.getDimensionPixelSize(R.dimen.thumbnail_image_manager_thumb_size_small);
+		
+		// create executor
+		m_SmallThumbDecodeExecutor = Executors.newFixedThreadPool(4);
+		m_ThumbDecodeExecutor = Executors.newFixedThreadPool(4);
 	}
 }
