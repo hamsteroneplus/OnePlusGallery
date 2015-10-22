@@ -45,6 +45,7 @@ final class ThumbnailImageManagerImpl extends BasicComponent implements Thumbnai
 	
 	// Fields.
 	private final List<Handle> m_ActivationHandles = new ArrayList<>();
+	private CacheManager m_CacheManager;
 	private Handle m_CacheManagerActivateHandle;
 	private final Queue<DecodingTask> m_FreeDecodingTasks = new ArrayDeque<>(MAX_FREE_DECODING_TASKS);
 	private final Object m_Lock = new Object();
@@ -293,8 +294,8 @@ final class ThumbnailImageManagerImpl extends BasicComponent implements Thumbnai
 		}
 		
 		// activate cache manager
-		if(!Handle.isValid(m_CacheManagerActivateHandle))
-			m_CacheManagerActivateHandle = CacheManager.activate();
+		if(!Handle.isValid(m_CacheManagerActivateHandle) && m_CacheManager != null)
+			m_CacheManagerActivateHandle = m_CacheManager.activate(0);
 		
 		// cancel clearing invalid thumbnail images
 		GalleryApplication.current().getHandler().removeCallbacks(m_ClearInvalidThumbsDelayedRunnable);
@@ -308,7 +309,9 @@ final class ThumbnailImageManagerImpl extends BasicComponent implements Thumbnai
 	private void clearInvalidThumbnailImages()
 	{
 		// get cache
-		Cache<ImageCacheKey, Bitmap> cache = CacheManager.getSmallThumbnailImageCache();
+		if(m_CacheManager == null)
+			return;
+		Cache<ImageCacheKey, Bitmap> cache = m_CacheManager.getSmallThumbnailImageCache();
 		if(cache == null)
 			return;
 		
@@ -419,7 +422,7 @@ final class ThumbnailImageManagerImpl extends BasicComponent implements Thumbnai
 		}
 		
 		// create task
-		HybridBitmapLruCache<ImageCacheKey> cache = CacheManager.getSmallThumbnailImageCache();
+		HybridBitmapLruCache<ImageCacheKey> cache = (m_CacheManager != null ? m_CacheManager.getSmallThumbnailImageCache() : null);
 		DecodingTask task = obtainDecodingTask();
 		task.bitmapDecoder = m_SmallThumbDecoder;
 		task.cache = cache;
@@ -484,7 +487,9 @@ final class ThumbnailImageManagerImpl extends BasicComponent implements Thumbnai
 	{
 		if(media == null)
 			return null;
-		Cache<ImageCacheKey, Bitmap> cache = CacheManager.getSmallThumbnailImageCache();
+		if(m_CacheManager == null)
+			return null;
+		Cache<ImageCacheKey, Bitmap> cache = m_CacheManager.getSmallThumbnailImageCache();
 		if(cache == null)
 			return null;
 		return cache.get(new ImageCacheKey(media), null, 0);
@@ -552,6 +557,9 @@ final class ThumbnailImageManagerImpl extends BasicComponent implements Thumbnai
 	{
 		// call super
 		super.onInitialize();
+		
+		// find components
+		m_CacheManager = GalleryApplication.current().findComponent(CacheManager.class);
 		
 		// create bitmap pools
 		m_SmallThumbDecoder = new BitmapPool("SmallThumbDecoder", (1 << 10), Bitmap.Config.ARGB_8888, 3, 0);

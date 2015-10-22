@@ -2,7 +2,7 @@ package com.oneplus.gallery;
 
 import com.oneplus.base.component.Component;
 import com.oneplus.base.component.ComponentBuilder;
-import com.oneplus.gallery.cache.CacheManager;
+import com.oneplus.gallery.cache.CacheManagerBuilder;
 import com.oneplus.gallery.media.MediaManager;
 import com.oneplus.gallery.media.MediaManagerBuilder;
 import com.oneplus.gallery.media.OPMediaManager;
@@ -15,6 +15,7 @@ public final class OPGalleryApplication extends GalleryApplication
 {
 	// Component builders.
 	private static final ComponentBuilder[] COMPONENT_BUILDERS = new ComponentBuilder[]{
+		new CacheManagerBuilder(),
 		new MediaManagerBuilder(),
 		new ThumbnailImageManagerBuilder(),
 	};
@@ -56,21 +57,10 @@ public final class OPGalleryApplication extends GalleryApplication
 	}
 	
 	
-	// Create.
-	@Override
-	public void onCreate()
-	{
-		super.onCreate();
-		CacheManager.initialize();
-	}
-	
-	
 	// Terminate.
 	@Override
 	public void onTerminate()
 	{
-		CacheManager.deinitialize();
-		
 		// release references
 		m_MediaManager = null;
 		
